@@ -49,7 +49,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       : '';
 
     let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
-    if (['lift-slide', 'sliding', 'bifold', 'products'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
+    if (['lift-slide', 'sliding', 'bifold', 'products', 'windows', 'doors', 'facades'].includes(meta.nav)) nav = nav.replace('data-group="products"', 'data-group="products" data-current');
     nav = nav.replace('{{enHref}}', enHref).replace('{{plHref}}', plHref)
       .replace('{{enCurrent}}', loc === 'en' && !meta.lang ? 'aria-current="true"' : '')
       .replace('{{plCurrent}}', loc === 'pl' ? 'aria-current="true"' : '');

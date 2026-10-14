@@ -45,6 +45,17 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     if (open && matchMedia('(min-width:1100px)').matches) { closeSubs(); open.focus(); }
   });
 
+  // House explorer: hovering a list item lights up its opening in the drawing, and the other way round.
+  $$('[data-explorer]').forEach((ex) => {
+    const set = (n) => $$('[data-hot]', ex).forEach((el) => el.classList.toggle('is-hot', el.dataset.hot === n));
+    $$('[data-hot]', ex).forEach((el) => {
+      el.addEventListener('mouseenter', () => set(el.dataset.hot));
+      el.addEventListener('focusin', () => set(el.dataset.hot));
+      el.addEventListener('mouseleave', () => set(null));
+      el.addEventListener('focusout', () => set(null));
+    });
+  });
+
   // Small screens: matrix tables become stacked cards, so give each cell its column name.
   const labelTables = (root = document) => {
     $$('table', root).forEach((t) => {
@@ -285,6 +296,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     if (role) { const r = form.querySelector(`input[name="role"][value="${role}"]`); if (r) r.checked = true; }
     const sys = params.get('system');
     if (sys) { const c = form.querySelector(`input[name="systems"][value="${sys}"]`); if (c) c.checked = true; }
+    const mat = params.get('material');
+    if (mat) { const m = form.querySelector(`input[name="material"][value="${CSS.escape(mat)}"]`); if (m) m.checked = true; }
     const topic = params.get('topic');
     if (topic && form.topic) form.topic.value = topic;
     if (!form.dataset.endpoint) { const note = $('[data-preview-note]', form); if (note) note.hidden = false; }
@@ -399,5 +412,68 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         btn.disabled = false; btn.textContent = t('Send for review', 'Wyślij do oceny');
       }
     });
+  }
+
+  // Material advisor (materials page): three answers -> a suggested material, with the reasons and caveats.
+  const adv = $('[data-advisor]');
+  if (adv) {
+    const NAME = {
+      alu: t('Aluminium', 'Aluminium'), timber: t('Timber', 'Drewno'), pvc: t('PVC', 'PVC'), alutimber: t('Timber-aluminium', 'Drewno-aluminium'),
+    };
+    const SYS = { windows: 'windows', doors: 'hinged', facades: 'facades', sliding: '' };
+    const recommend = (where, what, why) => {
+      const notes = [];
+      let mat; let text;
+      if (what === 'facades') {
+        mat = why === 'look' || why === 'carbon' ? 'alutimber' : 'alu';
+        text = mat === 'alu'
+          ? t('Curtain walling, rooflights and lanterns are engineered mainly in aluminium: it carries large panes on slim mullions and needs almost no upkeep.', 'Fasady, świetliki i latarnie dachowe powstają głównie z aluminium: uniesie duże tafle na smukłych słupkach i prawie nie wymaga konserwacji.')
+          : t('Timber-aluminium curtain walling puts warm timber mullions inside the room and a weatherproof aluminium cap outside.', 'Fasada drewniano-aluminiowa daje ciepłe drewniane słupki od środka i odporną na pogodę aluminiową nakładkę na zewnątrz.');
+        notes.push(t('Flat and walk-on rooflights are aluminium only.', 'Świetliki płaskie i pochylne do chodzenia robimy tylko z aluminium.'));
+        if (where === 'listed' || where === 'conservation') notes.push(t('Large new glazing in a sensitive building needs early talks with the planners. We can prepare drawings for that.', 'Duże nowe przeszklenia w chronionym budynku wymagają wczesnych rozmów z urzędem. Możemy przygotować do tego rysunki.'));
+      } else if (where === 'listed') {
+        mat = 'timber';
+        text = t('Listed buildings almost always need like-for-like timber, and new windows or doors need listed building consent first.', 'Budynki zabytkowe prawie zawsze wymagają drewna wiernego oryginałowi, a nowe okna i drzwi najpierw zgody konserwatora (listed building consent).');
+        notes.push(t('Slimline double or vacuum glazing can often keep the original glazing bars.', 'Cienkie szyby zespolone lub próżniowe często pozwalają zachować oryginalne szprosy.'));
+        if (what === 'sliding') notes.push(t('A large slider in a listed building is decided case by case. Timber lift & slide is the usual starting point.', 'O dużych drzwiach przesuwnych w zabytku decyduje się indywidualnie. Zwykle zaczynamy od drewnianych podnoszono-przesuwnych.'));
+      } else if (where === 'conservation' && what !== 'sliding') {
+        mat = 'timber';
+        text = t('In conservation areas, timber is the material planners most often accept for windows and doors on the street side.', 'W strefach ochrony konserwatorskiej drewno to materiał, który urząd najczęściej akceptuje w oknach i drzwiach od strony ulicy.');
+        if (why === 'cost') notes.push(t('PVC is often refused in conservation areas. Check with your council before choosing it.', 'PVC jest w tych strefach często odrzucane. Zanim je wybierzesz, sprawdź w urzędzie dzielnicy.'));
+        if (why === 'slim') notes.push(t('Steel-look aluminium can be accepted where it replaces original metal windows.', 'Aluminium w stylu stalowym bywa akceptowane, gdy zastępuje oryginalne okna metalowe.'));
+        if (why === 'upkeep') notes.push(t('Factory-finished timber needs a recoat only every 6–10 years.', 'Drewno malowane fabrycznie wymaga odnowienia powłoki tylko co 6–10 lat.'));
+      } else {
+        mat = { slim: 'alu', look: 'timber', cost: 'pvc', upkeep: 'alu', carbon: 'timber' }[why];
+        text = {
+          alu: t('Aluminium gives the slimmest frames and the largest panes, in any colour, with almost no upkeep.', 'Aluminium daje najsmuklejsze ramy i największe tafle, w dowolnym kolorze, prawie bez konserwacji.'),
+          timber: why === 'carbon'
+            ? t('FSC-certified timber stores carbon and has the lowest embodied carbon of the main frame materials.', 'Drewno z certyfikatem FSC magazynuje węgiel i ma najniższy ślad węglowy z głównych materiałów ram.')
+            : t('Timber gives proportions and detail that suit period houses, and it can be repaired and repainted for decades.', 'Drewno daje proporcje i detal pasujące do starych domów, a naprawiać i malować je można przez dziesięciolecia.'),
+          pvc: t('PVC gives the best thermal performance for the money and needs almost no upkeep.', 'PVC daje najlepszą izolacyjność za tę cenę i prawie nie wymaga konserwacji.'),
+        }[mat];
+        if (mat === 'pvc' && what === 'sliding') notes.push(t('PVC lift & slide suits openings up to about 4–5 m. For wider openings, aluminium.', 'Drzwi podnoszono-przesuwne z PVC sprawdzą się w otworach do ok. 4–5 m. Szersze: aluminium.'));
+        if (why === 'upkeep') notes.push(t('PVC is also low-upkeep and costs less, with wider frames.', 'PVC też jest bezobsługowe i tańsze, ale ma szersze ramy.'));
+        if (why === 'carbon') notes.push(t('Aluminium with high recycled content is the low-carbon option where you need slim frames.', 'Gdy potrzebne są smukłe ramy, niskoemisyjną opcją jest aluminium z dużym udziałem recyklingu.'));
+        if (why === 'look' && what === 'sliding') notes.push(t('Timber-aluminium gives timber inside with an aluminium shell outside.', 'Drewno-aluminium daje drewno od środka i aluminiową osłonę na zewnątrz.'));
+        if (where === 'conservation') notes.push(t('Rear elevations that can’t be seen from the street are often treated more flexibly. Check your council’s Article 4 direction.', 'Elewacje tylne niewidoczne z ulicy są często traktowane łagodniej. Sprawdź dyrektywę Article 4 w swojej dzielnicy.'));
+      }
+      if (where === 'unsure') notes.push(t('Check your council’s website to see whether your street is in a conservation area. It can change the answer.', 'Sprawdź na stronie urzędu dzielnicy, czy ulica leży w strefie ochrony konserwatorskiej. To może zmienić odpowiedź.'));
+      return { mat, text, notes };
+    };
+    const out = $('[data-advisor-out]', adv);
+    const update = () => {
+      const f = $('form', adv);
+      const v = (n) => (f.querySelector(`input[name="${n}"]:checked`) || {}).value;
+      const r = recommend(v('where'), v('what'), v('why'));
+      $('[data-out-material]', out).textContent = NAME[r.mat];
+      $('[data-out-why]', out).textContent = r.text;
+      $('[data-out-notes]', out).innerHTML = r.notes.map((n) => `<li>${n}</li>`).join('');
+      const q = new URLSearchParams();
+      if (SYS[v('what')]) q.set('system', SYS[v('what')]);
+      q.set('material', r.mat);
+      $('[data-out-link]', out).href = `contact.html?${q}`;
+    };
+    adv.addEventListener('change', update);
+    update();
   }
 })();

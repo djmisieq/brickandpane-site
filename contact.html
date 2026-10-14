@@ -21,7 +21,7 @@
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/inter-tight-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"Brick & Pane","url":"https://brickandpane.co.uk/","email":"hello@brickandpane.co.uk","description":"Aluminium lift & slide doors, sliding doors and windows, made to order for architects and developers in London.","areaServed":[{"@type":"City","name":"London"},{"@type":"Country","name":"United Kingdom"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"Brick & Pane","url":"https://brickandpane.co.uk/","email":"hello@brickandpane.co.uk","description":"Windows, doors, sliding doors and glazed facades in aluminium, timber and PVC, made to order and installed in London.","areaServed":[{"@type":"City","name":"London"},{"@type":"Country","name":"United Kingdom"}]}</script>
 
 </head>
 <body class="has-action-bar no-action-bar">
@@ -35,20 +35,25 @@
     </a>
     <nav class="primary-nav" id="primary-nav" aria-label="Main">
       <ul>
-        <li class="has-sub" data-group="doors">
-          <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="sub-doors">Sliding doors</button>
-          <ul class="sub" id="sub-doors">
-            <li><a href="lift-and-slide-doors.html" data-nav="lift-slide">Lift &amp; slide<small>Panels to 400 kg, best seal</small></a></li>
-            <li><a href="sliding-doors.html" data-nav="sliding">Slim sliding<small>Slimmest frames, standard hardware</small></a></li>
-            <li><a href="bifold-doors.html" data-nav="bifold">Bi-fold<small>Open almost the whole width</small></a></li>
-            <li><a href="products.html" data-nav="products">All systems<small>Including windows and hinged doors</small></a></li>
-          </ul>
+        <li class="has-sub" data-group="products">
+          <button class="sub-toggle" type="button" aria-expanded="false" aria-controls="sub-products">Products</button>
+          <div class="sub mega" id="sub-products">
+            <div class="mega-col"><a class="mega-h" href="windows.html" data-nav="windows">Windows</a><ul>
+              <li><a href="windows.html#casement">Casement</a></li><li><a href="windows.html#tilt-turn">Tilt &amp; turn</a></li><li><a href="windows.html#sash">Sliding sash</a></li><li><a href="windows.html#steel-look">Steel-look</a></li></ul></div>
+            <div class="mega-col"><a class="mega-h" href="doors.html" data-nav="doors">Doors</a><ul>
+              <li><a href="doors.html#entrance">Entrance doors</a></li><li><a href="doors.html#french">French doors</a></li><li><a href="doors.html#garden">Garden &amp; side doors</a></li></ul></div>
+            <div class="mega-col"><a class="mega-h" href="products.html#sliding">Sliding &amp; folding</a><ul>
+              <li><a href="lift-and-slide-doors.html" data-nav="lift-slide">Lift &amp; slide</a></li><li><a href="sliding-doors.html" data-nav="sliding">Slim sliding</a></li><li><a href="bifold-doors.html" data-nav="bifold">Bi-fold</a></li></ul></div>
+            <div class="mega-col"><a class="mega-h" href="facades.html" data-nav="facades">Facades &amp; roof glazing</a><ul>
+              <li><a href="facades.html#curtain-walling">Curtain walling</a></li><li><a href="facades.html#lanterns">Roof lanterns</a></li><li><a href="facades.html#rooflights">Flat rooflights</a></li><li><a href="facades.html#shopfronts">Shopfronts</a></li></ul></div>
+            <div class="mega-foot"><a href="products.html" data-nav="products">All products by material</a><a href="materials.html#advisor">Aluminium, timber or PVC?</a></div>
+          </div>
         </li>
+        <li><a href="materials.html" data-nav="materials">Materials</a></li>
         <li><a href="homeowners.html" data-nav="homeowners">Homeowners</a></li>
         <li><a href="architects.html" data-nav="architects">Architects</a></li>
         <li><a href="developers.html" data-nav="developers">Developers</a></li>
-        <li><a href="guide-large-sliding-doors-london.html" data-nav="guide">Design guide</a></li>
-        <li><a href="about.html" data-nav="about">About</a></li>
+        <li><a href="guide-large-sliding-doors-london.html" data-nav="guide">Guide</a></li>
       </ul>
       <span class="lang-switch" aria-label="Language"><a href="contact.html" hreflang="en" lang="en" aria-current="true">EN</a><a href="pl/contact.html" hreflang="pl" lang="pl" >PL</a></span>
       <a class="nav-login" href="portal.html" data-nav="portal">Client portal</a>
@@ -123,14 +128,26 @@
         </div>
         <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
-          <legend>Systems</legend>
+          <legend>Products</legend>
           <div class="choice-grid">
+            <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>Entrance / French doors</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="lift-slide"><span>Lift &amp; slide</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="sliding"><span>Slim sliding</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="bifold"><span>Bi-fold</span></label>
-            <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>French / entrance</span></label>
-            <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="facades"><span>Curtain walling / shopfront</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="rooflights"><span>Roof lantern / rooflight</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="unsure"><span>Not sure yet</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Material</legend>
+          <div class="choice-grid">
+            <label class="choice"><input type="radio" name="material" value="alu"><span>Aluminium</span></label>
+            <label class="choice"><input type="radio" name="material" value="timber"><span>Timber</span></label>
+            <label class="choice"><input type="radio" name="material" value="pvc"><span>PVC</span></label>
+            <label class="choice"><input type="radio" name="material" value="alutimber"><span>Timber-aluminium</span></label>
+            <label class="choice"><input type="radio" name="material" value="unsure"><span>Advise me</span></label>
           </div>
         </fieldset>
         <div class="field-row">
@@ -176,17 +193,19 @@
     <div class="footer-top">
       <div class="footer-brand">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg>
-        <p>Aluminium lift &amp; slide doors, sliding doors and windows. Made to order, drawn with you, installed by our own London team.</p>
+        <p>Windows, doors, sliding doors and glazed facades in aluminium, timber and PVC. Made to order, drawn with you, installed by our own London team.</p>
         <a class="btn btn-light btn-sm" href="contact.html">Send drawings for review</a>
       </div>
       <div>
-        <h2 class="footer-h">Systems</h2>
+        <h2 class="footer-h">Products</h2>
         <ul>
+          <li><a href="windows.html">Windows</a></li>
+          <li><a href="doors.html">Entrance &amp; French doors</a></li>
           <li><a href="lift-and-slide-doors.html">Lift &amp; slide doors</a></li>
           <li><a href="sliding-doors.html">Slim sliding doors</a></li>
           <li><a href="bifold-doors.html">Bi-fold doors</a></li>
-          <li><a href="products.html#hinged">French &amp; entrance doors</a></li>
-          <li><a href="products.html#windows">Casement &amp; tilt-turn windows</a></li>
+          <li><a href="facades.html">Facades &amp; roof glazing</a></li>
+          <li><a href="materials.html">Aluminium, timber or PVC</a></li>
         </ul>
       </div>
       <div>
@@ -196,6 +215,7 @@
           <li><a href="architects.html">For architects</a></li>
           <li><a href="developers.html">For developers &amp; contractors</a></li>
           <li><a href="projects.html">Founding projects</a></li>
+          <li><a href="about.html">About us</a></li>
           <li><a href="guide-large-sliding-doors-london.html">Design guide</a></li>
           <li><a href="architects.html#samples">Samples</a></li>
         </ul>

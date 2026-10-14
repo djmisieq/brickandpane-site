@@ -1,6 +1,6 @@
 // Client project portal: dashboard, project detail, new project, settings.
 import { store } from './store.js';
-import { SYSTEMS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
+import { SYSTEMS, MATERIALS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
 import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat } from '../pricing.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
 import { tr } from './i18n.js';
@@ -107,6 +107,8 @@ const LAYOUTS = {
   bifold: ['3+0', '4+0', '2+2', '5+0', '4+1', '3+2', '6+0', '3+3', '7+0', '4+3'].map((l) => [l, `${l} ${tr('leaves')}`]),
   hinged: [['S', 'Single door'], ['D', 'Double (French) door']],
   windows: [['', 'Not needed']],
+  facades: [['', 'Not needed']],
+  rooflights: [['', 'Not needed']],
 };
 const layoutOptions = (system, selected = '') => `<option value="">${system === 'windows' ? '—' : tr('Not sure')}</option>${(LAYOUTS[system] || []).filter(([v]) => v).map(([v, l]) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(tr(l))}</option>`).join('')}`;
 
@@ -114,6 +116,7 @@ function openingRow(i) {
   return `<tr data-row>
     <td data-label="${tr('Ref')}"><input name="ref" aria-label="${tr('Reference')}" value="${i < 9 ? `D0${i + 1}` : `D${i + 1}`}"></td>
     <td data-label="${tr('System')}"><select name="system" aria-label="${tr('System')}">${Object.entries(SYSTEMS).map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select></td>
+    <td data-label="${tr('Material')}"><select name="material" aria-label="${tr('Material')}"><option value="">${tr('Advise me')}</option>${Object.entries(MATERIALS).map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select></td>
     <td data-label="${tr('Width (mm)')}"><input name="width_mm" type="number" inputmode="numeric" min="300" max="30000" aria-label="${tr('Width (mm)')}" placeholder="mm"></td>
     <td data-label="${tr('Height (mm)')}"><input name="height_mm" type="number" inputmode="numeric" min="300" max="6000" aria-label="${tr('Height (mm)')}" placeholder="mm"></td>
     <td data-label="${tr('Layout')}"><select name="config" aria-label="${tr('Layout')}">${layoutOptions('lift-slide')}</select></td>
@@ -152,7 +155,7 @@ function newProject() {
         <section class="newp-sec"><h2 class="panel-h">${tr(home ? 'Your openings' : 'Openings schedule')}</h2>
           <p class="note">${tr(home ? 'Measure the hole in the wall (width × height) in millimetres. Rough sizes are fine; we measure exactly at the survey. Not sure about panels? Leave it blank.' : 'Structural opening sizes. Pick a layout to see the estimated panel weight.')}</p>
           <div class="sched-tools">${home ? '' : `<label class="btn btn-sm btn-ghost" for="np-csv">${tr('Import CSV')}</label><input id="np-csv" type="file" accept=".csv,text/csv" class="visually-hidden"><a class="linkish" href="#" data-csv-template>${tr('Download CSV template')}</a>`}</div>
-          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>${tr('Ref')}</th><th>${tr('System')}</th><th>${tr('Width (mm)')}</th><th>${tr('Height (mm)')}</th><th>${tr('Layout')}</th><th>${tr('Glazing')}</th><th>${tr('Qty')}</th><th>${tr('Panel weight')}</th>${showPrices() ? `<th>${tr('Est. budget')}</th>` : ''}<th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
+          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>${tr('Ref')}</th><th>${tr('System')}</th><th>${tr('Material')}</th><th>${tr('Width (mm)')}</th><th>${tr('Height (mm)')}</th><th>${tr('Layout')}</th><th>${tr('Glazing')}</th><th>${tr('Qty')}</th><th>${tr('Panel weight')}</th>${showPrices() ? `<th>${tr('Est. budget')}</th>` : ''}<th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
           <button type="button" class="btn btn-sm btn-ghost" data-add style="margin-top:1rem">${tr('Add opening')}</button>
           ${showPrices() ? `<div class="estimate" data-total style="margin-top:1.5rem"><span class="estimate-label">${tr('Budget estimate')}</span><span class="estimate-value" data-total-value>—</span><span class="estimate-text">${tr('Supplied & installed in London.')} ${esc(estimateNote())}</span></div>` : ''}
         </section>
@@ -204,6 +207,7 @@ function newProject() {
       tr2.querySelector('[name="height_mm"]').value = col(row, 'height_mm', 3);
       if (['d', 'dl', 't', 'tl'].includes(col(row, 'glazing', 5))) tr2.querySelector('[name="glazing"]').value = col(row, 'glazing', 5);
       tr2.querySelector('[name="qty"]').value = +col(row, 'qty', 6) || 1;
+      if (col(row, 'material', 7) in MATERIALS) tr2.querySelector('[name="material"]').value = col(row, 'material', 7);
       est(tr2);
     });
     total();
@@ -211,7 +215,7 @@ function newProject() {
   });
   $('[data-csv-template]', f)?.addEventListener('click', (e) => {
     e.preventDefault();
-    const blob = new Blob(['ref,system,width_mm,height_mm,config,glazing,qty\nD01,lift-slide,5600,2700,4C,t,1\nD02,bifold,4800,2400,4+1,d,1\nW01,windows,1200,1400,,t,2\n'], { type: 'text/csv' });
+    const blob = new Blob(['ref,system,width_mm,height_mm,config,glazing,qty,material\nD01,lift-slide,5600,2700,4C,t,1,alu\nD02,bifold,4800,2400,4+1,d,1,alu\nW01,windows,1200,1400,,t,2,timber\n'], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'openings-template.csv'; a.click(); URL.revokeObjectURL(a.href);
   });
   rows.addEventListener('change', () => total());
