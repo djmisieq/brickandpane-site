@@ -12,7 +12,7 @@
   --surface-2:#ece8df;
   --ink:#1c1b1a;           /* 15.6:1 on bg */
   --ink-2:#55514a;         /* 7.0:1 on bg */
-  --muted:#6f6a62;         /* 5.0:1 on bg — small text allowed */
+  --muted:#6f6a62;         /* 4.9:1 on bg — small text allowed (darker on .alt) */
   --line:#d6d2c9;
   --line-strong:#b9b4a9;
   --accent:#8b3a26;        /* dark brick, 7.0:1 on bg; white on it 7.7:1 */
@@ -83,7 +83,7 @@ ul,ol{padding-left:1.2em}
 .section{padding-block:var(--section)}
 .section-tight{padding-block:calc(var(--section) * .6)}
 .section + .section:not(.theme-dark):not(.alt){border-top:1px solid var(--line)}
-.alt{background:var(--surface-2)}
+.alt{background:var(--surface-2);--muted:#666159}  /* 5.0:1 on surface-2; the base muted is only 4.4:1 there */
 .grid-12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--gutter)}
 .span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-4{grid-column:span 4}.span-8{grid-column:span 8}.start-8{grid-column:8 / span 5}.start-7{grid-column:7 / span 6}
 @media (max-width:1023px){.grid-12>*{grid-column:1 / -1!important}}
