@@ -1,0 +1,45 @@
+<!--{"title":"Sign in to your project portal | Brick & Pane","description":"Sign in or create an account to send projects for review and follow every stage live.","nav":"portal","bodyClass":"no-action-bar"}-->
+<section class="section-tight">
+  <div class="container grid-12" id="auth">
+    <div class="span-5">
+      <span class="eyebrow">Project portal</span>
+      <h1 class="app-h1" style="font-size:var(--step-4)">Every project, every stage, without a phone call.</h1>
+      <ul class="checklist" style="margin-top:1.5rem;display:grid;gap:.6rem;color:var(--ink-2)">
+        <li>Send drawings and an openings schedule for review</li>
+        <li>See who has the ball, and when the next update is due</li>
+        <li>Approve quotations and shop drawings online</li>
+        <li>Ask questions in one thread the whole team sees</li>
+        <li>Get an email the moment anything changes</li>
+      </ul>
+    </div>
+    <div class="start-7" style="grid-column:7 / span 6">
+      <div class="auth-card">
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-auth-tab="signin">Sign in</button>
+          <button type="button" role="tab" aria-selected="false" data-auth-tab="signup">Create account</button>
+        </div>
+        <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
+        <form data-auth-panel="signin" data-signin class="auth-form">
+          <div class="field"><label for="si-email">Email</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="si-pw">Password</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
+          <div class="btn-row"><button class="btn" type="submit">Sign in</button><button class="linkish" type="button" data-magic>Email me a sign-in link instead</button></div>
+        </form>
+        <form data-auth-panel="signup" data-signup class="auth-form" hidden>
+          <div class="field-row">
+            <div class="field"><label for="su-name">Name</label><input id="su-name" name="full_name" autocomplete="name" required></div>
+            <div class="field"><label for="su-co">Practice / company</label><input id="su-co" name="company" autocomplete="organization"></div>
+          </div>
+          <div class="field"><label for="su-email">Email</label><input id="su-email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="su-pw">Password</label><input id="su-pw" name="password" type="password" autocomplete="new-password" minlength="10" required><span class="hint">At least 10 characters.</span></div>
+          <p class="note">By creating an account you agree to our <a href="privacy.html">privacy notice</a>.</p>
+          <div><button class="btn" type="submit">Create account</button></div>
+        </form>
+        <div class="demo-login" data-demo hidden>
+          <p><strong>Demo mode:</strong> the portal isn't connected to a database yet. Try it with sample data:</p>
+          <div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-demo-login="client">Continue as demo architect</button><button class="btn btn-ghost btn-sm" type="button" data-demo-login="staff">Continue as demo staff (CRM)</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<script type="module" src="js/portal/login.js"></script>

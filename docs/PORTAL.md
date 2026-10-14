@@ -1,0 +1,126 @@
+# Portal projektu i wewnętrzny CRM
+
+**Status:** działa w trybie demo, a backend (Supabase) jest gotowy do uruchomienia. **Data:** 14.10.2026
+
+## 1. Po co to jest
+
+Architekt, deweloper albo inwestor zakłada konto, wysyła projekt do wyceny i w swoim panelu widzi na bieżąco:
+- na jakim etapie jest projekt,
+- **po czyjej stronie jest piłka**: „Waiting on you” czy „With Brick & Pane”,
+- **do kiedy obiecaliśmy kolejną aktualizację**,
+- wszystkie dokumenty, akceptacje i całą korespondencję.
+
+Nie musi dzwonić, żeby się czegoś dowiedzieć. Zespół Brick & Pane prowadzi te same projekty w wewnętrznym CRM: tablica kanban, terminy, wartość kontraktu i notatki wewnętrzne. Konkurencja w UK takiego panelu dla klienta nie ma (patrz `docs/audyt/01-produkt-i-rynek.md`).
+
+## 2. Jak obejrzeć demo
+
+1. Otwórz `login.html` i wybierz **Continue as demo architect**.
+2. W drugiej karcie otwórz `admin.html` i wybierz **Continue as demo staff (CRM)**.
+3. Jako pracownik zmień etap projektu, wyślij wiadomość albo udostępnij dokument. W karcie architekta status, powiadomienie i wiadomość pojawią się **na żywo, bez odświeżania**.
+4. Jako architekt zaakceptuj wycenę. W CRM pojawi się powiadomienie.
+
+Dane demo są przykładowe i zapisują się tylko w przeglądarce. Przycisk „Reset demo” przywraca stan początkowy.
+
+## 3. Etapy projektu (pipeline)
+
+| # | Etap (klient widzi) | Faza | Po czyjej stronie | Obiecany czas |
+|---|---|---|---|---|
+| 1 | Received | Quotation | Brick & Pane | 1 dzień roboczy |
+| 2 | Technical review | Quotation | Brick & Pane | 2 dni robocze |
+| 3 | Questions for you | Quotation | **klient** | — |
+| 4 | Quote issued | Quotation | **klient** (akceptacja wyceny) | — |
+| 5 | Order confirmed | Design | Brick & Pane | 5 dni roboczych |
+| 6 | Site survey | Design | Brick & Pane | 5 dni roboczych |
+| 7 | Drawings for approval | Design | **klient** (akceptacja rysunków) | — |
+| 8 | In production | Delivery | Brick & Pane | wg programu |
+| 9 | Delivery scheduled | Delivery | Brick & Pane | |
+| 10 | Installation | Delivery | Brick & Pane | |
+| 11 | Handover | Delivery | Brick & Pane | |
+| 12 | Completed | — | — | |
+| — | On hold / Closed | — | — | |
+
+Definicje etapów są w `js/portal/core.js` (`STAGES`) i w bazie (enum `project_stage`). Obiecany termin liczy się automatycznie z czasu przypisanego do etapu, a pracownik może go nadpisać.
+
+## 4. Powiadomienia
+
+| Zdarzenie | Kto dostaje | Kanał |
+|---|---|---|
+| Nowy projekt | opiekun projektu, a jeśli go nie ma, cały zespół | w panelu + e-mail |
+| Zmiana etapu (widoczna dla klienta) | członkowie projektu po stronie klienta | w panelu + e-mail |
+| Nowy dokument / prośba o akceptację | klient | w panelu + e-mail |
+| Akceptacja / prośba o zmiany | opiekun | w panelu + e-mail |
+| Wiadomość od firmy | klient | w panelu + e-mail |
+| Wiadomość od klienta | opiekun | w panelu + e-mail |
+| Plik wgrany przez klienta | opiekun | w panelu + e-mail |
+
+Notatki wewnętrzne i zmiany etapu oznaczone jako ukryte **nie trafiają do klienta**. Klient może wyłączyć e-maile w Settings. Powiadomienia tworzy baza danych (triggery), więc nie da się ich pominąć z poziomu przeglądarki.
+
+## 5. Uprawnienia (wymuszane w bazie przez Row Level Security)
+
+**Klient:**
+- widzi tylko projekty, w których jest członkiem;
+- zakłada projekty;
+- edytuje listę otworów tylko na etapach Received i Questions;
+- wgrywa pliki i pisze wiadomości;
+- akceptuje dokumenty oczekujące na jego decyzję;
+- **nie może**: zmienić etapu ani terminu, nadać sobie uprawnień pracownika, zobaczyć notatek wewnętrznych, wartości kontraktu ani ukrytych zdarzeń.
+
+**Pracownik (staff):**
+- widzi i zmienia wszystko;
+- uprawnienia nadaje się wyłącznie poleceniem SQL (sekcja 6).
+
+**Pliki:**
+- prywatny bucket w Supabase Storage, dostęp przez linki ważne 5 minut;
+- klient pobiera tylko pliki udostępnione jemu.
+
+**Przetestowane:** migrację uruchomiłem na prawdziwym silniku Postgres (PGlite). Wynik:
+- próba podniesienia uprawnień przez klienta została zablokowana;
+- próba zmiany etapu przez klienta została zablokowana;
+- inny klient nie widzi cudzych projektów;
+- klient nie może wysłać notatki wewnętrznej ani podrobić wyceny;
+- powiadomienia trafiają do właściwych osób.
+
+## 6. Uruchomienie produkcyjne (ok. 30 min)
+
+1. Załóż projekt na [supabase.com](https://supabase.com). Wybierz region **London (eu-west-2)**, bo dane klientów powinny zostać w UK.
+2. W **SQL Editor** wklej i uruchom `supabase/migrations/0001_project_portal.sql`.
+3. **Authentication → URL Configuration:**
+   - Site URL: `https://brickandpane.co.uk`,
+   - Redirect URLs: `https://brickandpane.co.uk/portal.html`.
+4. Wpisz **Project URL** i **anon public key** w `js/portal/config.js`. Klucz anon jest publiczny z założenia, bo dostęp chroni RLS. Potem uruchom `node build.mjs`.
+5. Załóż swoje konto przez `login.html`, a następnie w SQL Editor nadaj sobie uprawnienia:
+   ```sql
+   update public.profiles set role = 'staff'
+   where id = (select id from auth.users where email = 'twoj@brickandpane.co.uk');
+   ```
+6. **E-maile:**
+   - załóż konto w [Resend](https://resend.com) i zweryfikuj domenę `brickandpane.co.uk`;
+   - wdróż funkcję: `supabase functions deploy notify-email`;
+   - ustaw sekrety: `RESEND_API_KEY`, `MAIL_FROM`, `PORTAL_URL`;
+   - w **Database → Webhooks** dodaj webhook: tabela `notifications`, zdarzenie INSERT, wywołuje funkcję `notify-email`.
+7. **Auth → Email Templates:** dostosuj treść maili logowania i potwierdzenia do marki.
+
+**Koszt:** Supabase Free na start, Pro 25 USD/mies., gdy potrzebne będą kopie zapasowe i większe pliki. Resend jest darmowy do 3000 e-maili miesięcznie.
+
+## 7. Pliki
+
+| Plik | Rola |
+|---|---|
+| `supabase/migrations/0001_project_portal.sql` | Schemat, RLS, triggery powiadomień, storage, realtime |
+| `supabase/functions/notify-email/index.ts` | Wysyłka e-maili z powiadomieniami (Resend) |
+| `js/portal/config.js` | Klucze Supabase. Puste = tryb demo |
+| `js/portal/core.js` | Etapy, formatowanie, szacunek wagi panelu |
+| `js/portal/store-demo.js` / `store-supabase.js` | Dwie implementacje tego samego API danych |
+| `js/portal/ui.js` | Wspólne komponenty: pipeline, status, dokumenty, wiadomości, oś czasu, powiadomienia |
+| `js/portal/portal.js` | Panel klienta: lista, szczegóły, nowy projekt, ustawienia |
+| `js/portal/admin.js` | CRM: tablica, lista, panel sterowania projektem |
+| `js/portal/login.js`, `src/pages/login.html`, `portal.html`, `admin.html` | Strony |
+
+## 8. Dalszy rozwój (propozycje)
+
+- **Zaproszenia do projektu:** architekt zaprasza klienta-inwestora albo kolegę z pracowni. Tabela `project_members` jest już gotowa.
+- **Tygodniowe podsumowanie e-mail** (opcja `notify_digest` jest już w profilu) oraz **alert o przekroczonym terminie** dla zespołu. Oba przez zaplanowaną funkcję (Supabase cron).
+- **Formularz z `contact.html` zapisywany od razu jako projekt** dla zalogowanych, a dla niezalogowanych jako lead w CRM.
+- **Wersjonowanie rysunków** z porównaniem rewizji oraz komentarze przypięte do konkretnego rysunku.
+- **Harmonogram dostaw** z datami poszczególnych partii przy dużych pakietach dla deweloperów.
+- **Eksport rejestru zmian i akceptacji do PDF** jako „golden thread” na przekazanie budynku.
