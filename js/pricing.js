@@ -17,7 +17,10 @@ export const PRICING = {
     bifold: { perM2: 760, perPanel: 290, minimum: 4200 },
     hinged: { perM2: 900, perPanel: 400, minimum: 2800 },
     windows: { perM2: 650, perPanel: 180, minimum: 900 },
+    facades: { perM2: 950, perPanel: 0, minimum: 6000 },
+    rooflights: { perM2: 1400, perPanel: 0, minimum: 2500 },
   },
+  material: { alu: 1, timber: 1.1, pvc: 0.7, alutimber: 1.3 },   // multiplier on the whole opening; '' counts as aluminium
   glazing: { d: 1, dl: 1.08, t: 1.12, tl: 1.2 },   // multiplier on the area rate
   extras: {
     flushThresholdPerM: 180,             // recessed track / flush threshold, per metre of width
@@ -46,7 +49,7 @@ export function estimateOpening(o) {
   const glazing = PRICING.glazing[o.glazing] || 1;
   let each = m2 * r.perM2 * glazing + panelsFor(o) * r.perPanel;
   if (o.flush) each += (o.width_mm / 1000) * PRICING.extras.flushThresholdPerM;
-  each = Math.max(each, r.minimum);
+  each = Math.max(each, r.minimum) * (PRICING.material[o.material] || 1);
   return { each, total: each * (o.qty || 1) };
 }
 

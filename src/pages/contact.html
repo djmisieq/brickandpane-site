@@ -63,14 +63,26 @@
         </div>
         <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
-          <legend>Systems</legend>
+          <legend>Products</legend>
           <div class="choice-grid">
+            <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>Entrance / French doors</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="lift-slide"><span>Lift &amp; slide</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="sliding"><span>Slim sliding</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="bifold"><span>Bi-fold</span></label>
-            <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>French / entrance</span></label>
-            <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="facades"><span>Curtain walling / shopfront</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="rooflights"><span>Roof lantern / rooflight</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="unsure"><span>Not sure yet</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Material</legend>
+          <div class="choice-grid">
+            <label class="choice"><input type="radio" name="material" value="alu"><span>Aluminium</span></label>
+            <label class="choice"><input type="radio" name="material" value="timber"><span>Timber</span></label>
+            <label class="choice"><input type="radio" name="material" value="pvc"><span>PVC</span></label>
+            <label class="choice"><input type="radio" name="material" value="alutimber"><span>Timber-aluminium</span></label>
+            <label class="choice"><input type="radio" name="material" value="unsure"><span>Advise me</span></label>
           </div>
         </fieldset>
         <div class="field-row">

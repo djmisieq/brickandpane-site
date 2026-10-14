@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404',
+  'windows', 'doors', 'facades', 'materials',
 ];
 const isMobileNav = (page) => page.viewportSize().width < 1100;
 
@@ -60,10 +61,10 @@ test.describe('navigation', () => {
 
     // Dropdown works as an accordion inside the menu.
     const sub = page.locator('.sub-toggle');
-    await expect(page.locator('#sub-doors')).toBeHidden();
+    await expect(page.locator('#sub-products')).toBeHidden();
     await sub.click();
     await expect(sub).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.locator('#sub-doors a[href="bifold-doors.html"]')).toBeVisible();
+    await expect(page.locator('#sub-products a[href="bifold-doors.html"]')).toBeVisible();
 
     // Escape closes and returns focus to the toggle.
     await page.keyboard.press('Escape');
@@ -85,23 +86,24 @@ test.describe('navigation', () => {
     const box = await page.locator('#primary-nav').boundingBox();
     expect(box.y).toBeLessThanOrEqual(90);
     await expect(page.locator('.sub-toggle')).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.locator('#sub-doors a[aria-current="page"]')).toHaveAttribute('href', 'bifold-doors.html');
+    await expect(page.locator('#sub-products a[aria-current="page"]')).toHaveAttribute('href', 'bifold-doors.html');
   });
 
   test('desktop dropdown opens, closes on Escape and outside click', async ({ page }) => {
     test.skip(isMobileNav(page), 'desktop only');
     await page.goto('/index.html');
     const sub = page.locator('.sub-toggle');
-    const panel = page.locator('#sub-doors');
+    const panel = page.locator('#sub-products');
     await expect(panel).toBeHidden();
     await sub.click();
     await expect(panel).toBeVisible();
-    await expect(panel.locator('a')).toHaveCount(4);
+    await expect(panel.locator('.mega-h')).toHaveCount(4);
+    await expect(panel.locator('a[href="windows.html"]')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect(sub).toBeFocused();
     await sub.click();
-    await page.locator('h1').click();
+    await page.mouse.click(5, page.viewportSize().height - 5);
     await expect(panel).toBeHidden();
     await sub.click();
     await panel.locator('a[href="sliding-doors.html"]').click();
@@ -219,5 +221,45 @@ test.describe('quote form', () => {
     await page.locator('#step-3 [data-prev]').click();
     await page.locator('#step-2 [data-prev]').click();
     await expect(page.locator('#f-name')).toHaveValue('Anna Clarke');
+  });
+});
+
+test.describe('full product range', () => {
+  test('homepage explorer links every product family and highlights from the list', async ({ page }) => {
+    await page.goto('/index.html');
+    const hots = page.locator('.explorer .hot');
+    await expect(hots).toHaveCount(5);
+    for (const href of ['windows.html', 'doors.html', 'products.html#sliding', 'facades.html#lanterns', 'facades.html#curtain-walling']) {
+      await expect(page.locator(`.explorer .hot[href="${href}"]`)).toHaveCount(1);
+    }
+    await page.locator('.explorer-list li[data-hot="2"]').hover();
+    await expect(page.locator('.hot[data-hot="2"]')).toHaveClass(/is-hot/);
+    await page.locator('.explorer-list a[href="windows.html"]').click();
+    await expect(page).toHaveURL(/windows\.html$/);
+    await expect(page.locator('#sash')).toBeVisible();
+  });
+
+  test('product matrix shows availability by material', async ({ page }) => {
+    await page.goto('/products.html');
+    const sash = page.locator('.matrix tr', { has: page.locator('a[href="windows.html#sash"]') });
+    await expect(sash.locator('td').nth(0).locator('.no')).toHaveCount(1);
+    await expect(sash.locator('td').nth(1).locator('.yes')).toHaveCount(1);
+    await expect(page.locator('.matrix a[href="facades.html#rooflights"]')).toBeVisible();
+  });
+
+  test('material advisor changes its answer and hands off to the form', async ({ page }) => {
+    await page.goto('/materials.html#advisor');
+    const out = page.locator('[data-out-material]');
+    await expect(out).toHaveText('Aluminium');
+    await page.locator('label', { hasText: 'Listed building' }).click();
+    await expect(out).toHaveText('Timber');
+    await expect(page.locator('[data-out-why]')).toContainText('listed building consent');
+    await page.locator('label', { hasText: 'Neither' }).click();
+    await page.locator('label', { hasText: 'Lowest cost' }).click();
+    await expect(out).toHaveText('PVC');
+    await page.locator('[data-out-link]').click();
+    await expect(page).toHaveURL(/contact\.html\?system=windows&material=pvc/);
+    await expect(page.locator('input[name="systems"][value="windows"]')).toBeChecked();
+    await expect(page.locator('input[name="material"][value="pvc"]')).toBeChecked();
   });
 });
