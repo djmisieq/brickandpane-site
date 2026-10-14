@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login',
-  'windows', 'doors', 'facades', 'materials',
+  'windows', 'doors', 'facades', 'materials', '404',
 ];
 
 test.describe('every Polish page', () => {
@@ -109,4 +109,22 @@ test('Polish material advisor answers in Polish', async ({ page }) => {
   await page.locator('label', { hasText: 'Zabytek' }).click();
   await expect(page.locator('[data-out-material]')).toHaveText('Drewno');
   await expect(page.locator('[data-out-why]')).toContainText('zgody konserwatora');
+});
+
+test('Polish staff CRM', async ({ page }) => {
+  await page.goto('/pl/login.html');
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+  await page.goto('/pl/admin.html');
+  await expect(page).toHaveURL(/\/pl\/login\.html/);
+  await page.locator('[data-demo-login="staff"]').click();
+  await expect(page).toHaveURL(/\/pl\/admin\.html/);
+  await expect(page.locator('h1')).toHaveText('Lejek projektów');
+  await expect(page.locator('.appbar-title')).toHaveText('CRM projektów');
+  await expect(page.locator('.stats')).toContainText('Czeka na klienta');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await expect(page.locator('[data-stage] .panel-h')).toHaveText('Zmień etap');
+  await page.locator('[data-stage] button[type="submit"]').click();
+  await expect(page.locator('.toast')).toHaveText('Najpierw wybierz nowy etap.');
+  await page.locator('[data-tab="messages"]').click();
+  await expect(page.locator('.composer')).toContainText('Wiadomość do klienta');
 });
