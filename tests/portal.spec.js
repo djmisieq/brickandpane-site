@@ -64,3 +64,32 @@ test('clients cannot use the staff CRM', async ({ page }) => {
   await page.goto('/admin.html');
   await expect(page.locator('#app')).toContainText('This area is for Brick & Pane staff');
 });
+
+test('sizing tool opening carries into a homeowner’s new request with a budget', async ({ page }) => {
+  await page.goto('/lift-and-slide-doors.html#sizing');
+  await page.locator('[data-tool-portal]').click();
+  await expect(page).toHaveURL(/login\.html\?next=portal\.html/);
+  await page.locator('[data-demo-login="homeowner"]').click();
+  await expect(page).toHaveURL(/portal\.html#\/new$/);
+  await expect(page.locator('h1')).toHaveText('Get a price');
+  await expect(page.locator('[data-rows] input[name="width_mm"]')).toHaveValue('5600');
+  await expect(page.locator('[data-rows] select[name="config"]')).toHaveValue('4C');
+  await expect(page.locator('[data-total-value]')).toHaveText(/£[\d,]+–£[\d,]+ \+ VAT/);
+  await expect(page.locator('#np-riba')).toBeHidden();
+  await page.fill('#np-name', 'Our kitchen');
+  await page.fill('#np-loc', 'E17');
+  await page.locator('.newp button[type="submit"]').click();
+  await expect(page.locator('.now-card')).toContainText('Request received');
+  await expect(page.locator('.estimate')).toContainText('Budget estimate');
+  await expect(page.locator('.tracker li.is-current')).toHaveText('Quote');
+});
+
+test('homeowner tracks an order like an online shop', async ({ page }) => {
+  await page.locator('[data-demo-login="homeowner"]').click();
+  await expect(page.locator('.eyebrow').first()).toHaveText('Your orders');
+  const card = page.locator('.pcard', { hasText: 'Kitchen extension doors' });
+  await expect(card.locator('.badge')).toHaveText('Being made');
+  await expect(card.locator('.tracker li.is-current')).toHaveText('Made');
+  await card.click();
+  await expect(page.locator('.now-card')).toContainText('being made to your approved drawings');
+});

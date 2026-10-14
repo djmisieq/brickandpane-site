@@ -550,3 +550,22 @@ fieldset{border:0;padding:0;min-width:0}
 .auth-form{display:grid;gap:var(--s-m)}
 .demo-login{border-top:1px solid var(--line);padding-top:var(--s-m);display:grid;gap:var(--s-s);font-size:var(--step--1)}
 body.app .site-footer{display:none}
+
+/* budget estimate (tools + portal) */
+.estimate{display:grid;gap:.25rem;padding:var(--s-m);background:var(--surface-2);border-left:3px solid var(--ink)}
+.estimate:empty{display:none}
+.estimate-label{font-family:var(--mono);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.estimate-value{font-family:var(--mono);font-size:var(--step-2);font-variant-numeric:tabular-nums}
+.estimate-text{font-size:var(--step--1);color:var(--ink-2)}
+/* shop-style order tracker (homeowners) */
+.tracker{list-style:none;padding:0;display:grid;grid-template-columns:repeat(5,1fr);margin:var(--s-s) 0;counter-reset:none}
+.tracker li{position:relative;display:grid;justify-items:center;gap:6px;font-size:.75rem;color:var(--muted);text-align:center}
+.tracker li::before{content:"";position:absolute;top:6px;left:-50%;width:100%;height:2px;background:var(--line);z-index:0}
+.tracker li:first-child::before{display:none}
+.tracker-dot{position:relative;z-index:1;width:14px;height:14px;border-radius:50%;border:2px solid var(--line-strong);background:var(--surface)}
+.tracker li.is-done{color:var(--ink)}
+.tracker li.is-done::before,.tracker li.is-current::before{background:var(--ink)}
+.tracker li.is-done .tracker-dot{background:var(--ink);border-color:var(--ink)}
+.tracker li.is-current{color:var(--accent);font-weight:600}
+.tracker li.is-current .tracker-dot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+.now-card .tracker{margin:0 0 var(--s-m)}
