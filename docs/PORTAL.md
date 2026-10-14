@@ -157,3 +157,28 @@ Obecne liczby są **przykładowe**. Dlatego:
 **Baza:** uruchom też `supabase/migrations/0002_accounts_estimates.sql`. Dodaje typ konta (`account_type`) i pola szacunku przy projekcie. Przetestowane na PGlite.
 
 **Następny krok (propozycja):** wpłata zaliczki online przy akceptacji wyceny (Stripe Checkout). Wtedy przejście „Quote → Order” dzieje się automatycznie, jak w sklepie.
+
+## 10. Zespół, rejestr zmian, płatności (po audycie person, 14.10.2026)
+
+- **Role w projekcie:** owner, architekt, klient, wykonawca, inżynier.
+  - Właściciel projektu zaprasza osoby e-mailem w zakładce Overview, sekcja Team.
+  - Konto, które już istnieje, dołącza od razu. Nowa osoba dołącza automatycznie po założeniu konta.
+- **Kto akceptuje co:**
+  - **wycenę** akceptuje klient (albo właściciel, który nie jest architektem);
+  - architekt może ją zaakceptować **w imieniu klienta** tylko wtedy, gdy w zespole nie ma klienta, i musi to zadeklarować;
+  - **rysunki** architekt lub inżynier oznacza jako „Reviewed — no comments” albo „Reviewed — with comments”;
+  - przed akceptacją wyceny widać kwotę i rewizję, a zgodę trzeba potwierdzić zaznaczeniem pola.
+- **Rejestr zmian (zakładka Changes):**
+  - każda zmiana specyfikacji ma opis i **wpływ na U-value, bezpieczeństwo, szczelność, koszt i termin**;
+  - propozycje Brick & Pane zatwierdza zespół klienta, a prośby zespołu klienta rozpatruje Brick & Pane;
+  - całość jest zapisana z datami. To realizacja obietnicy „no silent substitutions”.
+- **Terminy i płatności:**
+  - zespół wpisuje datę dostawy i montażu, a klient dostaje powiadomienie;
+  - harmonogram płatności (zaliczka, przy dostawie, na koniec) jest widoczny u klienta: „Paid £X of £Y”.
+- **CRM:**
+  - wybór nowego etapu nie ma wartości domyślnej, więc nie da się przesunąć projektu przez pomyłkę;
+  - notatka wewnętrzna ma osobny tryb z innym kolorem i przyciskiem;
+  - tablica pokazuje wszystkie etapy bez przewijania;
+  - opisy są pisane z perspektywy pracownika.
+- **Baza:** uruchom `supabase/migrations/0003_team_changes_payments.sql`. Reguły są wymuszane w bazie, m.in. prawo do akceptacji wyceny i decyzje o zmianach.
+- **Testy:** `npm test` uruchamia budowanie strony, testy reguł bazy (`tests/db`, prawdziwy Postgres w PGlite) i testy w przeglądarce (desktop, tablet, mobile).

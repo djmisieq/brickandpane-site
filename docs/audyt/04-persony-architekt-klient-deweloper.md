@@ -27,6 +27,8 @@
 
 ## B. Do poprawienia w kodzie (bez danych od właściciela)
 
+> **Status 14.10.2026: wszystkie punkty z części B są zrobione** (PR #4), poza trybem pakietowym dla deweloperów, który jest oznaczony jako „później”. Część A nadal czeka na dane od właściciela.
+
 **Spójność i uczciwość komunikatów:**
 - Home: „Technical data: published” zmienić na prawdziwy status. /architects: pogodzić „Gated downloads: none” ze statusem „Preparing”.
 - /projects: zmiękczyć „Lower risk than an established supplier”.

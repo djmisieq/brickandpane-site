@@ -15,7 +15,7 @@ let channel = null;
 const subscribe = () => {
   if (channel) return;
   channel = sb.channel('portal');
-  ['projects', 'stage_events', 'documents', 'messages', 'notifications'].forEach((table) =>
+  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members'].forEach((table) =>
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
   channel.subscribe();
 };
@@ -77,8 +77,14 @@ export const store = {
       sb.from('approvals').select(`*, actor:profiles(${PROFILE})`).eq('project_id', id).then(ok),
       sb.from('messages').select(`*, author:profiles(${PROFILE})`).eq('project_id', id).order('created_at').then(ok),
     ]);
+    const [members, changes, payments, invites] = await Promise.all([
+      sb.from('project_members').select(`*, user:profiles(${PROFILE})`).eq('project_id', id).then(ok),
+      sb.from('changes').select(`*, raiser:profiles!changes_raised_by_fkey(${PROFILE}), decider:profiles!changes_decided_by_fkey(${PROFILE})`).eq('project_id', id).order('created_at', { ascending: false }).then(ok),
+      sb.from('payments').select('*').eq('project_id', id).order('due_date').then(ok),
+      sb.from('project_invites').select('*').eq('project_id', id).then(ok),
+    ]);
     const internal = me?.role === 'staff' ? ok(await sb.from('project_internal').select('*').eq('project_id', id).maybeSingle()) : undefined;
-    return { project, openings, events, documents, approvals, messages, internal };
+    return { project, openings, events, documents, approvals, messages, internal, members, changes, payments, invites };
   },
 
   async createProject(data, openings, files) {
@@ -106,14 +112,28 @@ export const store = {
         version: staff ? (meta.version || '') : '',
         visible_to_client: staff ? meta.visible !== false : true,
         approval: staff && meta.approval ? 'pending' : 'none',
+        amount: staff && meta.amount ? Number(meta.amount) : null,
       }));
     }
   },
 
-  async decide(docId, decision, comment = '') {
+  async decide(docId, decision, comment = '', { onBehalf = false } = {}) {
     const { data: { user } } = await sb.auth.getUser();
     const d = ok(await sb.from('documents').select('project_id').eq('id', docId).single());
-    ok(await sb.from('approvals').insert({ document_id: docId, project_id: d.project_id, decision, comment, actor_id: user.id }));
+    const { error } = await sb.from('approvals').insert({ document_id: docId, project_id: d.project_id, decision, comment, on_behalf: onBehalf, actor_id: user.id });
+    if (error) throw new Error(error.code === '42501' ? 'You can’t decide on this document. If it’s a quotation, your client needs to accept it, or confirm you have their authority.' : error.message);
+  },
+
+  async inviteMember(pid, email, role) { return ok(await sb.rpc('invite_member', { p: pid, e: email.trim(), r: role })); },
+  async raiseChange(pid, { title, description, impact = '' }) {
+    const { data: { user } } = await sb.auth.getUser();
+    ok(await sb.from('changes').insert({ project_id: pid, title, description, impact, raised_by: user.id }));
+  },
+  async decideChange(changeId, decision, comment = '') { ok(await sb.rpc('decide_change', { c: changeId, decision, note: comment })); },
+  async addPayment(pid, { label, amount, due_date }) { ok(await sb.from('payments').insert({ project_id: pid, label, amount: Number(amount), due_date })); },
+  async markPaid(paymentId) {
+    const row = ok(await sb.from('payments').select('paid_at').eq('id', paymentId).single());
+    ok(await sb.from('payments').update({ paid_at: row.paid_at ? null : new Date().toISOString() }).eq('id', paymentId));
   },
 
   async setStage(pid, to, { note = '', visible = true, next_step, due_at } = {}) {
@@ -126,7 +146,7 @@ export const store = {
   },
 
   async updateProject(pid, patch) {
-    const allowed = {}; ['assignee_id', 'next_step', 'due_at'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; });
+    const allowed = {}; ['assignee_id', 'next_step', 'due_at', 'delivery_at', 'install_at'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; });
     ok(await sb.from('projects').update(allowed).eq('id', pid));
   },
   async updateInternal(pid, patch) { ok(await sb.from('project_internal').update({ ...patch, updated_at: new Date().toISOString() }).eq('project_id', pid)); },

@@ -3,18 +3,18 @@
 // Pipeline. `court` says who the ball is with: 'us' (Brick & Pane) or 'you' (the client).
 // `sla` is the promised turnaround in working days while the project sits in that stage.
 export const STAGES = [
-  { id: 'submitted', homeLabel: 'Request received', home: 'We have your request and will be in touch within one working day.', label: 'Received', phase: 'Quotation', court: 'us', sla: 1, client: 'We have your project and are assigning a technical lead.' },
-  { id: 'in_review', homeLabel: 'Preparing your price', home: "We're checking your sizes and preparing your price.", label: 'Technical review', phase: 'Quotation', court: 'us', sla: 2, client: 'Your technical lead is checking sizes, panel weights, compliance and interfaces.' },
-  { id: 'clarification', homeLabel: 'A question for you', home: 'We need a quick answer before we can finish your price. See Messages.', label: 'Questions for you', staffLabel: 'Questions to client', phase: 'Quotation', court: 'you', client: 'We need a few answers before we can price accurately. See Messages.' },
-  { id: 'quote_issued', homeLabel: 'Your quote is ready', home: 'Your quote is in Documents. Accept it there or ask us to change something.', label: 'Quote issued', phase: 'Quotation', court: 'you', client: 'Your quotation is in Documents. Accept it or ask for changes there.' },
-  { id: 'accepted', homeLabel: 'Order confirmed', home: "Thank you for your order. We'll book a survey at your home.", label: 'Order confirmed', phase: 'Design', court: 'us', sla: 5, client: 'Thank you. We are booking your site survey.' },
-  { id: 'survey', homeLabel: 'Home survey', home: "We measure the openings and check how we'll get the glass in.", label: 'Site survey', phase: 'Design', court: 'us', sla: 5, client: 'We survey the openings and the delivery route, then draw the shop drawings.' },
-  { id: 'drawings', homeLabel: 'Approve your drawings', home: 'Your final drawings are ready. Please approve them in Documents.', label: 'Drawings for approval', phase: 'Design', court: 'you', client: 'Shop drawings are ready. Approve them or request changes in Documents.' },
-  { id: 'production', homeLabel: 'Being made', home: 'Your doors and windows are being made to your approved drawings.', label: 'In production', phase: 'Delivery', court: 'us', client: 'Your doors and windows are being made to the signed drawings.' },
-  { id: 'delivery', homeLabel: 'Delivery booked', home: 'Your delivery date is confirmed.', label: 'Delivery scheduled', phase: 'Delivery', court: 'us', client: 'Delivery date and lifting plan are confirmed.' },
-  { id: 'installation', homeLabel: 'Installation', home: 'Our team is fitting your doors and windows.', label: 'Installation', phase: 'Delivery', court: 'us', client: 'Our own team is installing on site.' },
-  { id: 'handover', homeLabel: 'Finished — your documents', home: 'Your guarantee, certificates and care guide are in Documents.', label: 'Handover', phase: 'Delivery', court: 'us', client: 'O&M manual, declarations of performance and the guarantee are in Documents.' },
-  { id: 'completed', homeLabel: 'Completed', home: "All done. We'll check in after the first season.", label: 'Completed', phase: 'Delivery', court: 'none', client: 'Project complete. We will check in after the first season.' },
+  { id: 'submitted', staff: 'New project. Assign a technical lead and confirm receipt to the client.', homeLabel: 'Request received', home: 'We have your request and will be in touch within one working day.', label: 'Received', phase: 'Quotation', court: 'us', sla: 1, client: 'We have your project and are assigning a technical lead.' },
+  { id: 'in_review', staff: 'Check sizes, panel weights, compliance and interfaces, then price it.', homeLabel: 'Preparing your price', home: "We're checking your sizes and preparing your price.", label: 'Technical review', phase: 'Quotation', court: 'us', sla: 2, client: 'Your technical lead is checking sizes, panel weights, compliance and interfaces.' },
+  { id: 'clarification', staff: 'Waiting for the client to answer our questions in Messages.', homeLabel: 'A question for you', home: 'We need a quick answer before we can finish your price. See Messages.', label: 'Questions for you', staffLabel: 'Questions to client', phase: 'Quotation', court: 'you', client: 'We need a few answers before we can price accurately. See Messages.' },
+  { id: 'quote_issued', staff: 'Quotation issued. Waiting for the client to accept or ask for changes.', homeLabel: 'Your quote is ready', home: 'Your quote is in Documents. Accept it there or ask us to change something.', label: 'Quote issued', phase: 'Quotation', court: 'you', client: 'Your quotation is in Documents. Accept it or ask for changes there.' },
+  { id: 'accepted', staff: 'Order confirmed. Book the site survey.', homeLabel: 'Order confirmed', home: "Thank you for your order. We'll book a survey at your home.", label: 'Order confirmed', phase: 'Design', court: 'us', sla: 5, client: 'Thank you. We are booking your site survey.' },
+  { id: 'survey', staff: 'Survey the openings and delivery route, then prepare shop drawings.', homeLabel: 'Home survey', home: "We measure the openings and check how we'll get the glass in.", label: 'Site survey', phase: 'Design', court: 'us', sla: 5, client: 'We survey the openings and the delivery route, then draw the shop drawings.' },
+  { id: 'drawings', staff: 'Shop drawings issued. Waiting for client review and sign-off.', homeLabel: 'Approve your drawings', home: 'Your final drawings are ready. Please approve them in Documents.', label: 'Drawings for approval', phase: 'Design', court: 'you', client: 'Shop drawings are ready. Approve them or request changes in Documents.' },
+  { id: 'production', staff: 'In production to the signed drawings. Confirm delivery and fitting dates.', homeLabel: 'Being made', home: 'Your doors and windows are being made to your approved drawings.', label: 'In production', phase: 'Delivery', court: 'us', client: 'Your doors and windows are being made to the signed drawings.' },
+  { id: 'delivery', staff: 'Delivery booked. Confirm the lifting plan and access.', homeLabel: 'Delivery booked', home: 'Your delivery date is confirmed.', label: 'Delivery scheduled', phase: 'Delivery', court: 'us', client: 'Delivery date and lifting plan are confirmed.' },
+  { id: 'installation', staff: 'Our team is installing on site.', homeLabel: 'Installation', home: 'Our team is fitting your doors and windows.', label: 'Installation', phase: 'Delivery', court: 'us', client: 'Our own team is installing on site.' },
+  { id: 'handover', staff: 'Upload the O&M manual, declarations of performance and guarantee.', homeLabel: 'Finished — your documents', home: 'Your guarantee, certificates and care guide are in Documents.', label: 'Handover', phase: 'Delivery', court: 'us', client: 'O&M manual, declarations of performance and the guarantee are in Documents.' },
+  { id: 'completed', staff: 'Complete. Schedule the first-season check-in.', homeLabel: 'Completed', home: "All done. We'll check in after the first season.", label: 'Completed', phase: 'Delivery', court: 'none', client: 'Project complete. We will check in after the first season.' },
 ];
 export const SIDE_STAGES = [
   { id: 'on_hold', label: 'On hold', court: 'none', client: 'This project is paused.' },
@@ -76,7 +76,7 @@ export const isOverdue = (p) => p.due_at && stage(p.stage).court === 'us' && new
 
 // ---------- opening estimate (same assumptions as the public sizing tool) ----------
 const PANELS = { '2A': 2, '3T': 3, '4C': 4, '6C': 6 };
-const GLASS_MM = { d: 12, dl: 14.8, t: 16 };
+const GLASS_MM = { d: 12, dl: 14.8, t: 16, tl: 18.8 };
 export const estimatePanel = ({ width_mm: W, height_mm: H, config, glazing }) => {
   const n = PANELS[config]; const t = GLASS_MM[glazing];
   if (!n || !t || !W || !H) return null;
@@ -115,3 +115,31 @@ export const progressBar = (id) => {
   const pct = i < 0 ? 0 : Math.round(((i + 1) / STAGES.length) * 100);
   return `<div class="progress" role="img" aria-label="Stage ${i + 1} of ${STAGES.length}"><span style="width:${pct}%"></span></div>`;
 };
+
+// ---------- project team & decision rights ----------
+export const MEMBER_ROLES = { owner: 'Owner', architect: 'Architect', client: 'Client', contractor: 'Contractor', engineer: 'Engineer' };
+
+// Who may decide on a document. Quotations bind the client, so an architect who owns the project
+// may only accept on the client's behalf when no client is on the team (and must say so).
+export function decisionRights(doc, user, members) {
+  if (!user || user.role === 'staff') return { can: false, reason: 'staff' };
+  const mine = members.find((m) => m.user_id === user.id);
+  if (!mine) return { can: false, reason: 'not a member' };
+  if (doc.kind === 'quote') {
+    if (mine.role === 'client') return { can: true, onBehalf: false };
+    if (mine.role === 'owner' && user.account_type !== 'architect') return { can: true, onBehalf: false };
+    if (mine.role === 'owner' || mine.role === 'architect') {
+      const client = members.find((m) => m.role === 'client');
+      return client ? { can: false, reason: 'client', waitingFor: client } : { can: true, onBehalf: true };
+    }
+    return { can: false, reason: 'role' };
+  }
+  return ['owner', 'architect', 'client', 'engineer'].includes(mine.role) ? { can: true, onBehalf: false } : { can: false, reason: 'role' };
+}
+export const DECISION_LABELS = {
+  quote: { approved: 'Accept quotation', changes_requested: 'Ask for changes', doneYes: 'Accepted', doneNo: 'Changes requested' },
+  drawing: { approved: 'Reviewed — no comments', changes_requested: 'Reviewed — with comments', doneYes: 'Reviewed — no comments', doneNo: 'Reviewed — with comments' },
+  default: { approved: 'Approve', changes_requested: 'Request changes', doneYes: 'Approved', doneNo: 'Changes requested' },
+};
+export const decisionLabels = (kind) => DECISION_LABELS[kind] || DECISION_LABELS.default;
+export const CHANGE_STATUS = { proposed: 'Awaiting decision', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn' };

@@ -423,7 +423,7 @@ fieldset{border:0;padding:0;min-width:0}
 .dot-you{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);vertical-align:middle}
 .progress{height:3px;background:var(--line);margin-block:var(--s-s)}
 .progress span{display:block;height:100%;background:var(--ink)}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:.8rem 1.1rem;font-size:var(--step--1);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-2);z-index:100;max-width:90vw}
+.toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-20px);background:var(--ink);color:#fff;padding:.8rem 1.1rem;font-size:var(--step--1);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-2);z-index:100;max-width:90vw}
 .toast.is-on{opacity:1;transform:translate(-50%,0)}
 
 .dash-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:var(--s-l);margin-bottom:var(--s-xl)}
@@ -569,3 +569,46 @@ body.app .site-footer{display:none}
 .tracker li.is-current{color:var(--accent);font-weight:600}
 .tracker li.is-current .tracker-dot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
 .now-card .tracker{margin:0 0 var(--s-m)}
+.ps-skipped .ps-label{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line-strong)}
+.ps-skipped .ps-dot{border-style:dashed}
+
+/* ---- persona-audit fixes ---- */
+body.is-typing .action-bar{display:none}
+body.app .primary-nav,body.app .menu-toggle,body.app .prelaunch{display:none}
+body.app .site-header{position:static}
+.team{list-style:none;padding:0;display:grid;gap:0;border-top:1px solid var(--line);margin-bottom:var(--s-s)}
+.team li{display:flex;justify-content:space-between;gap:var(--s-s);padding:.55rem 0;border-bottom:1px solid var(--line);font-size:var(--step--1)}
+.invite{display:grid;grid-template-columns:1fr auto;gap:var(--s-xs);margin-top:var(--s-s)}
+.invite input{grid-column:1 / -1}
+.invite .note{grid-column:1 / -1}
+.change-impact{font-size:var(--step--1);background:var(--surface-2);padding:.5rem .7rem;margin-top:4px}
+.approve-title{font-size:var(--step--1)}
+.composer-mode{display:inline-flex;align-self:start}
+.composer-mode label{display:flex;align-items:center;gap:.4rem;padding:.5rem .9rem;font-size:var(--step--1);cursor:pointer}
+.composer-mode input{width:auto;min-height:0;accent-color:var(--ink)}
+.composer-mode label:has(input:checked){background:var(--ink);color:var(--bg)}
+.composer[data-mode="internal"] textarea{background:#fff4d6;border-color:#b38a00}
+.composer[data-mode="internal"] .btn{background:#4a3700;border-color:#4a3700}
+.col-empty{min-height:0}
+.board{grid-auto-flow:row;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));overflow:visible}
+.board .col{min-height:120px}
+.board .col-empty{opacity:.75}
+.sched-tools{display:flex;gap:var(--s-s);align-items:center;flex-wrap:wrap}
+@media (max-width:600px){
+  .tool-elev .dim{font-size:22px}
+  table.has-labels thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.has-labels,table.has-labels tbody,table.has-labels tr{display:block;width:100%}
+  table.has-labels tbody tr{border-bottom:1px solid var(--line);padding:.6rem 0}
+  table.has-labels tbody th,table.has-labels tbody td{display:grid;grid-template-columns:42% 1fr;gap:.6rem;border:0;padding:.25rem 0;width:auto;text-align:left}
+  table.has-labels tbody td[data-label]::before,table.has-labels tbody th[data-label]::before{content:attr(data-label);font-family:var(--font);font-size:.78rem;color:var(--muted);font-weight:400}
+  table.has-labels tbody th:not([data-label]){display:block;font-weight:600;color:var(--ink)}
+  table.has-labels tr.sub td{display:block;color:var(--muted)}
+  .sched{min-width:0}
+  .sched thead{display:none}
+  .sched tr{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;border:1px solid var(--line);padding:.7rem;margin-bottom:.7rem;background:var(--surface)}
+  .sched td{display:grid;gap:.2rem;padding:0}
+  .sched td::before{content:attr(data-label);font-size:.72rem;color:var(--muted)}
+  .sched td.sched-remove{grid-column:1 / -1;justify-items:end}
+  .sched td.sched-remove::before{content:none}
+  .sched input[name="qty"]{width:100%}
+}
