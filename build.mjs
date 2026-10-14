@@ -19,7 +19,8 @@ for (const file of pages) {
   const path = file === 'index.html' ? '' : file;
 
   // Mark the active nav item.
-  const nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
+  let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
+  if (['lift-slide', 'sliding', 'bifold'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
 
   const out = layout
     .replaceAll('{{title}}', meta.title)

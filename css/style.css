@@ -120,7 +120,10 @@ ul,ol{padding-left:1.2em}
 .tag-accent{border-color:var(--accent);color:var(--accent)}
 
 /* ---------- header ---------- */
-.site-header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:saturate(1.2) blur(10px);-webkit-backdrop-filter:saturate(1.2) blur(10px);border-bottom:1px solid transparent;transition:border-color var(--dur-2) var(--ease)}
+.site-header{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid transparent;transition:border-color var(--dur-2) var(--ease)}
+/* backdrop-filter makes the header a containing block for fixed children, which would trap the
+   mobile menu panel inside the header — so the translucent effect is desktop-only. */
+@media (min-width:1100px){.site-header{background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:saturate(1.2) blur(10px);-webkit-backdrop-filter:saturate(1.2) blur(10px)}}
 .site-header.is-scrolled{border-bottom-color:var(--line)}
 .header-inner{display:flex;align-items:center;justify-content:space-between;gap:var(--s-l);height:var(--header-h)}
 .brand{display:inline-flex;align-items:center;gap:.6rem;text-decoration:none;color:var(--ink)}
@@ -131,6 +134,20 @@ ul,ol{padding-left:1.2em}
 .primary-nav ul{display:flex;gap:var(--s-m);list-style:none;padding:0}
 .primary-nav a:not(.btn){text-decoration:none;font-size:var(--step--1);font-weight:500;padding-block:6px;border-bottom:1px solid transparent}
 .primary-nav a[aria-current="page"]{border-bottom-color:var(--ink)}
+.has-sub{position:relative}
+.sub-toggle{display:inline-flex;align-items:center;gap:.35em;background:none;border:0;border-bottom:1px solid transparent;padding:6px 0;font:inherit;font-size:var(--step--1);font-weight:500;color:var(--ink);cursor:pointer}
+.sub-toggle::after{content:"";flex:none;width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform var(--dur-1) var(--ease)}
+.sub-toggle[aria-expanded="true"]::after{transform:translateY(1px) rotate(-135deg)}
+.has-sub[data-current] .sub-toggle{border-bottom-color:var(--ink)}
+.sub{list-style:none;padding:0}
+@media (min-width:1100px){
+  .primary-nav .sub{gap:2px;position:absolute;left:-1rem;top:calc(100% + 10px);min-width:250px;background:var(--surface);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.1);padding:.5rem;display:none;z-index:60}
+  .primary-nav .sub-toggle[aria-expanded="true"]+.sub{display:grid}
+  .sub a:not(.btn){display:block;padding:.6rem .8rem;border:0!important}
+  .sub a:hover{background:var(--surface-2);color:var(--ink)}
+  .sub a[aria-current="page"]{color:var(--accent)}
+  .sub small{display:block;font-size:.75rem;color:var(--muted);font-weight:400}
+}
 .menu-toggle{display:none;align-items:center;gap:.6rem;background:none;border:1px solid var(--ink);color:var(--ink);font:inherit;font-size:var(--step--1);font-weight:500;padding:.5rem .8rem;cursor:pointer;min-height:44px}
 .menu-toggle-icon{width:16px;height:10px;border-block:1.5px solid currentColor;position:relative}
 .menu-toggle[aria-expanded="true"] .menu-toggle-icon{border-color:transparent}
@@ -144,6 +161,12 @@ ul,ol{padding-left:1.2em}
   .primary-nav li{border-bottom:1px solid var(--line)}
   .primary-nav a:not(.btn){display:block;font-size:var(--step-2);padding-block:var(--s-s);border:0}
   .primary-nav a[aria-current="page"]{color:var(--accent)}
+  .sub-toggle{font-size:var(--step-2);padding-block:var(--s-s);width:100%;justify-content:space-between;border:0}
+  .primary-nav .sub{display:none;gap:0;padding:0 0 var(--s-s) var(--s-s)}
+  .primary-nav .sub-toggle[aria-expanded="true"]+.sub{display:block}
+  .primary-nav .sub li{border:0}
+  .primary-nav .sub a:not(.btn){font-size:var(--step-1);padding-block:.5rem}
+  .sub small{display:none}
   .nav-cta{justify-content:center;min-height:52px;font-size:var(--step-0)}
   body.nav-open{overflow:hidden}
 }
