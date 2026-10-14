@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [['list']],
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' },
-  webServer: { command: 'python3 -m http.server 4173 --bind 127.0.0.1', url: 'http://127.0.0.1:4173/index.html', reuseExistingServer: true },
+  webServer: { command: 'node tests/serve.mjs 4173', url: 'http://127.0.0.1:4173/index.html', reuseExistingServer: true },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'tablet', use: { ...devices['Desktop Chrome'], viewport: { width: 900, height: 1100 }, hasTouch: true } },

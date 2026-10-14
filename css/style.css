@@ -716,3 +716,56 @@ body.app .site-header{position:static}
 .advisor-out ul{margin-top:var(--s-s);color:var(--ink-2);font-size:var(--step--1);display:grid;gap:.35rem}
 .advisor legend{font-weight:600;margin-bottom:var(--s-xs)}
 @media (max-width:899px){.advisor form,.advisor-out{grid-column:1 / -1}.advisor-out{position:static}}
+
+/* ---------- phones & tablets: keep the desktop structure, at a hand's scale ---------- */
+.mat{font-size:.75rem}
+@media (max-width:1099px){
+  /* touch: every button reaches 44 px, standalone links 24 px */
+  .btn-sm{min-height:44px}
+  .site-footer ul{gap:0}
+  .site-footer li a{display:inline-block;padding-block:4px}
+  .breadcrumb ol{align-items:center}
+  .breadcrumb a{display:inline-block;padding-block:3px}
+  .footer-bottom>span>a:only-child{display:inline-block;padding-block:4px}
+}
+/* five reasons fit one desktop row (and go three plus two on tablets) */
+.features:has(> :nth-child(5):last-child){grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+/* tablets: four items go two by two instead of three plus a lone one */
+@media (min-width:768px) and (max-width:1099px){
+  .ptiles,.features:has(> :nth-child(4):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:767px){
+  /* page tops: less empty space above the headline, so the first action sits on the first screen */
+  .hero,.page-hero{padding-top:var(--s-s)}
+  .breadcrumb{margin-bottom:var(--s-s)}
+  .hero .eyebrow,.page-hero .eyebrow{margin-bottom:var(--s-s)}
+  .hero-copy h1,.page-hero h1{margin-bottom:var(--s-s)}
+  .hero-copy .lead{margin-bottom:var(--s-m)}
+  /* product tiles: drawing beside the text, as a row, so the four families read as one set */
+  .ptiles{grid-template-columns:1fr;gap:0;border-top:1px solid var(--line)}
+  .ptile{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,10fr);grid-template-rows:auto auto 1fr;column-gap:var(--s-s);row-gap:var(--s-2xs);padding-block:var(--s-m);border-bottom:1px solid var(--line);align-items:start}
+  .ptile .photo-slot{grid-row:1 / span 4;align-self:start}
+  .ptile h3{font-size:var(--step-1)}
+  .ptile ul.types{font-size:.85rem}
+  .ptile .link-arrow{margin-top:var(--s-2xs);font-size:var(--step--1)}
+  /* layout cards: the plan view beside the text, like the product tiles */
+  .configs{gap:var(--s-xs)}
+  .config{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);column-gap:var(--s-s);row-gap:.3rem;padding:var(--s-s);align-items:start}
+  .config svg{grid-row:1 / span 3;align-self:center}
+  .config h3{font-size:var(--step-0)}
+  /* system rows: a wide, shallower drawing above the text */
+  .system{padding-block:var(--s-xl)}
+  .system-fig{max-width:none}
+  .system-fig .photo-slot{aspect-ratio:16 / 9}
+  /* comparison tables become full-width cards, whatever width the table asks for on desktop */
+  table.has-labels{min-width:0!important}
+  table.has-labels caption{display:block;width:100%}
+  table.has-labels tbody td[data-label]>small{grid-column:2}
+  /* product × material matrix: three material columns per product, not one long list */
+  table.matrix.has-labels tbody tr{display:grid;grid-template-columns:repeat(3,1fr);padding-block:.6rem}
+  table.matrix.has-labels tbody th{grid-column:1 / -1;display:block;padding:0 0 .4rem}
+  table.matrix.has-labels tbody th::before{content:none}
+  table.matrix.has-labels tbody td{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.2rem 0;font-size:var(--step--1)}
+  table.matrix.has-labels tbody td::before{font-family:var(--mono);font-size:.75rem}
+  table.matrix.has-labels tbody tr.grp{display:block}
+}
