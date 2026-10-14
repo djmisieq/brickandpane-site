@@ -49,10 +49,19 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       : '';
 
     let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
-    if (['lift-slide', 'sliding', 'bifold', 'products', 'windows', 'doors', 'facades'].includes(meta.nav)) nav = nav.replace('data-group="products"', 'data-group="products" data-current');
+    if (['lift-slide', 'sliding', 'bifold', 'products', 'windows', 'doors', 'facades', 'heritage'].includes(meta.nav)) nav = nav.replace('data-group="products"', 'data-group="products" data-current');
     nav = nav.replace('{{enHref}}', enHref).replace('{{plHref}}', plHref)
       .replace('{{enCurrent}}', loc === 'en' && !meta.lang ? 'aria-current="true"' : '')
       .replace('{{plCurrent}}', loc === 'pl' ? 'aria-current="true"' : '');
+
+    // On-page section nav (phones and tablets): inserted after the first section, the page hero.
+    let content = body.trim();
+    if (meta.sections) {
+      const links = meta.sections.map(([id, label]) => `<li><a href="#${id}">${label}</a></li>`).join('');
+      const sn = `<nav class="section-nav" aria-label="${loc === 'pl' ? 'Na tej stronie' : 'On this page'}"><ul class="container">${links}</ul></nav>`;
+      const i = content.indexOf('</section>') + '</section>'.length;
+      content = `${content.slice(0, i)}\n${sn}${content.slice(i)}`;
+    }
 
     const out = layout
       .replaceAll('{{title}}', meta.title)
@@ -71,7 +80,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       .replace('{{footer}}', footer
         .replace('{{actionHref}}', meta.actionHref || L.actionHref)
         .replace('{{actionLabel}}', meta.actionLabel || L.actionLabel))
-      .replace('{{content}}', body.trim());
+      .replace('{{content}}', content);
 
     writeFileSync(url(`${L.out}${file}`), out);
     console.log('built', `${loc}/${file}`);

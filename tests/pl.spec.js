@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login',
-  'windows', 'doors', 'facades', 'materials', '404',
+  'windows', 'doors', 'facades', 'materials', '404', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows',
 ];
 
 test.describe('every Polish page', () => {

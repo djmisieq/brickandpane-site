@@ -4,7 +4,12 @@ Static site published with GitHub Pages at brickandpane.co.uk.
 
 - Edit pages in `src/pages/` (English) and `src/pl/pages/` (Polish), shared parts in `src/partials/` and `src/pl/partials/`.
 - Build: `node build.mjs` (writes the root `*.html` and `pl/*.html`).
-- Test: `npm test` (build, database policy tests, Playwright).
+- Test: `npm test` (build, database policy tests, Playwright on desktop, tablet and phone). Playwright serves the site with `tests/serve.mjs`, so only Node is needed.
+  - `tests/layout.spec.js`: nothing cut off, readable text, tap targets, phone shows what desktop shows.
+  - `tests/a11y.spec.js`: axe WCAG 2.2 AA on every page, plus a page-weight budget.
+  - `tests/visual.spec.js` (`npm run test:visual`): full-page screenshots. Baselines are per machine and not committed: run `npx playwright test --grep @visual --update-snapshots` before a design change, then `npm run test:visual` after it.
+  - GitHub Actions runs everything except the visual baselines on each push and pull request.
+- Internal audit, strategy and deployment notes live in the private repo `djmisieq/brickandpane-docs`, not here.
 
 ## Photos
 
