@@ -8,6 +8,7 @@
 export const PRICING = {
   enabled: false,
   label: 'Example rates — not Brick & Pane prices',
+  labelPl: 'Stawki przykładowe — to nie są ceny Brick & Pane',
   vat: 0.2,
   spread: 0.15,          // estimate shown as total ±15%
   systems: {
@@ -60,7 +61,8 @@ export function estimateProject(openings, { heavy = false } = {}) {
 }
 
 export const fmtGBP = (n) => `£${Math.round(n).toLocaleString('en-GB')}`;
+const isPl = () => typeof document !== 'undefined' && document.documentElement.lang === 'pl';
 export const rangeText = (est) => `${fmtGBP(est.low)}–${fmtGBP(est.high)} + VAT`;
 const r100 = (n) => Math.round(n / 100) * 100;
 export const incVat = (n) => r100(n * (1 + PRICING.vat));
-export const rangeTextIncVat = (est) => `${fmtGBP(incVat(est.low))}–${fmtGBP(incVat(est.high))} inc. VAT`;
+export const rangeTextIncVat = (est) => `${fmtGBP(incVat(est.low))}–${fmtGBP(incVat(est.high))} ${isPl() ? 'z VAT' : 'inc. VAT'}`;

@@ -612,3 +612,17 @@ body.app .site-header{position:static}
   .sched td.sched-remove::before{content:none}
   .sched input[name="qty"]{width:100%}
 }
+/* language switch */
+.lang-switch{display:inline-flex;border:1px solid var(--line-strong);font-family:var(--mono);font-size:.75rem}
+.lang-switch a{padding:.35rem .55rem;text-decoration:none;color:var(--ink-2)}
+.lang-switch a[aria-current]{background:var(--ink);color:var(--bg)}
+@media (max-width:1099px){.lang-switch{align-self:flex-start;font-size:.9rem}.lang-switch a{padding:.6rem .9rem}}
+/* Desktop header: keep every item on one line (Polish labels are longer). */
+@media (min-width:1100px){
+  .brand-word,.primary-nav a,.primary-nav .sub-toggle,.primary-nav .btn{white-space:nowrap}
+}
+@media (min-width:1100px) and (max-width:1399px){
+  .primary-nav{gap:var(--s-m)}
+  .primary-nav ul{gap:var(--s-s)}
+  .primary-nav .btn{padding-inline:1rem}
+}

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en-GB">
+<html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -13,22 +13,23 @@
 <meta property="og:title" content="{{title}}">
 <meta property="og:description" content="{{description}}">
 <meta property="og:url" content="{{canonical}}">
-<meta property="og:locale" content="en_GB">
+<meta property="og:locale" content="{{ogLocale}}">
+{{alternates}}
 <meta name="theme-color" content="#f6f4ef">
-<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="fonts/inter-tight-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="{{root}}img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="{{root}}fonts/inter-tight-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{root}}css/style.css">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"Brick & Pane","url":"https://brickandpane.co.uk/","email":"hello@brickandpane.co.uk","description":"Aluminium lift & slide doors, sliding doors and windows, made to order for architects and developers in London.","areaServed":[{"@type":"City","name":"London"},{"@type":"Country","name":"United Kingdom"}]}</script>
 {{head}}
 </head>
 <body class="has-action-bar {{bodyClass}}">
-<a class="skip" href="#main">Skip to content</a>
-<div class="prelaunch" role="note">Pre-launch preview. Values marked <span class="tag">Indicative</span> are being verified against test certificates.</div>
+<a class="skip" href="#main">{{skip}}</a>
+<div class="prelaunch" role="note">{{prelaunch}}</div>
 {{header}}
 <main id="main">
 {{content}}
 </main>
 {{footer}}
-<script type="module" src="js/main.js"></script>
+<script type="module" src="{{root}}js/main.js"></script>
 </body>
 </html>
