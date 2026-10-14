@@ -6,3 +6,8 @@ exclude:
   - src/
   - build.mjs
   - README.md
+  - package.json
+  - package-lock.json
+  - playwright.config.js
+  - tests/
+  - node_modules/
