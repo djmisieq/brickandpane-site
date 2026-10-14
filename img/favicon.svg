@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 60" role="img" aria-label="Brick &amp; Pane">
+<g transform="translate(2,6)"><rect x="0" y="0" width="48" height="48" fill="#a4442c"/>
+<g stroke="#f7f3ec" stroke-width="1.6"><line x1="0" y1="12" x2="48" y2="12"/><line x1="0" y1="24" x2="48" y2="24"/><line x1="0" y1="36" x2="48" y2="36"/><line x1="16" y1="0" x2="16" y2="12"/><line x1="34" y1="12" x2="34" y2="24"/><line x1="16" y1="24" x2="16" y2="36"/><line x1="34" y1="36" x2="34" y2="48"/></g>
+<rect x="20" y="14" width="22" height="28" fill="#f7f3ec" stroke="#b08d57" stroke-width="2.5"/><line x1="31" y1="14" x2="31" y2="42" stroke="#b08d57" stroke-width="1.8"/><line x1="20" y1="28" x2="42" y2="28" stroke="#b08d57" stroke-width="1.8"/></g>
+<text x="64" y="40" font-family="'Cormorant Garamond',Georgia,serif" font-size="30" fill="#2b2a29" letter-spacing="1">Brick <tspan fill="#b08d57" font-style="italic">&amp;</tspan> Pane</text></svg>
