@@ -1,0 +1,106 @@
+<!--{"title":"Request a quote or drawing review | Brick & Pane","description":"Send drawings, a window schedule or a sketch. Architects get comments within 2 working days; developers get a budget within 5.","nav":"contact","bodyClass":"no-action-bar"}-->
+<section class="page-hero" style="padding-bottom:1rem">
+  <div class="container">
+    <nav class="breadcrumb" aria-label="Breadcrumb"><ol><li><a href="index.html">Home</a></li><li aria-current="page">Contact</li></ol></nav>
+    <span class="eyebrow">Request a quote</span>
+    <h1>Tell us about the opening.</h1>
+    <p class="lead">Three short steps. Drawings help, but a sketch with dimensions or a few phone photos is enough to start.</p>
+  </div>
+</section>
+
+<section class="section" style="padding-top:2rem">
+  <div class="container grid-12">
+    <form class="span-7" data-quote-form data-endpoint="" novalidate enctype="multipart/form-data">
+      <ol class="steps-indicator" aria-label="Form progress">
+        <li class="is-active" aria-current="step">1 · You</li><li>2 · Project</li><li>3 · Files</li>
+      </ol>
+
+      <fieldset class="form-step" id="step-1">
+        <legend class="visually-hidden">About you</legend>
+        <h2 style="font-size:var(--step-2)">About you</h2>
+        <div class="field">
+          <span class="field-label" id="role-label" style="font-size:var(--step--1);font-weight:500">I'm a…</span>
+          <div class="choice-grid" role="radiogroup" aria-labelledby="role-label" data-validate="radio" data-name="role">
+            <label class="choice"><input type="radio" name="role" value="architect"><span>Architect / designer</span></label>
+            <label class="choice"><input type="radio" name="role" value="developer"><span>Developer / contractor</span></label>
+            <label class="choice"><input type="radio" name="role" value="homeowner"><span>Homeowner</span></label>
+            <label class="choice"><input type="radio" name="role" value="other"><span>Other</span></label>
+          </div>
+          <span class="error" role="alert"></span>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" type="text" autocomplete="name" data-validate required><span class="error" role="alert"></span></div>
+          <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" autocomplete="email" data-validate required><span class="error" role="alert"></span></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="f-phone">Phone <span class="hint">optional — only if you'd like a call</span></label><input id="f-phone" name="phone" type="tel" autocomplete="tel"></div>
+          <div class="field" data-for-role="architect developer other"><label for="f-company">Practice / company</label><input id="f-company" name="company" type="text" autocomplete="organization"></div>
+        </div>
+        <div class="form-nav"><span></span><button class="btn" type="button" data-next>Continue</button></div>
+      </fieldset>
+
+      <fieldset class="form-step" id="step-2" hidden>
+        <legend class="visually-hidden">Project</legend>
+        <h2 style="font-size:var(--step-2)">The project</h2>
+        <div class="field">
+          <label for="f-topic">What do you need?</label>
+          <select id="f-topic" name="topic">
+            <option value="quote">A quotation</option>
+            <option value="review">A drawing / schedule review</option>
+            <option value="budget">A budget price for a scheme</option>
+            <option value="spec-pack">The spec pack (DWG / BIM / clauses)</option>
+            <option value="samples">Samples</option>
+            <option value="cpd">A CPD session</option>
+            <option value="pqq">The pre-qualification pack</option>
+            <option value="founding">Founding project</option>
+          </select>
+        </div>
+        <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
+        <fieldset class="field">
+          <legend>Systems</legend>
+          <div class="choice-grid">
+            <label class="choice"><input type="checkbox" name="systems" value="lift-slide"><span>Lift &amp; slide</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="sliding"><span>Slim sliding</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="bifold"><span>Bi-fold</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>French / entrance</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
+            <label class="choice"><input type="checkbox" name="systems" value="unsure"><span>Not sure yet</span></label>
+          </div>
+        </fieldset>
+        <div class="field-row">
+          <div class="field" data-for-role="architect"><label for="f-stage">RIBA stage</label><select id="f-stage" name="riba_stage"><option value="">Select</option><option>0–1 Strategic / brief</option><option>2 Concept</option><option>3 Spatial coordination</option><option>4 Technical design</option><option>5 Manufacturing &amp; construction</option></select></div>
+          <div class="field" data-for-role="developer"><label for="f-units">Number of units / openings</label><input id="f-units" name="units" type="text" inputmode="numeric" placeholder="e.g. 24 units, c. 120 openings"></div>
+          <div class="field" data-for-role="homeowner other"><label for="f-type">Building</label><select id="f-type" name="building"><option value="">Select</option><option>Extension to an existing house</option><option>New-build house</option><option>Flat / apartment</option><option>Listed or in a conservation area</option></select></div>
+          <div class="field"><label for="f-start">Start on site</label><select id="f-start" name="start"><option value="">Select</option><option>Within 3 months</option><option>3–6 months</option><option>6–12 months</option><option>Over 12 months / not sure</option></select></div>
+        </div>
+        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Back</button><button class="btn" type="button" data-next>Continue</button></div>
+      </fieldset>
+
+      <fieldset class="form-step" id="step-3" hidden>
+        <legend class="visually-hidden">Files and message</legend>
+        <h2 style="font-size:var(--step-2)">Files &amp; notes</h2>
+        <div class="field">
+          <label for="f-files">Drawings, schedule or photos <span class="hint">optional</span></label>
+          <div class="dropzone"><p>Drag files here or choose them below. PDF, DWG, XLSX or JPG, up to 25 MB each.</p><input id="f-files" name="files" type="file" multiple accept=".pdf,.dwg,.dxf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic" style="margin-top:.8rem"></div>
+          <ul class="file-list" data-file-list></ul>
+          <span class="error" role="alert"></span>
+        </div>
+        <div class="field"><label for="f-msg">Anything else? <span class="hint">optional</span></label><textarea id="f-msg" name="message" placeholder="Opening sizes, what matters most (sightlines, threshold, budget, programme)…"></textarea></div>
+        <div class="field"><label class="consent"><input type="checkbox" name="consent" value="yes" data-validate="consent"> <span>I agree that Brick &amp; Pane can use these details to reply to my enquiry, as set out in the <a href="privacy.html">privacy notice</a>.</span></label><span class="error" role="alert"></span></div>
+        <input type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+        <div class="form-status" data-form-status tabindex="-1" hidden role="status"></div>
+        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Back</button><button class="btn" type="submit">Send for review</button></div>
+      </fieldset>
+    </form>
+
+    <aside class="start-9" style="grid-column:9 / span 4">
+      <h2 class="eyebrow">What happens next</h2>
+      <ol class="process" style="grid-template-columns:1fr">
+        <li><h3>Confirmation</h3><p>An email with a copy of your enquiry and a reference.</p></li>
+        <li><h3>A named person</h3><p>One person handles your project from first reply onwards.</p></li>
+        <li><h3>Our response</h3><p>Architects: comments within 2 working days. Developers: a budget within 5. Homeowners: a first view and next steps within 2.</p></li>
+      </ol>
+      <div class="callout" style="margin-top:2rem"><h3>Prefer email?</h3><p>Send files to <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Large sets via WeTransfer or Dropbox are fine.</p></div>
+    </aside>
+  </div>
+</section>
