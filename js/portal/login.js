@@ -27,6 +27,14 @@ $$('[data-auth-tab]', root).forEach((b) => b.addEventListener('click', () => {
   status.hidden = true;
 }));
 
+// ?signup=homeowner|architect|developer opens account creation with that type preselected.
+const preset = new URLSearchParams(location.search).get('signup');
+if (preset) {
+  $('[data-auth-tab="signup"]', root).click();
+  const r = $(`[data-signup] input[name="account_type"][value="${CSS.escape(preset)}"]`, root);
+  if (r) r.checked = true;
+}
+
 $('[data-signin]', root).addEventListener('submit', async (e) => {
   e.preventDefault(); const f = e.currentTarget;
   try { await store.signIn(f.email.value.trim(), f.password.value); go(); } catch (err) { say(esc(err.message), true); }

@@ -2,9 +2,9 @@
 import { store } from './store.js';
 import {
   STAGES, PHASES, DOC_KINDS, SYSTEMS, stage, stageIndex, stageLabel, stageText, tracker, esc, fmtDate, fmtDay, ago, fmtSize,
-  stageBadge, courtLabel, estimatePanel, $, $$, toast,
+  stageBadge, courtLabel, estimatePanel, $, $$, toast, MEMBER_ROLES, decisionRights, decisionLabels, CHANGE_STATUS,
 } from './core.js';
-import { PRICING, pricingVisible, pricingIsExample, estimateOpening, fmtGBP } from '../pricing.js';
+import { PRICING, pricingVisible, pricingIsExample, estimateOpening, fmtGBP, incVat } from '../pricing.js';
 
 export const showPrices = () => pricingVisible({ demo: store.mode === 'demo' });
 export const estimateNote = () => (pricingIsExample() ? `${PRICING.label}.` : 'Automatic estimate, not a quotation.');
@@ -64,7 +64,7 @@ export async function renderAppBar(el, user, area) {
 // ---------- pipeline ----------
 export function pipeline(project, events, audience = 'trade') {
   const reached = {};
-  events.forEach((e) => { reached[e.to_stage] = e.created_at; });
+  events.forEach((e) => { if (!reached[e.to_stage]) reached[e.to_stage] = e.created_at; }); // first time each stage was reached
   const cur = stageIndex(project.stage);
   const side = cur < 0 ? stage(project.stage) : null;
   return `
@@ -74,11 +74,11 @@ export function pipeline(project, events, audience = 'trade') {
         <div class="pipeline-phase">
           <h3 class="pipeline-phase-title">${ph}</h3>
           <ol>${STAGES.map((s, i) => ({ s, i })).filter(({ s }) => s.phase === ph).map(({ s, i }) => {
-            const st = i < cur ? 'done' : i === cur ? 'current' : 'todo';
+            const st = i < cur ? (reached[s.id] ? 'done' : 'skipped') : i === cur ? 'current' : 'todo';
             return `<li class="ps ps-${st}${s.court === 'you' ? ' ps-you' : ''}" ${st === 'current' ? 'aria-current="step"' : ''}>
               <span class="ps-dot" aria-hidden="true"></span>
               <span class="ps-label">${esc(stageLabel(s.id, audience))}</span>
-              <span class="ps-date">${reached[s.id] && st !== 'todo' ? fmtDate(reached[s.id]) : ''}</span>
+              <span class="ps-date">${st === 'skipped' ? 'not needed' : reached[s.id] && st !== 'todo' ? fmtDate(reached[s.id]) : ''}</span>
             </li>`;
           }).join('')}</ol>
         </div>`).join('')}
@@ -89,15 +89,19 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
   const s = stage(project.stage);
   const court = courtLabel(project.stage, viewer);
   const due = project.due_at && s.court === 'us'
-    ? `<li><span>${viewer === 'client' ? 'Next update by' : 'Due'}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
+    ? `<li><span>${viewer === 'client' ? 'Next update by' : 'Promised to client by'}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
+  const dates = [
+    project.delivery_at ? `<li><span>Delivery</span><span>${fmtDay(project.delivery_at)}</span></li>` : '',
+    project.install_at ? `<li><span>Fitting</span><span>${fmtDay(project.install_at)}</span></li>` : '',
+  ].join('');
   return `
     <section class="now-card ${s.court === 'you' ? 'is-you' : ''}" aria-label="Current status">
       ${audience === 'home' ? tracker(project.stage) : ''}
       <div class="now-head">${stageBadge(project.stage, audience)}${court ? `<span class="court court-${s.court}">${court}</span>` : ''}</div>
-      <p class="now-text">${esc(viewer === 'client' ? stageText(project.stage, audience) : s.client.replace(/\byour\b/gi, 'the client’s'))}</p>
-      ${project.next_step ? `<p class="now-next"><strong>Next step:</strong> ${esc(project.next_step)}</p>` : ''}
+      <p class="now-text">${esc(viewer === 'client' ? stageText(project.stage, audience) : (s.staff || s.client))}</p>
+      ${project.next_step ? `<p class="now-next"><strong>${viewer === 'client' ? 'Next step' : 'Next step shown to client'}:</strong> ${esc(project.next_step)}</p>` : ''}
       <ul class="proof-list">
-        ${due}
+        ${dates}${due}
         <li><span>${viewer === 'client' ? 'Your contact' : 'Owner'}</span><span>${esc(project.assignee?.full_name || 'Being assigned')}</span></li>
         <li><span>In this stage since</span><span>${fmtDate(project.stage_changed_at)}</span></li>
       </ul>
@@ -105,30 +109,50 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
 }
 
 // ---------- tabs ----------
-export function tabs(active, counts) {
-  const t = [['overview', 'Overview'], ['documents', `Documents${counts.documents ? ` (${counts.documents})` : ''}`], ['messages', `Messages${counts.messages ? ` (${counts.messages})` : ''}`], ['timeline', 'Timeline']];
-  return `<div class="tabs" role="tablist">${t.map(([id, label]) => `<button type="button" role="tab" id="tab-${id}" aria-selected="${id === active}" aria-controls="panel-${id}" data-tab="${id}">${label}${id === 'documents' && counts.pending ? ' <span class="dot-you" aria-label="action needed"></span>' : ''}</button>`).join('')}</div>`;
+export function tabs(active, c) {
+  const t = [
+    ['overview', 'Overview'],
+    ['documents', `Documents${c.documents ? ` (${c.documents})` : ''}`, c.pendingDocs],
+    ['changes', `Changes${c.changes ? ` (${c.changes})` : ''}`, c.pendingChanges],
+    ['messages', `Messages${c.messages ? ` (${c.messages})` : ''}`],
+    ['timeline', 'Timeline'],
+  ];
+  return `<div class="tabs" role="tablist">${t.map(([id, label, dot]) => `<button type="button" role="tab" id="tab-${id}" aria-selected="${id === active}" aria-controls="panel-${id}" data-tab="${id}">${label}${dot ? ' <span class="dot-you" aria-label="action needed"></span>' : ''}</button>`).join('')}</div>`;
 }
 
-export function overviewPanel(d, viewer = 'client') {
+const money = (n, audience) => (audience === 'home' ? `${fmtGBP(incVat(n))} inc. VAT` : `${fmtGBP(n)} + VAT`);
+
+export function overviewPanel(d, viewer = 'client', audience = 'trade', user = null) {
   const p = d.project;
   const prices = showPrices();
   const hasQuote = d.documents.some((x) => x.kind === 'quote');
+  const linePrices = prices && !hasQuote;
+  const members = d.members || [];
+  const isOwner = viewer === 'staff' || members.some((m) => m.user_id === user?.id && m.role === 'owner');
   const estBlock = p.estimate_low && prices && !hasQuote ? `
     <div class="estimate" style="margin-bottom:var(--s-l)">
       <span class="estimate-label">${viewer === 'staff' ? 'Automatic estimate shown to client' : 'Budget estimate'}</span>
-      <span class="estimate-value">${fmtGBP(p.estimate_low)}–${fmtGBP(p.estimate_high)} + VAT</span>
+      <span class="estimate-value">${audience === 'home' ? `${fmtGBP(incVat(p.estimate_low))}–${fmtGBP(incVat(p.estimate_high))} inc. VAT` : `${fmtGBP(p.estimate_low)}–${fmtGBP(p.estimate_high)} + VAT`}</span>
       <span class="estimate-text">Supplied &amp; installed. ${viewer === 'staff' ? 'Calculated from the client’s schedule.' : 'Your formal quotation follows after our technical review.'} ${esc(estimateNote())}</span>
     </div>` : '';
+  const payments = d.payments || [];
+  const paid = payments.filter((x) => x.paid_at).reduce((t, x) => t + Number(x.amount), 0);
+  const total = payments.reduce((t, x) => t + Number(x.amount), 0);
   return `
     ${estBlock}
     <div class="grid-12">
       <div class="span-8">
         <h3 class="panel-h">Openings</h3>
-        ${d.openings.length ? `<div style="overflow-x:auto"><table class="spec spec-compact"><thead><tr><th scope="col">Ref</th><th scope="col">System</th><th scope="col">W × H (mm)</th><th scope="col">Layout</th><th scope="col">Qty</th><th scope="col">Est. panel</th>${prices ? '<th scope="col">Est. budget</th>' : ''}</tr></thead><tbody>
-          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(SYSTEMS[o.system] || o.system)}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ' <span class="tag tag-accent">check</span>' : ''}` : '—'}</td>${prices ? `<td>${(() => { const b = estimateOpening(o); return b ? fmtGBP(b.total) : '—'; })()}</td>` : ''}</tr>${o.notes ? `<tr class="sub"><td></td><td colspan="${prices ? 6 : 5}">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
-        </tbody></table></div>` : '<p class="note">No openings listed yet.</p>'}
+        ${d.openings.length ? `<table class="spec spec-compact"><thead><tr><th scope="col">Ref</th><th scope="col">System</th><th scope="col">W × H (mm)</th><th scope="col">Layout</th><th scope="col">Qty</th><th scope="col">Panel weight</th>${linePrices ? '<th scope="col">Est. budget (line)</th>' : ''}</tr></thead><tbody>
+          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(SYSTEMS[o.system] || o.system)}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ' <span class="tag tag-accent">check</span>' : ''}` : '—'}</td>${linePrices ? `<td>${(() => { const b = estimateOpening(o); return b ? (audience === 'home' ? `c. ${fmtGBP(incVat(b.total))} inc. VAT` : `c. ${fmtGBP(Math.round(b.total / 100) * 100)}`) : '—'; })()}</td>` : ''}</tr>${o.notes ? `<tr class="sub"><td colspan="${linePrices ? 7 : 6}">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
+        </tbody></table>` : '<p class="note">No openings listed yet.</p>'}
         ${p.brief ? `<h3 class="panel-h">Brief</h3><p class="measure">${esc(p.brief)}</p>` : ''}
+        ${payments.length ? `
+          <h3 class="panel-h">Payments</h3>
+          <table class="spec spec-compact"><thead><tr><th scope="col">Stage</th><th scope="col">Amount</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead><tbody>
+            ${payments.map((x) => `<tr><th scope="row">${esc(x.label)}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">Paid ${fmtDate(x.paid_at)}</span>` : '<span class="badge">Not yet due</span>'}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${x.paid_at ? 'Mark unpaid' : 'Mark paid'}</button>` : ''}</td></tr>`).join('')}
+          </tbody></table>
+          <p class="note" style="margin-top:.6rem">Paid ${fmtGBP(paid)} of ${fmtGBP(total)}${audience === 'home' ? ' (amounts include VAT)' : ''}.</p>` : ''}
       </div>
       <div class="start-9" style="grid-column:9 / span 4">
         <h3 class="panel-h">Project</h3>
@@ -140,35 +164,57 @@ export function overviewPanel(d, viewer = 'client') {
           ${p.start_window ? `<li><span>Start on site</span><span>${esc(p.start_window)}</span></li>` : ''}
           <li><span>Submitted</span><span>${fmtDate(p.created_at)}</span></li>
         </ul>
+        <h3 class="panel-h">Team</h3>
+        <ul class="team">
+          ${p.assignee ? `<li><span>${esc(p.assignee.full_name)}</span><span class="tag">Brick &amp; Pane</span></li>` : ''}
+          ${members.map((m) => `<li><span>${esc(m.user?.full_name || m.user?.email || '')}${m.user_id === user?.id ? ' (you)' : ''}</span><span class="tag">${esc(MEMBER_ROLES[m.role] || m.role)}</span></li>`).join('')}
+          ${(d.invites || []).map((i) => `<li><span>${esc(i.email)}</span><span class="tag">${esc(MEMBER_ROLES[i.role] || i.role)} · invited</span></li>`).join('')}
+        </ul>
+        ${isOwner ? `
+          <form class="invite" data-invite>
+            <label for="inv-email" class="visually-hidden">Email</label>
+            <input id="inv-email" name="email" type="email" placeholder="name@example.com" required>
+            <label for="inv-role" class="visually-hidden">Role</label>
+            <select id="inv-role" name="role">${Object.entries(MEMBER_ROLES).filter(([k]) => k !== 'owner').map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
+            <button class="btn btn-sm btn-ghost" type="submit">Invite</button>
+            <p class="note">Invite your client, engineer or contractor. Clients accept quotations; architects and engineers review drawings.</p>
+          </form>` : ''}
       </div>
     </div>`;
 }
 
-export function documentsPanel(d, viewer) {
+export function documentsPanel(d, viewer, user = null) {
   const docs = d.documents;
+  const members = d.members || [];
   const row = (doc) => {
+    const L = decisionLabels(doc.kind);
     const approvals = d.approvals.filter((a) => a.document_id === doc.id);
     const last = approvals[approvals.length - 1];
-    const status = doc.approval === 'pending' ? `<span class="badge badge-you">${viewer === 'client' ? 'Your approval needed' : 'Awaiting client'}</span>`
-      : doc.approval === 'approved' ? '<span class="badge badge-ok">Approved</span>'
-      : doc.approval === 'changes_requested' ? '<span class="badge badge-warn">Changes requested</span>' : '';
+    const rights = viewer === 'client' && doc.approval === 'pending' ? decisionRights(doc, user, members) : { can: false };
+    const waiting = rights.reason === 'client' ? `Waiting for ${esc(rights.waitingFor?.user?.full_name || 'your client')}` : (viewer === 'client' ? (doc.kind === 'quote' ? 'Your acceptance needed' : 'Your review needed') : 'Awaiting client');
+    const status = doc.approval === 'pending' ? `<span class="badge badge-you">${waiting}</span>`
+      : doc.approval === 'approved' ? `<span class="badge badge-ok">${L.doneYes}</span>`
+      : doc.approval === 'changes_requested' ? `<span class="badge badge-warn">${L.doneNo}</span>` : '';
+    const amount = doc.amount ? ` · ${money(doc.amount, viewer === 'client' && user?.account_type === 'homeowner' ? 'home' : 'trade')}` : '';
     return `
       <li class="doc">
         <div class="doc-main">
           <span class="doc-kind">${esc(DOC_KINDS[doc.kind] || 'Document')}${doc.version ? ` · ${esc(doc.version)}` : ''}${viewer === 'staff' && !doc.visible_to_client ? ' · <span class="tag">internal</span>' : ''}</span>
-          <span class="doc-title">${esc(doc.title)}</span>
+          <span class="doc-title">${esc(doc.title)}${amount}</span>
           <span class="doc-meta">${fmtDate(doc.created_at)} · ${esc(doc.uploader?.full_name || '')}${doc.size_bytes ? ` · ${fmtSize(doc.size_bytes)}` : ''}</span>
-          ${last ? `<span class="doc-meta">${last.decision === 'approved' ? 'Approved' : 'Changes requested'} by ${esc(last.actor?.full_name || '')}, ${fmtDate(last.created_at, true)}${last.comment ? `: “${esc(last.comment)}”` : ''}</span>` : ''}
+          ${last ? `<span class="doc-meta">${last.decision === 'approved' ? L.doneYes : L.doneNo} by ${esc(last.actor?.full_name || '')}${last.on_behalf ? ' on the client’s behalf' : ''}, ${fmtDate(last.created_at, true)}${last.comment ? `: “${esc(last.comment)}”` : ''}</span>` : ''}
         </div>
         <div class="doc-side">
           ${status}
           <button type="button" class="btn btn-sm btn-ghost" data-download="${esc(doc.id)}">Download</button>
         </div>
-        ${viewer === 'client' && doc.approval === 'pending' ? `
+        ${rights.can ? `
           <form class="approve-form" data-approve="${esc(doc.id)}">
+            <p class="approve-title"><strong>${doc.kind === 'quote' ? 'Accept' : 'Review'}:</strong> ${esc(doc.title)}${doc.version ? `, ${esc(doc.version)}` : ''}${amount}</p>
             <label class="visually-hidden" for="c-${esc(doc.id)}">Comment</label>
-            <textarea id="c-${esc(doc.id)}" name="comment" rows="2" placeholder="Comment (required if you request changes)"></textarea>
-            <div class="btn-row"><button class="btn btn-sm" value="approved">Approve</button><button class="btn btn-sm btn-ghost" value="changes_requested">Request changes</button></div>
+            <textarea id="c-${esc(doc.id)}" name="comment" rows="2" placeholder="${doc.kind === 'quote' ? 'Comment (required if you ask for changes)' : 'Your comments (required for “with comments”)'}"></textarea>
+            ${doc.kind === 'quote' ? `<label class="consent"><input type="checkbox" name="confirm"> <span>I have read ${esc(doc.version || 'this quotation')}${amount ? ` (${amount.slice(3)})` : ''} including its exclusions${rights.onBehalf ? ', and I have my client’s authority to accept it on their behalf' : ''}.</span></label>` : ''}
+            <div class="btn-row"><button class="btn btn-sm" value="approved">${L.approved}</button><button class="btn btn-sm btn-ghost" value="changes_requested">${L.changes_requested}</button></div>
           </form>` : ''}
       </li>`;
   };
@@ -182,21 +228,56 @@ export function documentsPanel(d, viewer) {
       </form>` : ''}`;
 }
 
+export function changesPanel(d, viewer, user) {
+  const list = d.changes || [];
+  const mine = (d.members || []).find((m) => m.user_id === user.id);
+  const canDecide = (c) => c.status === 'proposed' && (viewer === 'staff' ? c.raiser?.role !== 'staff' : c.raiser?.role === 'staff' && mine && mine.role !== 'contractor');
+  return `
+    <p class="note" style="margin-bottom:var(--s-m)">Every change to the specification is recorded here with its effect on performance, cost and programme, and nothing changes until it's approved. Brick &amp; Pane proposals are decided by the client team; requests from the client team are answered by Brick &amp; Pane.</p>
+    ${list.length ? `<ul class="doc-list">${list.map((c) => `
+      <li class="doc">
+        <div class="doc-main">
+          <span class="doc-kind">Change · raised by ${esc(c.raiser?.full_name || '')}${c.raiser?.role === 'staff' ? ' (Brick &amp; Pane)' : ''} · ${fmtDate(c.created_at)}</span>
+          <span class="doc-title">${esc(c.title)}</span>
+          ${c.description ? `<span class="doc-meta">${esc(c.description)}</span>` : ''}
+          ${c.impact ? `<span class="change-impact"><strong>Impact:</strong> ${esc(c.impact)}</span>` : ''}
+          ${c.decided_at ? `<span class="doc-meta">${esc(CHANGE_STATUS[c.status])} by ${esc(c.decider?.full_name || '')}, ${fmtDate(c.decided_at, true)}${c.comment ? `: “${esc(c.comment)}”` : ''}</span>` : ''}
+        </div>
+        <div class="doc-side"><span class="badge ${c.status === 'approved' ? 'badge-ok' : c.status === 'proposed' ? 'badge-you' : 'badge-warn'}">${esc(CHANGE_STATUS[c.status])}</span></div>
+        ${canDecide(c) ? `
+          <form class="approve-form" data-change="${esc(c.id)}">
+            <label class="visually-hidden" for="cc-${esc(c.id)}">Comment</label>
+            <textarea id="cc-${esc(c.id)}" name="comment" rows="2" placeholder="Comment (required to reject)"></textarea>
+            <div class="btn-row"><button class="btn btn-sm" value="approved">Approve change</button><button class="btn btn-sm btn-ghost" value="rejected">Reject</button></div>
+          </form>` : ''}
+        ${c.status === 'proposed' && c.raised_by === user.id ? `<div><button type="button" class="linkish" data-withdraw="${esc(c.id)}">Withdraw</button></div>` : ''}
+      </li>`).join('')}</ul>` : '<p class="note">No changes so far. The specification is exactly as quoted.</p>'}
+    <form class="ctl" data-raise style="margin-top:var(--s-l)">
+      <h3 class="panel-h">${viewer === 'staff' ? 'Propose a change to the client' : 'Request a change'}</h3>
+      <div class="field"><label for="ch-title">What should change?</label><input id="ch-title" name="title" required placeholder="${viewer === 'staff' ? 'e.g. Handle finish satin → black' : 'e.g. Add a third panel'}"></div>
+      <div class="field"><label for="ch-desc">Details</label><textarea id="ch-desc" name="description" rows="2"></textarea></div>
+      ${viewer === 'staff' ? '<div class="field"><label for="ch-impact">Impact on U-value, security, weather, cost and programme</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="e.g. No change to U-value or PAS 24. Cost +£420 + VAT. Programme: no change."></textarea></div>' : ''}
+      <div><button class="btn btn-sm" type="submit">${viewer === 'staff' ? 'Send for approval' : 'Send request'}</button></div>
+    </form>`;
+}
+
 export function messagesPanel(d, user) {
+  const staff = user.role === 'staff';
   return `
     <ol class="thread">${d.messages.length ? d.messages.map((m) => `
       <li class="msg ${m.author_id === user.id ? 'is-mine' : ''} ${m.internal ? 'is-internal' : ''}">
-        <span class="msg-meta">${esc(m.author?.full_name || '')}${m.author?.role === 'staff' ? ' · Brick &amp; Pane' : ''} · ${fmtDate(m.created_at, true)}${m.internal ? ' · <span class="tag">internal note</span>' : ''}</span>
+        <span class="msg-meta">${esc(m.author?.full_name || '')}${m.author?.role === 'staff' ? ' · Brick &amp; Pane' : ''} · ${fmtDate(m.created_at, true)}${m.internal ? ' · <span class="tag">internal note — client can’t see this</span>' : ''}</span>
         <div class="msg-body">${esc(m.body).replace(/\n/g, '<br>')}</div>
       </li>`).join('') : '<li class="note">No messages yet. Ask anything here instead of phoning: the whole team sees it.</li>'}
     </ol>
-    <form class="composer" data-message>
+    <form class="composer" data-message data-mode="client">
+      ${staff ? `<div class="seg composer-mode" role="radiogroup" aria-label="Message type">
+        <label><input type="radio" name="mode" value="client" checked> <span>Message to client</span></label>
+        <label><input type="radio" name="mode" value="internal"> <span>Internal note</span></label>
+      </div>` : ''}
       <label for="msg-body" class="visually-hidden">Message</label>
-      <textarea id="msg-body" name="body" rows="3" required placeholder="Write a message…"></textarea>
-      <div class="btn-row">
-        ${user.role === 'staff' ? '<label class="consent"><input type="checkbox" name="internal"> <span>Internal note (staff only)</span></label>' : ''}
-        <button class="btn btn-sm" type="submit">Send</button>
-      </div>
+      <textarea id="msg-body" name="body" rows="3" required placeholder="${staff ? 'Write to the client…' : 'Write a message…'}"></textarea>
+      <div class="btn-row"><span class="note composer-hint">${staff ? 'The client will see this and get an email.' : 'Your Brick & Pane contact gets an email.'}</span><button class="btn btn-sm" type="submit">${staff ? 'Send to client' : 'Send'}</button></div>
     </form>`;
 }
 
@@ -218,12 +299,39 @@ export function bindDetail(root, d, refresh) {
   $$('[data-approve]', root).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const decision = e.submitter?.value; const comment = f.comment.value.trim();
-    if (decision === 'changes_requested' && !comment) { f.comment.focus(); toast('Please say what needs to change.'); return; }
-    try { await store.decide(f.dataset.approve, decision, comment); toast(decision === 'approved' ? 'Approved. We’ve been notified.' : 'Change request sent.'); } catch (err) { toast(err.message); }
+    if (decision === 'changes_requested' && !comment) { f.comment.focus(); toast('Please add your comments.'); return; }
+    if (decision === 'approved' && f.confirm && !f.confirm.checked) { f.confirm.focus(); toast('Please tick the confirmation first.'); return; }
+    try { await store.decide(f.dataset.approve, decision, comment, { onBehalf: !!f.confirm?.checked }); toast(decision === 'approved' ? 'Done. We’ve been notified.' : 'Comments sent.'); } catch (err) { toast(err.message); }
   }));
-  $('[data-message]', root)?.addEventListener('submit', async (e) => {
+  $$('[data-change]', root).forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const decision = e.submitter?.value; const comment = f.comment.value.trim();
+    if (decision === 'rejected' && !comment) { f.comment.focus(); toast('Please say why.'); return; }
+    try { await store.decideChange(f.dataset.change, decision, comment); toast(decision === 'approved' ? 'Change approved.' : 'Change rejected.'); } catch (err) { toast(err.message); }
+  }));
+  $$('[data-withdraw]', root).forEach((b) => b.addEventListener('click', async () => { try { await store.decideChange(b.dataset.withdraw, 'withdrawn'); } catch (err) { toast(err.message); } }));
+  $('[data-raise]', root)?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget;
+    try { await store.raiseChange(d.project.id, { title: f.title.value.trim(), description: f.description.value.trim(), impact: f.impact?.value.trim() || '' }); f.reset(); toast('Sent.'); } catch (err) { toast(err.message); }
+  });
+  $('[data-invite]', root)?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget;
+    try { const r = await store.inviteMember(d.project.id, f.email.value, f.role.value); f.reset(); toast(r === 'added' ? 'Added to the project.' : 'Invitation saved. They’ll join when they create an account with that email.'); } catch (err) { toast(err.message); }
+  });
+  $$('[data-paid]', root).forEach((b) => b.addEventListener('click', async () => { try { await store.markPaid(b.dataset.paid); } catch (err) { toast(err.message); } }));
+  const composer = $('[data-message]', root);
+  composer?.addEventListener('change', (e) => {
+    if (e.target.name !== 'mode') return;
+    const internal = e.target.value === 'internal';
+    composer.dataset.mode = internal ? 'internal' : 'client';
+    $('button[type=submit]', composer).textContent = internal ? 'Save internal note' : 'Send to client';
+    $('.composer-hint', composer).textContent = internal ? 'Only Brick & Pane staff can see internal notes.' : 'The client will see this and get an email.';
+    composer.body.placeholder = internal ? 'Internal note — staff only…' : 'Write to the client…';
+  });
+  composer?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const body = f.body.value.trim(); if (!body) return;
-    try { await store.addMessage(d.project.id, body, !!f.internal?.checked); f.reset(); } catch (err) { toast(err.message); }
+    const internal = f.dataset.mode === 'internal';
+    try { await store.addMessage(d.project.id, body, internal); f.body.value = ''; } catch (err) { toast(err.message); }
   });
   $('[data-client-upload]', root)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const files = [...e.currentTarget.files.files]; if (!files.length) return;
@@ -231,8 +339,14 @@ export function bindDetail(root, d, refresh) {
   });
 }
 
-export const counts = (d, viewer) => ({
-  documents: d.documents.length,
-  messages: d.messages.length,
-  pending: viewer === 'client' && d.documents.some((x) => x.approval === 'pending'),
-});
+export const counts = (d, viewer, user = null) => {
+  const changes = d.changes || [];
+  const mine = (d.members || []).find((m) => m.user_id === user?.id);
+  return {
+    documents: d.documents.length,
+    messages: d.messages.length,
+    changes: changes.length,
+    pendingDocs: viewer === 'client' && d.documents.some((x) => x.approval === 'pending' && decisionRights(x, user, d.members || []).can),
+    pendingChanges: changes.some((c) => c.status === 'proposed' && (viewer === 'staff' ? c.raiser?.role !== 'staff' : c.raiser?.role === 'staff' && mine && mine.role !== 'contractor')),
+  };
+};
