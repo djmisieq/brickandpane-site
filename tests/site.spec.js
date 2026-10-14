@@ -276,3 +276,18 @@ test('structured data parses and FAQ answers match what the page shows', async (
     expect(faq.mainEntity.map((q) => q.name), url).toEqual(shown);
   }
 });
+
+test('technical detail is folded behind its heading and opens from links', async ({ page }) => {
+  await page.goto('/lift-and-slide-doors.html');
+  const tech = page.locator('#performance details.tech');
+  await expect(tech.locator('summary h2')).toBeVisible();
+  await expect(tech).not.toHaveAttribute('open', '');
+  await expect(page.locator('#performance table')).toBeHidden();
+  // "Sizes and technical data" in the hero opens it.
+  await page.locator('.hero-aside a[href="#performance"]').click();
+  await expect(tech).toHaveAttribute('open', '');
+  await expect(page.locator('#performance table')).toBeVisible();
+  // A deep link opens the right section too.
+  await page.goto('/pl/bifold-doors.html#downloads');
+  await expect(page.locator('#downloads details.tech')).toHaveAttribute('open', '');
+});

@@ -63,6 +63,13 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       content = `${content.slice(0, i)}\n${sn}${content.slice(i)}`;
     }
 
+    // Technical sections (data-tech): keep the heading, fold the detail behind "Technical data for architects".
+    content = content.replace(/<section([^>]*) data-tech>([\s\S]*?)<\/section>/g, (m, attrs, inner) => {
+      const h2 = inner.match(/<h2[^>]*>[\s\S]*?<\/h2>/)[0];
+      const label = loc === 'pl' ? 'Dane techniczne dla architektów' : 'Technical data for architects';
+      return `<section${attrs} data-tech><div class="container"><details class="tech"><summary><span class="tech-label">${label}</span>${h2}</summary>${inner.replace(h2, '')}</details></div></section>`;
+    });
+
     const out = layout
       .replaceAll('{{title}}', meta.title)
       .replaceAll('{{description}}', meta.description)

@@ -79,6 +79,16 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
 
   $$('[data-year]').forEach((el) => { el.textContent = new Date().getFullYear(); });
 
+  /* ---------- folded technical sections: open when a link or the address points into them ---------- */
+  const openTech = (hash) => {
+    const el = hash && hash.length > 1 && document.getElementById(decodeURIComponent(hash.slice(1)));
+    const d = el && (el.querySelector(':scope > .container > details.tech') || el.closest('details.tech'));
+    if (d && !d.open) d.open = true;
+  };
+  openTech(location.hash);
+  addEventListener('hashchange', () => openTech(location.hash));
+  document.addEventListener('click', (e) => { const a = e.target.closest('a[href^="#"]'); if (a) openTech(a.getAttribute('href')); });
+
   /* ---------- on-page section nav ---------- */
   const secNav = $('.section-nav');
   if (secNav && 'IntersectionObserver' in window) {

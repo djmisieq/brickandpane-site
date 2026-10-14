@@ -795,3 +795,29 @@ body.app .site-header{position:static}
 @media (max-width:767px){
   body.has-action-bar:not(.is-typing) .tool-peek{bottom:72px}
 }
+
+/* ---------- technical detail folded behind its heading (product pages) ---------- */
+.tech>summary{list-style:none;cursor:pointer;display:grid;gap:.5rem;grid-template-columns:1fr auto;align-items:end}
+.tech>summary::-webkit-details-marker{display:none}
+.tech-label{grid-column:1 / -1;font-size:var(--step--1);font-weight:500;color:var(--muted)}
+.tech>summary h2{font-size:var(--step-3)}
+.tech>summary::after{content:"+";font-family:var(--mono);font-size:var(--step-3);line-height:1;color:var(--muted);transition:transform var(--dur-2) var(--ease)}
+.tech[open]>summary{margin-bottom:var(--s-xl)}
+.tech[open]>summary::after{transform:rotate(45deg)}
+.tech>summary:hover h2{color:var(--accent)}
+.tech .container{padding-inline:0}
+.section[data-tech]:has(.tech:not([open])){padding-block:var(--s-xl)}
+
+/* ---------- problem → answer rows (homepage) ---------- */
+.pairs{list-style:none;padding:0;border-top:1px solid var(--dark-ink-2)}
+.pairs li{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--s-xs) var(--gutter);padding-block:var(--s-m);border-bottom:1px solid var(--line)}
+.pair-q{font-size:var(--step-1);color:var(--ink-2)}
+.pair-q::before{content:"“"}
+.pair-q::after{content:"”"}
+.pair-a h3{font-size:var(--step-1);margin-bottom:var(--s-2xs)}
+.pair-a p{color:var(--ink-2)}
+@media (max-width:767px){.pairs li{grid-template-columns:1fr}}
+
+/* plainer key facts: words, not a spec sheet */
+.proof-list li span:last-child{font-family:var(--font)}
+html[lang="pl"] .pair-q::before{content:"„"}
