@@ -16,7 +16,7 @@ if (store.mode === 'demo') {
   $('[data-demo]', root).hidden = false;
   $$('[data-demo-login]', root).forEach((b) => b.addEventListener('click', async () => {
     await store.demoLogin(b.dataset.demoLogin);
-    location.href = b.dataset.demoLogin === 'staff' ? 'admin.html' : 'portal.html';
+    location.href = b.dataset.demoLogin === 'staff' ? 'admin.html' : (safeNext.startsWith('portal') ? safeNext : 'portal.html');
   }));
   $('[data-magic]', root).hidden = true;
 }
@@ -42,7 +42,7 @@ $('[data-signup]', root).addEventListener('submit', async (e) => {
   e.preventDefault(); const f = e.currentTarget;
   if (f.password.value.length < 10) { say('Use at least 10 characters for your password.', true); return; }
   try {
-    const r = await store.signUp({ email: f.email.value.trim(), password: f.password.value, full_name: f.full_name.value.trim(), company: f.company.value.trim() });
+    const r = await store.signUp({ email: f.email.value.trim(), password: f.password.value, full_name: f.full_name.value.trim(), company: f.company.value.trim(), account_type: f.account_type.value });
     if (r.needsConfirmation) say(`Check <strong>${esc(f.email.value.trim())}</strong> for a link to confirm your account.`);
     else { toast('Account created.'); go(); }
   } catch (err) { say(esc(err.message), true); }
