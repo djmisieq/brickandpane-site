@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in to your project portal | Brick & Pane</title>
+<meta name="description" content="Sign in or create an account to send projects for review and follow every stage live.">
+<!-- Pre-launch: remove noindex when content is verified. -->
+<meta name="robots" content="noindex,nofollow">
+<link rel="canonical" href="https://brickandpane.co.uk/login.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brick &amp; Pane">
+<meta property="og:title" content="Sign in to your project portal | Brick & Pane">
+<meta property="og:description" content="Sign in or create an account to send projects for review and follow every stage live.">
+<meta property="og:url" content="https://brickandpane.co.uk/login.html">
+<meta property="og:locale" content="en_GB">
+<meta name="theme-color" content="#f6f4ef">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/inter-tight-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"Brick & Pane","url":"https://brickandpane.co.uk/","email":"hello@brickandpane.co.uk","description":"Aluminium lift & slide doors, sliding doors and windows, made to order for architects and developers in London.","areaServed":[{"@type":"City","name":"London"},{"@type":"Country","name":"United Kingdom"}]}</script>
+
+</head>
+<body class="has-action-bar no-action-bar">
+<a class="skip" href="#main">Skip to content</a>
+<div class="prelaunch" role="note">Pre-launch preview. Values marked <span class="tag">Indicative</span> are being verified against test certificates.</div>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html" aria-label="Brick &amp; Pane — home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg>
+      <span class="brand-word">Brick &amp; Pane</span>
+    </a>
+    <nav class="primary-nav" id="primary-nav" aria-label="Main">
+      <ul>
+        <li><a href="lift-and-slide-doors.html" data-nav="lift-slide">Lift &amp; slide</a></li>
+        <li><a href="products.html" data-nav="products">Systems</a></li>
+        <li><a href="architects.html" data-nav="architects">Architects</a></li>
+        <li><a href="developers.html" data-nav="developers">Developers</a></li>
+        <li><a href="guide-large-sliding-doors-london.html" data-nav="guide">Design guide</a></li>
+        <li><a href="about.html" data-nav="about">About</a></li>
+      </ul>
+      <a class="nav-login" href="portal.html" data-nav="portal" aria-current="page">Client portal</a>
+      <a class="btn btn-sm nav-cta" href="contact.html">Request a quote</a>
+    </nav>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav"><span class="menu-toggle-label">Menu</span><span class="menu-toggle-icon" aria-hidden="true"></span></button>
+  </div>
+</header>
+
+<main id="main">
+<section class="section-tight">
+  <div class="container grid-12" id="auth">
+    <div class="span-5">
+      <span class="eyebrow">Project portal</span>
+      <h1 class="app-h1" style="font-size:var(--step-4)">Every project, every stage, without a phone call.</h1>
+      <ul class="checklist" style="margin-top:1.5rem;display:grid;gap:.6rem;color:var(--ink-2)">
+        <li>Send drawings and an openings schedule for review</li>
+        <li>See who has the ball, and when the next update is due</li>
+        <li>Approve quotations and shop drawings online</li>
+        <li>Ask questions in one thread the whole team sees</li>
+        <li>Get an email the moment anything changes</li>
+      </ul>
+    </div>
+    <div class="start-7" style="grid-column:7 / span 6">
+      <div class="auth-card">
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-auth-tab="signin">Sign in</button>
+          <button type="button" role="tab" aria-selected="false" data-auth-tab="signup">Create account</button>
+        </div>
+        <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
+        <form data-auth-panel="signin" data-signin class="auth-form">
+          <div class="field"><label for="si-email">Email</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="si-pw">Password</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
+          <div class="btn-row"><button class="btn" type="submit">Sign in</button><button class="linkish" type="button" data-magic>Email me a sign-in link instead</button></div>
+        </form>
+        <form data-auth-panel="signup" data-signup class="auth-form" hidden>
+          <div class="field-row">
+            <div class="field"><label for="su-name">Name</label><input id="su-name" name="full_name" autocomplete="name" required></div>
+            <div class="field"><label for="su-co">Practice / company</label><input id="su-co" name="company" autocomplete="organization"></div>
+          </div>
+          <div class="field"><label for="su-email">Email</label><input id="su-email" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="su-pw">Password</label><input id="su-pw" name="password" type="password" autocomplete="new-password" minlength="10" required><span class="hint">At least 10 characters.</span></div>
+          <p class="note">By creating an account you agree to our <a href="privacy.html">privacy notice</a>.</p>
+          <div><button class="btn" type="submit">Create account</button></div>
+        </form>
+        <div class="demo-login" data-demo hidden>
+          <p><strong>Demo mode:</strong> the portal isn't connected to a database yet. Try it with sample data:</p>
+          <div class="btn-row"><button class="btn btn-ghost btn-sm" type="button" data-demo-login="client">Continue as demo architect</button><button class="btn btn-ghost btn-sm" type="button" data-demo-login="staff">Continue as demo staff (CRM)</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<script type="module" src="js/portal/login.js"></script>
+</main>
+<footer class="site-footer theme-dark">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg>
+        <p>Aluminium lift &amp; slide doors, sliding doors and windows. Made to order, drawn with you, installed by our own London team.</p>
+        <a class="btn btn-light btn-sm" href="contact.html">Send drawings for review</a>
+      </div>
+      <div>
+        <h2 class="footer-h">Systems</h2>
+        <ul>
+          <li><a href="lift-and-slide-doors.html">Lift &amp; slide doors</a></li>
+          <li><a href="products.html#sliding">Slim sliding doors</a></li>
+          <li><a href="products.html#bifold">Bi-fold doors</a></li>
+          <li><a href="products.html#hinged">French &amp; entrance doors</a></li>
+          <li><a href="products.html#windows">Casement &amp; tilt-turn windows</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-h">Work with us</h2>
+        <ul>
+          <li><a href="architects.html">For architects</a></li>
+          <li><a href="developers.html">For developers &amp; contractors</a></li>
+          <li><a href="projects.html">Founding projects</a></li>
+          <li><a href="guide-large-sliding-doors-london.html">Design guide</a></li>
+          <li><a href="architects.html#samples">Samples</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-h">Contact</h2>
+        <ul>
+          <li><a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a></li>
+          <li><a href="contact.html">Request a quote</a></li>
+          <li>London &amp; South East</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Brick &amp; Pane.</span>
+      <span><a href="privacy.html">Privacy</a></span>
+      <span class="footer-ogl">Regulatory references contain public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">Open Government Licence v3.0</a>.</span>
+    </div>
+  </div>
+</footer>
+<div class="action-bar" role="region" aria-label="Quick actions">
+  <a class="btn btn-ghost" href="architects.html#library">Technical data</a>
+  <a class="btn" href="contact.html">Request a quote</a>
+</div>
+
+<script src="js/main.js" defer></script>
+</body>
+</html>

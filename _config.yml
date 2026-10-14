@@ -1,0 +1,8 @@
+# GitHub Pages (Jekyll) — publish only the built site, not internal files.
+exclude:
+  - AUDYT.md
+  - docs/
+  - supabase/
+  - src/
+  - build.mjs
+  - README.md
