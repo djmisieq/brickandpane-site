@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404', 'thank-you',
-  'windows', 'doors', 'facades', 'materials',
+  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows',
 ];
 const URLS = [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)];
 // The only places where sideways scrolling is the intended design.

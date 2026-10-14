@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404',
-  'windows', 'doors', 'facades', 'materials',
+  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows',
 ];
 const isMobileNav = (page) => page.viewportSize().width < 1100;
 
@@ -262,4 +262,17 @@ test.describe('full product range', () => {
     await expect(page.locator('input[name="systems"][value="windows"]')).toBeChecked();
     await expect(page.locator('input[name="material"][value="pvc"]')).toBeChecked();
   });
+});
+
+test('structured data parses and FAQ answers match what the page shows', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'runs once');
+  for (const url of [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)]) {
+    await page.goto(url);
+    const blocks = await page.$$eval('script[type="application/ld+json"]', (ss) => ss.map((s) => s.textContent));
+    const data = blocks.map((b) => JSON.parse(b));
+    const faq = data.find((d) => d['@type'] === 'FAQPage');
+    if (!faq) continue;
+    const shown = await page.$$eval('.faq summary', (ss) => ss.map((s) => s.textContent.trim()));
+    expect(faq.mainEntity.map((q) => q.name), url).toEqual(shown);
+  }
 });
