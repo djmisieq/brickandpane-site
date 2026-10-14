@@ -1,0 +1,151 @@
+// Live store backed by Supabase (auth, Postgres with RLS, storage, realtime).
+// Business rules (timeline, notifications, permissions) are enforced in the database —
+// see supabase/migrations/0001_project_portal.sql. This file only reads and writes.
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { addWorkingDays, stage } from './core.js';
+
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BUCKET = 'project-files';
+const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
+const listeners = new Set();
+const emit = () => listeners.forEach((cb) => cb());
+let channel = null;
+
+const subscribe = () => {
+  if (channel) return;
+  channel = sb.channel('portal');
+  ['projects', 'stage_events', 'documents', 'messages', 'notifications'].forEach((table) =>
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
+  channel.subscribe();
+};
+sb.auth.onAuthStateChange(() => emit());
+
+const PROFILE = 'id, full_name, company, role';
+const safeName = (n) => n.replace(/[^\w.\- ]+/g, '_').slice(-120);
+
+async function upload(pid, file) {
+  const path = `${pid}/${crypto.randomUUID()}-${safeName(file.name)}`;
+  ok(await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'application/octet-stream' }));
+  return path;
+}
+
+export const store = {
+  mode: 'live',
+  onChange(cb) { listeners.add(cb); subscribe(); return () => listeners.delete(cb); },
+
+  async getUser() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+    const p = ok(await sb.from('profiles').select('*').eq('id', user.id).single());
+    return { ...p, email: user.email };
+  },
+  async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); },
+  async signUp({ email, password, full_name, company }) {
+    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company }, emailRedirectTo: new URL('portal.html', location.href).href } }));
+    return { needsConfirmation: !data.session };
+  },
+  async sendMagicLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL('portal.html', location.href).href } })); },
+  async signOut() { await sb.auth.signOut(); },
+
+  async updateProfile(patch) {
+    const { data: { user } } = await sb.auth.getUser();
+    const { full_name, company, phone, notify_email, notify_digest } = patch;
+    ok(await sb.from('profiles').update({ full_name, company, phone, notify_email, notify_digest }).eq('id', user.id));
+  },
+
+  async listProjects() {
+    const me = await this.getUser();
+    const rows = ok(await sb.from('projects')
+      .select(`*, owner:profiles!projects_owner_id_fkey(${PROFILE}), assignee:profiles!projects_assignee_id_fkey(${PROFILE})`)
+      .order('updated_at', { ascending: false }));
+    if (me?.role === 'staff') {
+      const internal = ok(await sb.from('project_internal').select('*'));
+      const map = Object.fromEntries(internal.map((i) => [i.project_id, i]));
+      rows.forEach((r) => { r.internal = map[r.id]; });
+    }
+    return rows;
+  },
+
+  async getProject(id) {
+    const me = await this.getUser();
+    const [project, openings, events, documents, approvals, messages] = await Promise.all([
+      sb.from('projects').select(`*, owner:profiles!projects_owner_id_fkey(${PROFILE}), assignee:profiles!projects_assignee_id_fkey(${PROFILE})`).eq('id', id).single().then(ok),
+      sb.from('openings').select('*').eq('project_id', id).then(ok),
+      sb.from('stage_events').select(`*, actor:profiles(${PROFILE})`).eq('project_id', id).order('created_at').then(ok),
+      sb.from('documents').select(`*, uploader:profiles(${PROFILE})`).eq('project_id', id).order('created_at', { ascending: false }).then(ok),
+      sb.from('approvals').select(`*, actor:profiles(${PROFILE})`).eq('project_id', id).then(ok),
+      sb.from('messages').select(`*, author:profiles(${PROFILE})`).eq('project_id', id).order('created_at').then(ok),
+    ]);
+    const internal = me?.role === 'staff' ? ok(await sb.from('project_internal').select('*').eq('project_id', id).maybeSingle()) : undefined;
+    return { project, openings, events, documents, approvals, messages, internal };
+  },
+
+  async createProject(data, openings, files) {
+    const { data: { user } } = await sb.auth.getUser();
+    const p = ok(await sb.from('projects').insert({ ...data, owner_id: user.id }).select('id').single());
+    if (openings.length) ok(await sb.from('openings').insert(openings.map((o) => ({ ...o, project_id: p.id }))));
+    if (files.length) await this.uploadFiles(p.id, files);
+    return p.id;
+  },
+
+  async addMessage(pid, body, internal = false) {
+    const { data: { user } } = await sb.auth.getUser();
+    ok(await sb.from('messages').insert({ project_id: pid, author_id: user.id, body, internal }));
+  },
+
+  async uploadFiles(pid, files, meta = {}) {
+    const me = await this.getUser();
+    const staff = me.role === 'staff';
+    for (const f of files) {
+      const storage_path = await upload(pid, f);
+      ok(await sb.from('documents').insert({
+        project_id: pid, storage_path, size_bytes: f.size, uploaded_by: me.id,
+        kind: staff ? (meta.kind || 'other') : 'client_upload',
+        title: (staff && meta.title) || f.name,
+        version: staff ? (meta.version || '') : '',
+        visible_to_client: staff ? meta.visible !== false : true,
+        approval: staff && meta.approval ? 'pending' : 'none',
+      }));
+    }
+  },
+
+  async decide(docId, decision, comment = '') {
+    const { data: { user } } = await sb.auth.getUser();
+    const d = ok(await sb.from('documents').select('project_id').eq('id', docId).single());
+    ok(await sb.from('approvals').insert({ document_id: docId, project_id: d.project_id, decision, comment, actor_id: user.id }));
+  },
+
+  async setStage(pid, to, { note = '', visible = true, next_step, due_at } = {}) {
+    const { data: { user } } = await sb.auth.getUser();
+    const p = ok(await sb.from('projects').select('stage').eq('id', pid).single());
+    ok(await sb.from('stage_events').insert({ project_id: pid, from_stage: p.stage, to_stage: to, note, visible_to_client: visible, actor_id: user.id }));
+    const patch = { due_at: due_at !== undefined ? due_at : (stage(to).sla ? addWorkingDays(new Date(), stage(to).sla) : null) };
+    if (next_step !== undefined) patch.next_step = next_step;
+    ok(await sb.from('projects').update(patch).eq('id', pid));
+  },
+
+  async updateProject(pid, patch) {
+    const allowed = {}; ['assignee_id', 'next_step', 'due_at'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; });
+    ok(await sb.from('projects').update(allowed).eq('id', pid));
+  },
+  async updateInternal(pid, patch) { ok(await sb.from('project_internal').update({ ...patch, updated_at: new Date().toISOString() }).eq('project_id', pid)); },
+  async listStaff() { return ok(await sb.from('profiles').select(PROFILE).eq('role', 'staff')); },
+
+  async notifications() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return [];
+    return ok(await sb.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50));
+  },
+  async markRead(ids = 'all') {
+    const { data: { user } } = await sb.auth.getUser();
+    let q = sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null);
+    if (ids !== 'all') q = q.in('id', ids);
+    ok(await q);
+  },
+  async fileUrl(doc) {
+    if (!doc.storage_path) return null;
+    const data = ok(await sb.storage.from(BUCKET).createSignedUrl(doc.storage_path, 300));
+    return data.signedUrl;
+  },
+};
