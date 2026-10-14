@@ -1,5 +1,5 @@
 /* Brick & Pane — site behaviour. No dependencies. */
-import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText } from './pricing.js';
+import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, rangeTextIncVat } from './pricing.js';
 
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
@@ -43,6 +43,23 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     if (open && matchMedia('(min-width:1100px)').matches) { closeSubs(); open.focus(); }
   });
 
+  // Small screens: matrix tables become stacked cards, so give each cell its column name.
+  const labelTables = (root = document) => {
+    $$('table', root).forEach((t) => {
+      const heads = $$('thead th', t).map((th) => th.textContent.trim());
+      if (!heads.length) return;
+      $$('tbody tr', t).forEach((tr) => [...tr.children].forEach((cell, i) => { if (!cell.dataset.label && heads[i] && cell.colSpan === 1) cell.dataset.label = heads[i]; }));
+      t.classList.add('has-labels');
+    });
+  };
+  labelTables();
+  let lt = null;
+  new MutationObserver(() => { clearTimeout(lt); lt = setTimeout(() => labelTables(), 60); }).observe(document.body, { childList: true, subtree: true });
+
+  // Hide the sticky mobile action bar while typing so it never covers a field.
+  document.addEventListener('focusin', (e) => { if (e.target.matches('input, select, textarea')) document.body.classList.add('is-typing'); });
+  document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement?.matches?.('input, select, textarea')) document.body.classList.remove('is-typing'); }, 50));
+
   const onScroll = () => header?.classList.toggle('is-scrolled', scrollY > 8);
   addEventListener('scroll', onScroll, { passive: true });
   onScroll();
@@ -65,11 +82,13 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     d: { t: 12, label: 'Double, 6 / 20 / 6 toughened' },
     dl: { t: 14.8, label: 'Double, 8.8 laminated / 18 / 6 toughened' },
     t: { t: 16, label: 'Triple, 6 / 14 / 4 / 14 / 6' },
+    tl: { t: 18.8, label: 'Triple, 8.8 laminated / 14 / 4 / 14 / 6' },
   };
   // dirs: sliding panels and the direction they open (-1 left, 1 right).
   const SLIDERS = {
     'lift-slide': {
       limits: { panelKg: 400, heavyKg: 300, sashH: 3200, sashHMax: 3500, sashW: 3300, sashWMin: 700, handKg: 150, liftKg: 250 },
+      okText: 'Panel weight is inside the standard 300 kg hardware class (heavy-duty goes to 400 kg).',
       heavyText: 'Heavy-duty roller carriages needed (300–400 kg class). Fine for the system, but it affects the track and the floor detail.',
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
@@ -80,7 +99,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     },
     sliding: {
       limits: { panelKg: 250, heavyKg: 200, sashH: 3000, sashHMax: 3200, sashW: 2800, sashWMin: 600, handKg: 150, liftKg: 220 },
-      heavyText: 'Upper end of the inline hardware range (200–250 kg). Above this, lift & slide hardware is the safer choice.',
+      okText: 'Panel weight is well inside the 250 kg inline hardware range.',
+      heavyText: 'Upper end of the 250 kg inline hardware range (over 200 kg). If panels grow, lift & slide hardware is the safer choice.',
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
         '2B': { panels: 2, dirs: { 0: 1, 1: -1 }, open: 1 / 2, label: '2 panels — both sliding' },
@@ -96,8 +116,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     if (!(area > 0)) return null;
     const pct = (totalM2 / area) * 100;
     return [pct > 25 ? 'warn' : 'ok', pct > 25
-      ? `This door alone is ${fmt(pct)}% of the extension floor area. Above 25% (plus the area of any openings removed), Approved Document L expects a SAP-based calculation instead of the simple route. Brief your energy assessor early.`
-      : `This door is ${fmt(pct)}% of the extension floor area, inside the 25% simple-route allowance (check total glazing, including rooflights).`];
+      ? `Lots of glass: this door is ${fmt(pct)}% of the extension floor area. That's allowed. Above about 25%, Building Regulations (Part L) just ask for an energy calculation called SAP instead of the simple check. An energy assessor or your architect does it routinely, and we supply the figures. Tell them early.`
+      : `This door is ${fmt(pct)}% of the extension floor area, inside the simple 25% allowance in Building Regulations. Remember to count rooflights and other windows too.`];
   };
 
   const drawSlider = (svg, cfg, W, H) => {
@@ -153,7 +173,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     }
     const est = estimateProject([opening]);
     box.innerHTML = est
-      ? `<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text">Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`
+      ? `<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> for homeowners. Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`
       : '';
   };
   const bindPortalDraft = (tool, opening) => {
@@ -190,7 +210,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
       const msgs = [];
       if (kg > L.panelKg) msgs.push(['stop', `At about ${fmt(kg)} kg per panel this is beyond the ${L.panelKg} kg hardware class. Add a panel, reduce the height${system === 'sliding' ? ', or consider lift &amp; slide' : ''}.`]);
       else if (kg > L.heavyKg) msgs.push(['warn', def.heavyText]);
-      else msgs.push(['ok', `Panel weight is inside the standard hardware range (up to ${L.heavyKg} kg).`]);
+      else msgs.push(['ok', def.okText]);
       if (sashW > L.sashW) msgs.push(['stop', `Each panel would be about ${fmt(sashW)} mm wide, over the ${fmt(L.sashW)} mm limit. Choose a configuration with more panels.`]);
       if (sashW < L.sashWMin) msgs.push(['warn', `Panels under ~${fmt(L.sashWMin)} mm wide waste the slim interlock. Fewer panels will look better and cost less.`]);
       if (sashH > L.sashHMax) msgs.push(['stop', `A ${fmt(sashH)} mm panel height is outside the system range. Talk to us about a transom or a different system.`]);
@@ -261,6 +281,9 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     if (sys) { const c = form.querySelector(`input[name="systems"][value="${sys}"]`); if (c) c.checked = true; }
     const topic = params.get('topic');
     if (topic && form.topic) form.topic.value = topic;
+    if (!form.dataset.endpoint) { const note = $('[data-preview-note]', form); if (note) note.hidden = false; }
+    if (params.get('w') && form.opening_width_mm) form.opening_width_mm.value = params.get('w');
+    if (params.get('h') && form.opening_height_mm) form.opening_height_mm.value = params.get('h');
     if (params.get('w') && params.get('h')) {
       const sysKey = params.get('system'); const cfg = SLIDERS[sysKey]?.configs[params.get('config')]; const gl = GLASS[params.get('glass')];
       const sysName = { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold' }[sysKey] || 'Door';
@@ -284,6 +307,12 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
     const showRoleFields = () => {
       const r = form.querySelector('input[name="role"]:checked')?.value;
       $$('[data-for-role]', form).forEach((el) => { el.hidden = !(el.dataset.forRole.split(' ').includes(r)); });
+      // Only offer what makes sense for this kind of client.
+      const sel = form.topic;
+      if (sel) {
+        [...sel.options].forEach((o) => { const roles = o.dataset.roles; const show = !roles || !r || roles.split(' ').includes(r); o.hidden = !show; o.disabled = !show; });
+        if (sel.selectedOptions[0]?.disabled) sel.value = 'quote';
+      }
     };
     form.addEventListener('change', (e) => { if (e.target.name === 'role') showRoleFields(); });
     showRoleFields();
@@ -322,7 +351,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText }
 
     // Files
     const fileInput = $('input[type=file]', form), list = $('[data-file-list]', form), zone = $('.dropzone', form);
-    const MAX_MB = 25, MAX_TOTAL = 50;
+    const MAX_MB = 50, MAX_TOTAL = 100;
     const renderFiles = () => {
       const files = [...fileInput.files]; let total = 0, err = '';
       list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = `${fl.name} is over ${MAX_MB} MB — export a PDF or add a WeTransfer link in your message.`; return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');

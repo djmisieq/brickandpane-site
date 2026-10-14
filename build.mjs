@@ -20,7 +20,7 @@ for (const file of pages) {
 
   // Mark the active nav item.
   let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
-  if (['lift-slide', 'sliding', 'bifold'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
+  if (['lift-slide', 'sliding', 'bifold', 'products'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
 
   const out = layout
     .replaceAll('{{title}}', meta.title)
@@ -29,7 +29,9 @@ for (const file of pages) {
     .replaceAll('{{bodyClass}}', meta.bodyClass || '')
     .replace('{{head}}', meta.head || '')
     .replace('{{header}}', nav)
-    .replace('{{footer}}', footer)
+    .replace('{{footer}}', footer
+      .replace('{{actionHref}}', meta.actionHref || 'login.html?next=portal.html%23%2Fnew&signup=homeowner')
+      .replace('{{actionLabel}}', meta.actionLabel || 'Get a price'))
     .replace('{{content}}', body.trim());
 
   writeFileSync(new URL(`./${file}`, import.meta.url), out);

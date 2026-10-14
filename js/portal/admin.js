@@ -1,7 +1,7 @@
 // Internal CRM for Brick & Pane staff: pipeline board, list, project control panel.
 import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
-import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
+import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -60,11 +60,11 @@ async function board(asList) {
       </div>
       ${asList ? `
         <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">Ref</th><th scope="col">Project</th><th scope="col">Client</th><th scope="col">Stage</th><th scope="col">Owner</th><th scope="col">Due</th><th scope="col">Value</th><th scope="col">Updated</th></tr></thead><tbody>
-          ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(p.owner?.company || p.owner?.full_name || '')}</td><td>${stageBadge(p.stage)}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
+          ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(p.owner?.company || p.owner?.full_name || '')}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
-          return `<section class="col ${s.court === 'you' ? 'col-you' : ''}" aria-label="${esc(s.staffLabel || s.label)}"><h2 class="col-h">${esc(s.staffLabel || s.label)} <span>${items.length}</span></h2>${items.map(card).join('')}</section>`;
+          return `<section class="col ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" aria-label="${esc(s.staffLabel || s.label)}"><h2 class="col-h">${esc(s.staffLabel || s.label)} <span>${items.length}</span></h2>${items.map(card).join('')}</section>`;
         }).join('')}</div>`}
     </div>`;
   const qi = $('#crm-q', app);
@@ -87,21 +87,40 @@ async function detail(id) {
       <div class="crm-grid">
         <div class="crm-main">
           ${nowCard(p, 'staff')}
-          ${pipeline(p, d.events)}
-          ${tabs(activeTab, counts(d, 'staff'))}
+          ${pipeline(p, d.events, 'staff')}
+          ${tabs(activeTab, counts(d, 'staff', user))}
           <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
-            ${activeTab === 'documents' ? documentsPanel(d, 'staff') : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d, 'staff')}
+            ${activeTab === 'documents' ? documentsPanel(d, 'staff', user) : activeTab === 'changes' ? changesPanel(d, 'staff', user) : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d, 'staff', 'staff', user)}
           </div>
         </div>
         <aside class="crm-side">
-          <form class="ctl" data-stage>
+          <form class="ctl" data-stage novalidate>
             <h2 class="panel-h">Move stage</h2>
-            <div class="field"><label for="ctl-stage">New stage</label><select id="ctl-stage" name="stage">${ALL_STAGES.map((s) => `<option value="${s.id}" ${s.id === suggested ? 'selected' : ''}>${esc(s.label)}${s.id === p.stage ? ' (current)' : ''}</option>`).join('')}</select></div>
+            <div class="field"><label for="ctl-stage">New stage</label><select id="ctl-stage" name="stage" required><option value="">Choose the new stage…</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(s.staffLabel || s.label)}${s.id === suggested ? ' (next)' : ''}</option>`).join('')}</select><span class="hint">Current: ${esc(stage(p.stage).staffLabel || stage(p.stage).label)}</span></div>
             <div class="field"><label for="ctl-note">Note to client</label><textarea id="ctl-note" name="note" rows="2" placeholder="e.g. Quotation Q1 is in Documents."></textarea></div>
             <div class="field"><label for="ctl-next">Next step (shown to client)</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
             <div class="field"><label for="ctl-due">Promised by</label><input id="ctl-due" name="due" type="date"><span class="hint">Blank = automatic from the stage SLA.</span></div>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>Visible to client and notify them</span></label>
             <button class="btn btn-sm" type="submit">Update stage</button>
+          </form>
+
+          <form class="ctl" data-dates>
+            <h2 class="panel-h">Delivery &amp; fitting</h2>
+            <div class="field-row">
+              <div class="field"><label for="ctl-del">Delivery</label><input id="ctl-del" name="delivery" type="date" value="${p.delivery_at ? p.delivery_at.slice(0, 10) : ''}"></div>
+              <div class="field"><label for="ctl-ins">Fitting</label><input id="ctl-ins" name="install" type="date" value="${p.install_at ? p.install_at.slice(0, 10) : ''}"></div>
+            </div>
+            <button class="btn btn-sm btn-ghost" type="submit">Save &amp; notify client</button>
+          </form>
+
+          <form class="ctl" data-payment>
+            <h2 class="panel-h">Payment schedule</h2>
+            <div class="field"><label for="pay-label">Stage</label><input id="pay-label" name="label" placeholder="e.g. Deposit (30%)" required></div>
+            <div class="field-row">
+              <div class="field"><label for="pay-amt">Amount (£)</label><input id="pay-amt" name="amount" type="number" min="0" step="1" required></div>
+              <div class="field"><label for="pay-due">Due</label><input id="pay-due" name="due" type="date"></div>
+            </div>
+            <button class="btn btn-sm btn-ghost" type="submit">Add payment</button>
           </form>
 
           <form class="ctl" data-assign>
@@ -118,6 +137,7 @@ async function detail(id) {
               <div class="field"><label for="ctl-ver">Version</label><input id="ctl-ver" name="version" placeholder="Q1 / Rev A"></div>
             </div>
             <div class="field"><label for="ctl-title">Title</label><input id="ctl-title" name="title" placeholder="Defaults to file name"></div>
+            <div class="field"><label for="ctl-amt">Quotation amount (£, ex VAT)</label><input id="ctl-amt" name="amount" type="number" min="0" step="1" placeholder="For quotations"></div>
             <label class="consent"><input type="checkbox" name="approval"> <span>Ask the client to approve</span></label>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>Visible to client</span></label>
             <button class="btn btn-sm" type="submit">Upload &amp; notify</button>
@@ -140,13 +160,23 @@ async function detail(id) {
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   $('[data-stage]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
+    if (!f.stage.value) { f.stage.focus(); toast('Choose the new stage first.'); return; }
     const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : (stage(f.stage.value).sla ? addWorkingDays(new Date(), stage(f.stage.value).sla) : null);
     try { await store.setStage(id, f.stage.value, { note: f.note.value.trim(), visible: f.visible.checked, next_step: f.next_step.value.trim(), due_at: due }); toast(f.visible.checked ? 'Stage updated. Client notified.' : 'Stage updated (hidden from client).'); } catch (err) { toast(err.message); }
   });
   $('[data-assign]', app).addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { assignee_id: e.currentTarget.assignee_id.value || null }); toast('Owner saved.'); } catch (err) { toast(err.message); } });
   $('[data-doc]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const file = f.file.files[0]; if (!file) return;
-    try { await store.uploadFiles(id, [file], { kind: f.kind.value, version: f.version.value.trim(), title: f.title.value.trim(), approval: f.approval.checked, visible: f.visible.checked }); toast(f.visible.checked ? 'Shared. Client notified.' : 'Uploaded (internal).'); } catch (err) { toast(err.message); }
+    try { await store.uploadFiles(id, [file], { kind: f.kind.value, version: f.version.value.trim(), title: f.title.value.trim(), amount: f.amount.value, approval: f.approval.checked, visible: f.visible.checked }); toast(f.visible.checked ? 'Shared. Client notified.' : 'Uploaded (internal).'); } catch (err) { toast(err.message); }
+  });
+  $('[data-dates]', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget;
+    const iso = (v) => (v ? new Date(`${v}T09:00:00`).toISOString() : null);
+    try { await store.updateProject(id, { delivery_at: iso(f.delivery.value), install_at: iso(f.install.value) }); toast('Dates saved. Client notified.'); } catch (err) { toast(err.message); }
+  });
+  $('[data-payment]', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget;
+    try { await store.addPayment(id, { label: f.label.value.trim(), amount: f.amount.value, due_date: f.due.value ? new Date(`${f.due.value}T09:00:00`).toISOString() : null }); f.reset(); toast('Payment added.'); } catch (err) { toast(err.message); }
   });
   $('[data-internal]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
