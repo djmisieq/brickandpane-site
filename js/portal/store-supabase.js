@@ -21,7 +21,7 @@ const subscribe = () => {
 };
 sb.auth.onAuthStateChange(() => emit());
 
-const PROFILE = 'id, full_name, company, role';
+const PROFILE = 'id, full_name, company, role, account_type';
 const safeName = (n) => n.replace(/[^\w.\- ]+/g, '_').slice(-120);
 
 async function upload(pid, file) {
@@ -41,8 +41,8 @@ export const store = {
     return { ...p, email: user.email };
   },
   async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); },
-  async signUp({ email, password, full_name, company }) {
-    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company }, emailRedirectTo: new URL('portal.html', location.href).href } }));
+  async signUp({ email, password, full_name, company, account_type = 'architect' }) {
+    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company, account_type }, emailRedirectTo: new URL('portal.html', location.href).href } }));
     return { needsConfirmation: !data.session };
   },
   async sendMagicLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL('portal.html', location.href).href } })); },

@@ -124,3 +124,36 @@ Notatki wewnętrzne i zmiany etapu oznaczone jako ukryte **nie trafiają do klie
 - **Wersjonowanie rysunków** z porównaniem rewizji oraz komentarze przypięte do konkretnego rysunku.
 - **Harmonogram dostaw** z datami poszczególnych partii przy dużych pakietach dla deweloperów.
 - **Eksport rejestru zmian i akceptacji do PDF** jako „golden thread” na przekazanie budynku.
+
+## 9. Szacunek budżetu i konta dla osób prywatnych (dodane 14.10.2026)
+
+**Jak działa wycena:**
+- Kalkulator na stronie produktu i formularz nowego projektu w portalu liczą **natychmiastowy szacunek budżetu**. Wynik ma postać widełek ±15%, kwot netto, z dostawą i montażem w Londynie.
+- **Formalną wycenę** nadal przygotowuje zespół: wgrywa PDF w CRM, a klient akceptuje go online.
+- Do czasu wgrania wyceny projekt pokazuje szacunek. CRM widzi, jaką kwotę klient zobaczył.
+
+**Cennik:** jedna tabela w `js/pricing.js`, którą trzeba uzupełnić:
+- stawka za m² dla każdego systemu,
+- stawka za panel,
+- minimum za otwór,
+- mnożniki szkła,
+- dopłata za próg bez stopnia,
+- ryczałt za dźwig lub robota.
+
+Obecne liczby są **przykładowe**. Dlatego:
+- `enabled: false`, czyli na publicznych stronach ceny są **ukryte**, a zamiast nich widać zachętę do zapisania otworu w portalu;
+- w portalu demo i pod adresem z `?preview=pricing` szacunek jest widoczny, z wyraźną etykietą „Example rates — not Brick & Pane prices”;
+- po wpisaniu prawdziwego cennika ustaw `enabled: true` i uruchom `npm run build`.
+
+**Typy kont:**
+- **Architekt**: pełny pipeline 12 etapów, etap RIBA, język techniczny.
+- **Deweloper**: jak architekt.
+- **Osoba prywatna**: prostszy język („Your quote is ready”, „Being made”, „Delivery booked”) i **pasek śledzenia zamówienia jak w sklepie**: Quote → Order → Made → Delivered → Installed. Formularz nazywa się „Get a price” i nie ma pola etapu RIBA.
+
+**Ścieżka z kalkulatora:**
+1. Przycisk „Save to your portal” zapisuje otwór z kalkulatora.
+2. Po zalogowaniu lub założeniu konta formularz nowego projektu jest już wypełniony tym otworem i szacunkiem.
+
+**Baza:** uruchom też `supabase/migrations/0002_accounts_estimates.sql`. Dodaje typ konta (`account_type`) i pola szacunku przy projekcie. Przetestowane na PGlite.
+
+**Następny krok (propozycja):** wpłata zaliczki online przy akceptacji wyceny (Stripe Checkout). Wtedy przejście „Quote → Order” dzieje się automatycznie, jak w sklepie.
