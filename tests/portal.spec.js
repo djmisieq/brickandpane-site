@@ -68,10 +68,18 @@ test('architect submits a new project with an openings schedule', async ({ page 
   await page.fill('[data-rows] input[name="width_mm"]', '6000');
   await page.fill('[data-rows] input[name="height_mm"]', '2800');
   await page.selectOption('[data-rows] select[name="config"]', '4C');
+  await page.selectOption('[data-rows] select[name="material"]', 'timber');
   await expect(page.locator('[data-est]')).toHaveText(/kg/);
+  await page.locator('[data-add]').click();
+  const row2 = page.locator('[data-rows] tr').nth(1);
+  await row2.locator('select[name="system"]').selectOption('rooflights');
+  await row2.locator('input[name="width_mm"]').fill('2000');
+  await row2.locator('input[name="height_mm"]').fill('3000');
   await page.locator('.newp button[type="submit"]').click();
   await expect(page.locator('.now-card')).toContainText('Received');
   await expect(page.locator('h1')).toHaveText('Test villa');
+  await expect(page.locator('.spec-compact')).toContainText('Lift & slide · Timber');
+  await expect(page.locator('.spec-compact')).toContainText('Roof lantern / rooflight');
 });
 
 test('clients cannot use the staff CRM', async ({ page }) => {

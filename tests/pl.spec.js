@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login',
+  'windows', 'doors', 'facades', 'materials',
 ];
 
 test.describe('every Polish page', () => {
@@ -28,7 +29,7 @@ test('Polish internal links all resolve', async ({ page, request }, info) => {
   const hrefs = new Set();
   for (const name of PAGES) {
     await page.goto(`/pl/${name}.html`);
-    (await page.$$eval('a[href]', (as) => as.map((a) => a.href)))
+    (await page.$$eval('a[href]', (as) => as.map((a) => new URL(a.getAttribute('href'), location.href).href)))
       .filter((h) => h.startsWith(new URL(page.url()).origin) && /\.html/.test(h)).forEach((h) => hrefs.add(h.split(/[?#]/)[0]));
   }
   for (const h of hrefs) expect((await request.get(h)).status(), h).toBe(200);
@@ -101,4 +102,11 @@ test.describe('Polish client portal', () => {
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('.field.has-error .error').first()).toHaveText('Pole wymagane.');
   });
+});
+
+test('Polish material advisor answers in Polish', async ({ page }) => {
+  await page.goto('/pl/materials.html#advisor');
+  await page.locator('label', { hasText: 'Zabytek' }).click();
+  await expect(page.locator('[data-out-material]')).toHaveText('Drewno');
+  await expect(page.locator('[data-out-why]')).toContainText('zgody konserwatora');
 });

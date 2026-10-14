@@ -43,7 +43,8 @@ export const DOC_KINDS = {
   client_upload: 'Your upload', quote: 'Quotation', drawing: 'Shop drawing', survey: 'Survey',
   certificate: 'Certificate / DoP', om_manual: 'O&M manual', other: 'Document',
 };
-export const SYSTEMS = { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance', windows: 'Windows' };
+export const SYSTEMS = { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance', windows: 'Windows', facades: 'Curtain walling', rooflights: 'Roof lantern / rooflight' };
+export const MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium' };
 
 // ---------- formatting ----------
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
