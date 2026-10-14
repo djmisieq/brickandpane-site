@@ -1,4 +1,5 @@
 // Shared definitions and helpers for the project portal and the internal CRM.
+import { tr, locale } from './i18n.js';
 
 // Pipeline. `court` says who the ball is with: 'us' (Brick & Pane) or 'you' (the client).
 // `sla` is the promised turnaround in working days while the project sits in that stage.
@@ -24,8 +25,8 @@ export const ALL_STAGES = [...STAGES, ...SIDE_STAGES];
 export const PHASES = ['Quotation', 'Design', 'Delivery'];
 export const stage = (id) => ALL_STAGES.find((s) => s.id === id) || ALL_STAGES[0];
 export const audienceOf = (user) => (user?.role === 'staff' ? 'staff' : user?.account_type === 'homeowner' ? 'home' : 'trade');
-export const stageLabel = (id, audience = 'trade') => { const s = stage(id); return audience === 'home' && s.homeLabel ? s.homeLabel : audience === 'staff' && s.staffLabel ? s.staffLabel : s.label; };
-export const stageText = (id, audience = 'trade') => { const s = stage(id); return audience === 'home' && s.home ? s.home : s.client; };
+export const stageLabel = (id, audience = 'trade') => { const s = stage(id); return tr(audience === 'home' && s.homeLabel ? s.homeLabel : audience === 'staff' && s.staffLabel ? s.staffLabel : s.label); };
+export const stageText = (id, audience = 'trade') => { const s = stage(id); return tr(audience === 'home' && s.home ? s.home : s.client); };
 export const ACCOUNT_TYPES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner' };
 
 // Shop-style order tracker for homeowners: five milestones over the 12 stages.
@@ -52,15 +53,15 @@ export const fmtDate = (iso, withTime = false) => {
   const d = new Date(iso);
   const opts = { day: 'numeric', month: 'short', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined };
   if (withTime) Object.assign(opts, { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleString('en-GB', opts);
+  return d.toLocaleString(locale, opts);
 };
-export const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—');
+export const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' }) : '—');
 export const ago = (iso) => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  if (s < 86400 * 7) return `${Math.floor(s / 86400)} d ago`;
+  if (s < 60) return tr('just now');
+  if (s < 3600) return tr('{n} min ago', { n: Math.floor(s / 60) });
+  if (s < 86400) return tr('{n} h ago', { n: Math.floor(s / 3600) });
+  if (s < 86400 * 7) return tr('{n} d ago', { n: Math.floor(s / 86400) });
   return fmtDate(iso);
 };
 export const fmtMoney = (n) => (n == null || n === '' ? '—' : `£${Number(n).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`);
@@ -102,18 +103,18 @@ export const tracker = (id) => {
   const i = stageIndex(id);
   const cur = i < 0 ? -1 : MILESTONES.findIndex((m) => stageIndex(m.until) >= i);
   const done = id === 'completed';
-  return `<ol class="tracker" aria-label="Order progress">${MILESTONES.map((m, j) => `<li class="${done || j < cur ? 'is-done' : j === cur ? 'is-current' : ''}" ${j === cur && !done ? 'aria-current="step"' : ''}><span class="tracker-dot" aria-hidden="true"></span><span>${m.label}</span></li>`).join('')}</ol>`;
+  return `<ol class="tracker" aria-label="${tr('Order progress')}">${MILESTONES.map((m, j) => `<li class="${done || j < cur ? 'is-done' : j === cur ? 'is-current' : ''}" ${j === cur && !done ? 'aria-current="step"' : ''}><span class="tracker-dot" aria-hidden="true"></span><span>${tr(m.label)}</span></li>`).join('')}</ol>`;
 };
 export const courtLabel = (id, viewer = 'client') => {
   const c = stage(id).court;
   if (c === 'none') return '';
-  if (viewer !== 'staff') return c === 'you' ? 'Waiting on you' : 'With Brick & Pane';
+  if (viewer !== 'staff') return tr(c === 'you' ? 'Waiting on you' : 'With Brick & Pane');
   return c === 'you' ? 'Waiting on client' : 'With us';
 };
 export const progressBar = (id) => {
   const i = stageIndex(id);
   const pct = i < 0 ? 0 : Math.round(((i + 1) / STAGES.length) * 100);
-  return `<div class="progress" role="img" aria-label="Stage ${i + 1} of ${STAGES.length}"><span style="width:${pct}%"></span></div>`;
+  return `<div class="progress" role="img" aria-label="${tr('Stage {i} of {n}', { i: i + 1, n: STAGES.length })}"><span style="width:${pct}%"></span></div>`;
 };
 
 // ---------- project team & decision rights ----------
