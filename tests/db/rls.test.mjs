@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -14,7 +14,7 @@ const O = '55555555-5555-5555-5555-555555555555'; // unrelated client
 
 async function setup() {
   const db = new PGlite();
-  await db.exec(`create role anon; create role authenticated; create schema auth;
+  await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
     create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;
@@ -86,4 +86,28 @@ test('invitations attach on sign-up', async () => {
   await db.exec('reset role');
   await db.query(`insert into auth.users values ('66666666-6666-6666-6666-666666666666', 'eng@x.com', '{}')`);
   assert.equal((await db.query(`select role from public.project_members where user_id = '66666666-6666-6666-6666-666666666666'`)).rows[0].role, 'engineer');
+});
+
+test('quote requests: the public cannot read or write them, staff triage them', async () => {
+  const { db, as, fails } = await setup();
+  await db.exec('grant usage on schema public to anon; grant all on public.contact_requests to anon, service_role; grant usage on schema public to service_role;');
+  // The Edge Function writes with the service role.
+  await db.exec('set role service_role');
+  const r = (await db.query(`insert into public.contact_requests (name, email, consent_at, systems) values ('Sam', 'sam@x.com', now(), '{bifold}') returning id, ref, status`)).rows[0];
+  assert.match(r.ref, /^BP-\d{6}-[0-9A-F]{4}$/);
+  assert.equal(r.status, 'new');
+  await fails(`insert into public.contact_requests (name, email, consent_at) values ('Bad', 'not-an-email', now())`);
+  await db.exec('reset role');
+  // Anyone on the internet (anon) and ordinary clients see nothing and cannot add rows directly.
+  await db.exec('set role anon');
+  assert.equal((await db.query('select * from public.contact_requests')).rows.length, 0);
+  await fails(`insert into public.contact_requests (name, email, consent_at) values ('Spam', 'a@b.co', now())`);
+  await as(A);
+  assert.equal((await db.query('select * from public.contact_requests')).rows.length, 0);
+  await db.query(`update public.contact_requests set status = 'closed'`);
+  await as(S);
+  const seen = (await db.query('select status from public.contact_requests')).rows;
+  assert.deepEqual(seen, [{ status: 'new' }]);
+  await db.query(`update public.contact_requests set status = 'replied', staff_note = 'Called back' where id = $1`, [r.id]);
+  assert.equal((await db.query('select status from public.contact_requests where id = $1', [r.id])).rows[0].status, 'replied');
 });
