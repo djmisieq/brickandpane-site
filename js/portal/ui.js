@@ -7,8 +7,7 @@ import {
 import { PRICING, pricingVisible, pricingIsExample, estimateOpening, fmtGBP, incVat } from '../pricing.js';
 import { tr, LANG } from './i18n.js';
 
-// PL pages live in /pl/; the staff CRM exists only in English at the root.
-const ADMIN = LANG === 'pl' ? '../admin.html' : 'admin.html';
+const ADMIN = 'admin.html';
 
 export const showPrices = () => pricingVisible({ demo: store.mode === 'demo' });
 export const estimateNote = () => (pricingIsExample() ? `${LANG === 'pl' && PRICING.labelPl ? PRICING.labelPl : PRICING.label}.` : tr('Automatic estimate, not a quotation.'));
@@ -26,10 +25,10 @@ export async function renderAppBar(el, user, area) {
   const home = area === 'admin' ? 'admin.html#/' : 'portal.html#/';
   const crmLink = area === 'admin' ? 'portal.html' : ADMIN;
   el.innerHTML = `
-    ${store.mode === 'demo' ? `<div class="demo-bar" role="note"><strong>${tr('Demo mode.')}</strong> ${tr('Sample data stored in this browser only. Open the')} <a href="${crmLink}" target="_blank" rel="noopener">${area === 'admin' ? 'client portal' : tr('staff CRM')}</a> ${tr('in another tab to see updates arrive live.')} <button type="button" class="linkish" data-reset-demo>${tr('Reset demo')}</button></div>` : ''}
+    ${store.mode === 'demo' ? `<div class="demo-bar" role="note"><strong>${tr('Demo mode.')}</strong> ${tr('Sample data stored in this browser only. Open the')} <a href="${crmLink}" target="_blank" rel="noopener">${tr(area === 'admin' ? 'client portal' : 'staff CRM')}</a> ${tr('in another tab to see updates arrive live.')} <button type="button" class="linkish" data-reset-demo>${tr('Reset demo')}</button></div>` : ''}
     <div class="appbar">
       <div class="container appbar-inner">
-        <a class="appbar-title" href="${home}">${area === 'admin' ? 'Projects CRM' : tr(user.account_type === 'homeowner' ? 'Your orders' : 'Your projects')}</a>
+        <a class="appbar-title" href="${home}">${area === 'admin' ? tr('Projects CRM') : tr(user.account_type === 'homeowner' ? 'Your orders' : 'Your projects')}</a>
         <div class="appbar-actions">
           ${area === 'portal' ? `<a class="btn btn-sm" href="#/new">${tr(user.account_type === 'homeowner' ? 'Get a price' : 'New project')}</a>` : ''}
           <div class="notif">
@@ -47,9 +46,9 @@ export async function renderAppBar(el, user, area) {
           </div>
           <details class="usermenu"><summary>${esc(user.full_name || user.email)}</summary>
             <div class="usermenu-panel">
-              <span class="note">${esc(user.email || '')}${user.role === 'staff' ? ' · staff' : ''}</span>
-              ${area === 'portal' ? `<a href="#/settings">${tr('Settings')}</a>` : '<a href="portal.html">Client view</a>'}
-              ${user.role === 'staff' && area === 'portal' ? `<a href="${ADMIN}">Staff CRM</a>` : ''}
+              <span class="note">${esc(user.email || '')}${user.role === 'staff' ? ` · ${tr('staff')}` : ''}</span>
+              ${area === 'portal' ? `<a href="#/settings">${tr('Settings')}</a>` : `<a href="portal.html">${tr('Client view')}</a>`}
+              ${user.role === 'staff' && area === 'portal' ? `<a href="${ADMIN}">${tr('Staff CRM')}</a>` : ''}
               <button type="button" class="linkish" data-signout>${tr('Sign out')}</button>
             </div>
           </details>
@@ -94,7 +93,7 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
   const s = stage(project.stage);
   const court = courtLabel(project.stage, viewer);
   const due = project.due_at && s.court === 'us'
-    ? `<li><span>${viewer === 'client' ? tr('Next update by') : 'Promised to client by'}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
+    ? `<li><span>${tr(viewer === 'client' ? 'Next update by' : 'Promised to client by')}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
   const dates = [
     project.delivery_at ? `<li><span>${tr('Delivery')}</span><span>${fmtDay(project.delivery_at)}</span></li>` : '',
     project.install_at ? `<li><span>${tr('Fitting')}</span><span>${fmtDay(project.install_at)}</span></li>` : '',
@@ -103,11 +102,11 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
     <section class="now-card ${s.court === 'you' ? 'is-you' : ''}" aria-label="${tr('Current status')}">
       ${audience === 'home' ? tracker(project.stage) : ''}
       <div class="now-head">${stageBadge(project.stage, audience)}${court ? `<span class="court court-${s.court}">${court}</span>` : ''}</div>
-      <p class="now-text">${esc(viewer === 'client' ? stageText(project.stage, audience) : (s.staff || s.client))}</p>
-      ${project.next_step ? `<p class="now-next"><strong>${viewer === 'client' ? tr('Next step') : 'Next step shown to client'}:</strong> ${esc(viewer === 'client' ? tr(project.next_step) : project.next_step)}</p>` : ''}
+      <p class="now-text">${esc(viewer === 'client' ? stageText(project.stage, audience) : tr(s.staff || s.client))}</p>
+      ${project.next_step ? `<p class="now-next"><strong>${tr(viewer === 'client' ? 'Next step' : 'Next step shown to client')}:</strong> ${esc(tr(project.next_step))}</p>` : ''}
       <ul class="proof-list">
         ${dates}${due}
-        <li><span>${viewer === 'client' ? tr('Your contact') : 'Owner'}</span><span>${esc(project.assignee?.full_name || tr('Being assigned'))}</span></li>
+        <li><span>${tr(viewer === 'client' ? 'Your contact' : 'Owner')}</span><span>${esc(project.assignee?.full_name || tr('Being assigned'))}</span></li>
         <li><span>${tr('In this stage since')}</span><span>${fmtDate(project.stage_changed_at)}</span></li>
       </ul>
     </section>`;
@@ -136,9 +135,9 @@ export function overviewPanel(d, viewer = 'client', audience = 'trade', user = n
   const isOwner = viewer === 'staff' || members.some((m) => m.user_id === user?.id && m.role === 'owner');
   const estBlock = p.estimate_low && prices && !hasQuote ? `
     <div class="estimate" style="margin-bottom:var(--s-l)">
-      <span class="estimate-label">${viewer === 'staff' ? 'Automatic estimate shown to client' : tr('Budget estimate')}</span>
+      <span class="estimate-label">${tr(viewer === 'staff' ? 'Automatic estimate shown to client' : 'Budget estimate')}</span>
       <span class="estimate-value">${audience === 'home' ? `${fmtGBP(incVat(p.estimate_low))}–${fmtGBP(incVat(p.estimate_high))} ${tr('inc. VAT')}` : `${fmtGBP(p.estimate_low)}–${fmtGBP(p.estimate_high)} + VAT`}</span>
-      <span class="estimate-text">${tr('Supplied & installed.')} ${viewer === 'staff' ? 'Calculated from the client’s schedule.' : tr('Your formal quotation follows after our technical review.')} ${esc(estimateNote())}</span>
+      <span class="estimate-text">${tr('Supplied & installed.')} ${tr(viewer === 'staff' ? 'Calculated from the client’s schedule.' : 'Your formal quotation follows after our technical review.')} ${esc(estimateNote())}</span>
     </div>` : '';
   const payments = d.payments || [];
   const paid = payments.filter((x) => x.paid_at).reduce((t, x) => t + Number(x.amount), 0);
@@ -155,7 +154,7 @@ export function overviewPanel(d, viewer = 'client', audience = 'trade', user = n
         ${payments.length ? `
           <h3 class="panel-h">${tr('Payments')}</h3>
           <table class="spec spec-compact"><thead><tr><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Amount')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Status')}</th></tr></thead><tbody>
-            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${x.paid_at ? 'Mark unpaid' : 'Mark paid'}</button>` : ''}</td></tr>`).join('')}
+            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${tr(x.paid_at ? 'Mark unpaid' : 'Mark paid')}</button>` : ''}</td></tr>`).join('')}
           </tbody></table>
           <p class="note" style="margin-top:.6rem">${tr('Paid {paid} of {total}', { paid: fmtGBP(paid), total: fmtGBP(total) })}${audience === 'home' ? ` ${tr('(amounts include VAT)')}` : ''}.</p>` : ''}
       </div>
@@ -196,7 +195,7 @@ export function documentsPanel(d, viewer, user = null) {
     const approvals = d.approvals.filter((a) => a.document_id === doc.id);
     const last = approvals[approvals.length - 1];
     const rights = viewer === 'client' && doc.approval === 'pending' ? decisionRights(doc, user, members) : { can: false };
-    const waiting = rights.reason === 'client' ? tr('Waiting for {name}', { name: esc(rights.waitingFor?.user?.full_name || tr('your client')) }) : (viewer === 'client' ? tr(doc.kind === 'quote' ? 'Your acceptance needed' : 'Your review needed') : 'Awaiting client');
+    const waiting = rights.reason === 'client' ? tr('Waiting for {name}', { name: esc(rights.waitingFor?.user?.full_name || tr('your client')) }) : (viewer === 'client' ? tr(doc.kind === 'quote' ? 'Your acceptance needed' : 'Your review needed') : tr('Awaiting client'));
     const status = doc.approval === 'pending' ? `<span class="badge badge-you">${waiting}</span>`
       : doc.approval === 'approved' ? `<span class="badge badge-ok">${tr(L.doneYes)}</span>`
       : doc.approval === 'changes_requested' ? `<span class="badge badge-warn">${tr(L.doneNo)}</span>` : '';
@@ -204,7 +203,7 @@ export function documentsPanel(d, viewer, user = null) {
     return `
       <li class="doc">
         <div class="doc-main">
-          <span class="doc-kind">${esc(tr(DOC_KINDS[doc.kind] || 'Document'))}${doc.version ? ` · ${esc(doc.version)}` : ''}${viewer === 'staff' && !doc.visible_to_client ? ' · <span class="tag">internal</span>' : ''}</span>
+          <span class="doc-kind">${esc(tr(DOC_KINDS[doc.kind] || 'Document'))}${doc.version ? ` · ${esc(doc.version)}` : ''}${viewer === 'staff' && !doc.visible_to_client ? ` · <span class="tag">${tr('internal')}</span>` : ''}</span>
           <span class="doc-title">${esc(doc.title)}${amount}</span>
           <span class="doc-meta">${fmtDate(doc.created_at)} · ${esc(doc.uploader?.full_name || '')}${doc.size_bytes ? ` · ${fmtSize(doc.size_bytes)}` : ''}</span>
           ${last ? `<span class="doc-meta">${tr(last.decision === 'approved' ? L.doneYes : L.doneNo)} ${tr('by')} ${esc(last.actor?.full_name || '')}${last.on_behalf ? ` ${tr('on the client’s behalf')}` : ''}, ${fmtDate(last.created_at, true)}${last.comment ? `: “${esc(last.comment)}”` : ''}</span>` : ''}
@@ -258,11 +257,11 @@ export function changesPanel(d, viewer, user) {
         ${c.status === 'proposed' && c.raised_by === user.id ? `<div><button type="button" class="linkish" data-withdraw="${esc(c.id)}">${tr('Withdraw')}</button></div>` : ''}
       </li>`).join('')}</ul>` : `<p class="note">${tr('No changes so far. The specification is exactly as quoted.')}</p>`}
     <form class="ctl" data-raise style="margin-top:var(--s-l)">
-      <h3 class="panel-h">${viewer === 'staff' ? 'Propose a change to the client' : tr('Request a change')}</h3>
-      <div class="field"><label for="ch-title">${tr('What should change?')}</label><input id="ch-title" name="title" required placeholder="${viewer === 'staff' ? 'e.g. Handle finish satin → black' : tr('e.g. Add a third panel')}"></div>
+      <h3 class="panel-h">${tr(viewer === 'staff' ? 'Propose a change to the client' : 'Request a change')}</h3>
+      <div class="field"><label for="ch-title">${tr('What should change?')}</label><input id="ch-title" name="title" required placeholder="${viewer === 'staff' ? tr('e.g. Handle finish satin → black') : tr('e.g. Add a third panel')}"></div>
       <div class="field"><label for="ch-desc">${tr('Details')}</label><textarea id="ch-desc" name="description" rows="2"></textarea></div>
-      ${viewer === 'staff' ? '<div class="field"><label for="ch-impact">Impact on U-value, security, weather, cost and programme</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="e.g. No change to U-value or PAS 24. Cost +£420 + VAT. Programme: no change."></textarea></div>' : ''}
-      <div><button class="btn btn-sm" type="submit">${viewer === 'staff' ? 'Send for approval' : tr('Send request')}</button></div>
+      ${viewer === 'staff' ? `<div class="field"><label for="ch-impact">${tr('Impact on U-value, security, weather, cost and programme')}</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="${tr('e.g. No change to U-value or PAS 24. Cost +£420 + VAT. Programme: no change.')}"></textarea></div>` : ''}
+      <div><button class="btn btn-sm" type="submit">${tr(viewer === 'staff' ? 'Send for approval' : 'Send request')}</button></div>
     </form>`;
 }
 
@@ -271,26 +270,26 @@ export function messagesPanel(d, user) {
   return `
     <ol class="thread">${d.messages.length ? d.messages.map((m) => `
       <li class="msg ${m.author_id === user.id ? 'is-mine' : ''} ${m.internal ? 'is-internal' : ''}">
-        <span class="msg-meta">${esc(m.author?.full_name || '')}${m.author?.role === 'staff' ? ' · Brick &amp; Pane' : ''} · ${fmtDate(m.created_at, true)}${m.internal ? ' · <span class="tag">internal note — client can’t see this</span>' : ''}</span>
+        <span class="msg-meta">${esc(m.author?.full_name || '')}${m.author?.role === 'staff' ? ' · Brick &amp; Pane' : ''} · ${fmtDate(m.created_at, true)}${m.internal ? ` · <span class="tag">${tr('internal note — client can’t see this')}</span>` : ''}</span>
         <div class="msg-body">${esc(m.body).replace(/\n/g, '<br>')}</div>
       </li>`).join('') : `<li class="note">${tr('No messages yet. Ask anything here instead of phoning: the whole team sees it.')}</li>`}
     </ol>
     <form class="composer" data-message data-mode="client">
-      ${staff ? `<div class="seg composer-mode" role="radiogroup" aria-label="Message type">
-        <label><input type="radio" name="mode" value="client" checked> <span>Message to client</span></label>
-        <label><input type="radio" name="mode" value="internal"> <span>Internal note</span></label>
+      ${staff ? `<div class="seg composer-mode" role="radiogroup" aria-label="${tr('Message type')}">
+        <label><input type="radio" name="mode" value="client" checked> <span>${tr('Message to client')}</span></label>
+        <label><input type="radio" name="mode" value="internal"> <span>${tr('Internal note')}</span></label>
       </div>` : ''}
       <label for="msg-body" class="visually-hidden">${tr('Message')}</label>
-      <textarea id="msg-body" name="body" rows="3" required placeholder="${staff ? 'Write to the client…' : tr('Write a message…')}"></textarea>
-      <div class="btn-row"><span class="note composer-hint">${staff ? 'The client will see this and get an email.' : tr('Your Brick & Pane contact gets an email.')}</span><button class="btn btn-sm" type="submit">${staff ? 'Send to client' : tr('Send')}</button></div>
+      <textarea id="msg-body" name="body" rows="3" required placeholder="${tr(staff ? 'Write to the client…' : 'Write a message…')}"></textarea>
+      <div class="btn-row"><span class="note composer-hint">${tr(staff ? 'The client will see this and get an email.' : 'Your Brick & Pane contact gets an email.')}</span><button class="btn btn-sm" type="submit">${tr(staff ? 'Send to client' : 'Send')}</button></div>
     </form>`;
 }
 
 export function timelinePanel(d, viewer, audience = viewer === 'staff' ? 'staff' : 'trade') {
   return `<ol class="timeline">${[...d.events].reverse().map((e) => `
     <li><span class="tl-date">${fmtDate(e.created_at, true)}</span>
-      <span class="tl-body">${stageBadge(e.to_stage, audience)}${viewer === 'staff' && !e.visible_to_client ? ' <span class="tag">hidden from client</span>' : ''}
-      ${e.note ? `<span class="tl-note">${esc(viewer === 'staff' ? e.note : tr(e.note))}</span>` : ''}<span class="tl-actor">${esc(e.actor?.full_name || '')}</span></span></li>`).join('')}
+      <span class="tl-body">${stageBadge(e.to_stage, audience)}${viewer === 'staff' && !e.visible_to_client ? ` <span class="tag">${tr('hidden from client')}</span>` : ''}
+      ${e.note ? `<span class="tl-note">${esc(tr(e.note))}</span>` : ''}<span class="tl-actor">${esc(e.actor?.full_name || '')}</span></span></li>`).join('')}
   </ol>`;
 }
 
@@ -329,9 +328,9 @@ export function bindDetail(root, d, refresh) {
     if (e.target.name !== 'mode') return;
     const internal = e.target.value === 'internal';
     composer.dataset.mode = internal ? 'internal' : 'client';
-    $('button[type=submit]', composer).textContent = internal ? 'Save internal note' : 'Send to client';
-    $('.composer-hint', composer).textContent = internal ? 'Only Brick & Pane staff can see internal notes.' : 'The client will see this and get an email.';
-    composer.body.placeholder = internal ? 'Internal note — staff only…' : 'Write to the client…';
+    $('button[type=submit]', composer).textContent = tr(internal ? 'Save internal note' : 'Send to client');
+    $('.composer-hint', composer).textContent = tr(internal ? 'Only Brick & Pane staff can see internal notes.' : 'The client will see this and get an email.');
+    composer.body.placeholder = tr(internal ? 'Internal note — staff only…' : 'Write to the client…');
   });
   composer?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const body = f.body.value.trim(); if (!body) return;

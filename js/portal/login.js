@@ -1,11 +1,11 @@
 // Sign in / create account for the project portal.
 import { store } from './store.js';
 import { $, $$, toast, esc } from './core.js';
-import { tr, LANG } from './i18n.js';
+import { tr } from './i18n.js';
 
 const next = new URLSearchParams(location.search).get('next') || 'portal.html';
 const safeNext = /^(portal|admin)\.html/.test(next) ? next : 'portal.html';
-const go = () => { location.href = LANG === 'pl' && safeNext.startsWith('admin') ? `../${safeNext}` : safeNext; };
+const go = () => { location.href = safeNext; };
 
 const root = $('#auth');
 const status = $('[data-auth-status]', root);
@@ -17,7 +17,7 @@ if (store.mode === 'demo') {
   $('[data-demo]', root).hidden = false;
   $$('[data-demo-login]', root).forEach((b) => b.addEventListener('click', async () => {
     await store.demoLogin(b.dataset.demoLogin);
-    location.href = b.dataset.demoLogin === 'staff' ? (LANG === 'pl' ? '../admin.html' : 'admin.html') : (safeNext.startsWith('portal') ? safeNext : 'portal.html');
+    location.href = b.dataset.demoLogin === 'staff' ? 'admin.html' : (safeNext.startsWith('portal') ? safeNext : 'portal.html');
   }));
   $('[data-magic]', root).hidden = true;
 }

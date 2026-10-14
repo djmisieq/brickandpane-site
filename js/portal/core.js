@@ -110,7 +110,7 @@ export const courtLabel = (id, viewer = 'client') => {
   const c = stage(id).court;
   if (c === 'none') return '';
   if (viewer !== 'staff') return tr(c === 'you' ? 'Waiting on you' : 'With Brick & Pane');
-  return c === 'you' ? 'Waiting on client' : 'With us';
+  return tr(c === 'you' ? 'Waiting on client' : 'With us');
 };
 export const progressBar = (id) => {
   const i = stageIndex(id);

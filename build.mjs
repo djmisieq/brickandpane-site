@@ -65,6 +65,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       .replace('{{alternates}}', alternates)
       .replace('{{skip}}', L.skip)
       .replace('{{prelaunch}}', L.prelaunch)
+      .replace('{{base}}', meta.base ? `<base href="${meta.base}">\n` : '')
       .replace('{{head}}', meta.head || '')
       .replace('{{header}}', nav)
       .replace('{{footer}}', footer
