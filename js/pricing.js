@@ -17,13 +17,13 @@ export const PRICING = {
     hinged: { perM2: 900, perPanel: 400, minimum: 2800 },
     windows: { perM2: 650, perPanel: 180, minimum: 900 },
   },
-  glazing: { d: 1, dl: 1.08, t: 1.12 },   // multiplier on the area rate
+  glazing: { d: 1, dl: 1.08, t: 1.12, tl: 1.2 },   // multiplier on the area rate
   extras: {
     flushThresholdPerM: 180,             // recessed track / flush threshold, per metre of width
     heavyLiftKg: 250, heavyLift: 950,    // mechanical handling / crane allowance per project
     survey: 0,                           // survey included
   },
-  panels: { '2A': 2, '2B': 2, '3T': 3, '4C': 4, '6C': 6 },
+  panels: { '2A': 2, '2B': 2, '3T': 3, '4C': 4, '6C': 6, S: 1, D: 2 },
 };
 
 const isPreview = () => {
@@ -61,3 +61,6 @@ export function estimateProject(openings, { heavy = false } = {}) {
 
 export const fmtGBP = (n) => `£${Math.round(n).toLocaleString('en-GB')}`;
 export const rangeText = (est) => `${fmtGBP(est.low)}–${fmtGBP(est.high)} + VAT`;
+const r100 = (n) => Math.round(n / 100) * 100;
+export const incVat = (n) => r100(n * (1 + PRICING.vat));
+export const rangeTextIncVat = (est) => `${fmtGBP(incVat(est.low))}–${fmtGBP(incVat(est.high))} inc. VAT`;

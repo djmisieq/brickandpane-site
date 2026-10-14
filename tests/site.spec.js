@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 
 const PAGES = [
-  'index', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
+  'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404',
 ];
 const isMobileNav = (page) => page.viewportSize().width < 1100;
@@ -96,7 +96,7 @@ test.describe('navigation', () => {
     await expect(panel).toBeHidden();
     await sub.click();
     await expect(panel).toBeVisible();
-    await expect(panel.locator('a')).toHaveCount(3);
+    await expect(panel.locator('a')).toHaveCount(4);
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect(sub).toBeFocused();
@@ -120,7 +120,7 @@ test.describe('sizing tools', () => {
     await expect(page.locator('[data-messages]')).toContainText('beyond the 400 kg hardware class');
     await expect(page.locator('[data-messages]')).toContainText('over the 3,300 mm limit');
     await page.fill('#t-a', '30');
-    await expect(page.locator('[data-messages]')).toContainText('Approved Document L');
+    await expect(page.locator('[data-messages]')).toContainText('Building Regulations (Part L)');
     await page.locator('[data-tool-quote]').click();
     await expect(page).toHaveURL(/contact\.html\?system=lift-slide/);
     await expect(page.locator('#f-msg')).toHaveValue(/Lift & slide opening approx\. 9000 × 2700 mm, 2 panels/);
@@ -129,7 +129,7 @@ test.describe('sizing tools', () => {
 
   test('slim sliding: recommends lift & slide when too heavy', async ({ page }) => {
     await page.goto('/sliding-doors.html#sizing');
-    await expect(page.locator('[data-messages]')).toContainText('inside the standard hardware range');
+    await expect(page.locator('[data-messages]')).toContainText('inside the 250 kg inline hardware range');
     await page.fill('#t-w', '6000'); await page.fill('#t-h', '3000');
     await page.selectOption('#t-c', '2A'); await page.selectOption('#t-g', 't');
     await expect(page.locator('[data-messages]')).toContainText('consider lift & slide');
@@ -168,6 +168,29 @@ test.describe('budget estimates', () => {
     await page.goto('/bifold-doors.html?preview=pricing#sizing');
     await expect(page.locator('[data-estimate]')).toContainText(/£[\d,]+–£[\d,]+ \+ VAT/);
     await expect(page.locator('[data-estimate]')).toContainText('Example rates');
+  });
+});
+
+test.describe('homeowner & mobile details', () => {
+  test('contact form adapts to a homeowner and carries opening sizes', async ({ page }) => {
+    await page.goto('/contact.html?role=homeowner&system=bifold&w=4800&h=2400');
+    await expect(page.locator('[data-preview-note]')).toBeVisible();
+    await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
+    await page.locator('#step-1 [data-next]').click();
+    await expect(page.locator('#f-ow')).toHaveValue('4800');
+    await expect(page.locator('#f-oh')).toHaveValue('2400');
+    const visible = await page.$$eval('#f-topic option', (os) => os.filter((o) => !o.hidden).map((o) => o.value));
+    expect(visible).not.toContain('cpd');
+    expect(visible).not.toContain('pqq');
+    expect(visible).toContain('question');
+  });
+  test('comparison table keeps column names on small screens', async ({ page }) => {
+    test.skip(page.viewportSize().width > 600, 'mobile only');
+    await page.goto('/lift-and-slide-doors.html#compare');
+    const cell = page.locator('#compare tbody tr').first().locator('td').first();
+    await expect(cell).toHaveAttribute('data-label', 'Lift & slide');
+    const before = await cell.evaluate((el) => getComputedStyle(el, '::before').content);
+    expect(before).toContain('Lift');
   });
 });
 

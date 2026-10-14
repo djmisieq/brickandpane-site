@@ -21,17 +21,31 @@ test('architect and staff see each other’s changes live', async ({ page, conte
   await staff.locator('[data-demo-login="staff"]').click();
   await expect(staff.locator('.board')).toBeVisible();
 
-  // Architect approves the quotation.
+  // Architect accepts the quotation on the client's behalf (no client on the team yet), after confirming.
   await page.locator('[data-tab="documents"]').click();
+  await expect(page.locator('[data-approve]')).toContainText('£23,900 + VAT');
   await page.locator('[data-approve] button[value="approved"]').click();
-  await expect(page.locator('.badge-ok', { hasText: 'Approved' }).first()).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('tick the confirmation');
+  await page.locator('[data-approve] input[name="confirm"]').check();
+  await page.locator('[data-approve] button[value="approved"]').click();
+  await expect(page.locator('.badge-ok', { hasText: 'Accepted' }).first()).toBeVisible();
+  await expect(page.locator('.doc-meta', { hasText: 'on the client’s behalf' })).toBeVisible();
 
   // Staff gets notified, moves the stage and replies.
   await expect(staff.locator('.notif-count')).toBeVisible();
   await staff.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await staff.locator('[data-stage] button[type="submit"]').click();
+  await expect(staff.locator('.toast')).toContainText('Choose the new stage');
   await staff.selectOption('#ctl-stage', 'accepted');
   await staff.fill('#ctl-note', 'Order confirmed.');
   await staff.locator('[data-stage] button[type="submit"]').click();
+  await staff.locator('[data-tab="messages"]').click();
+  await staff.locator('.composer-mode input[value="internal"]').check();
+  await expect(staff.locator('[data-message] button[type="submit"]')).toHaveText('Save internal note');
+  await staff.fill('#msg-body', 'Margin is fine at this price.');
+  await staff.locator('[data-message] button[type="submit"]').click();
+  await staff.locator('.composer-mode input[value="client"]').check();
+  await expect(staff.locator('[data-message] button[type="submit"]')).toHaveText('Send to client');
   await staff.fill('#msg-body', 'Survey booked for Tuesday.');
   await staff.locator('[data-message] button[type="submit"]').click();
 
@@ -40,7 +54,8 @@ test('architect and staff see each other’s changes live', async ({ page, conte
   await expect(page.locator('.notif-btn')).toHaveAttribute('aria-label', /unread/);
   await page.locator('[data-tab="messages"]').click();
   await expect(page.locator('.thread li').last()).toContainText('Survey booked for Tuesday.');
-  await expect(page.locator('.thread')).not.toContainText('discount headroom'); // internal note stays hidden
+  await expect(page.locator('.thread')).not.toContainText('discount headroom'); // internal notes stay hidden
+  await expect(page.locator('.thread')).not.toContainText('Margin is fine');
 });
 
 test('architect submits a new project with an openings schedule', async ({ page }) => {
@@ -74,7 +89,7 @@ test('sizing tool opening carries into a homeowner’s new request with a budget
   await expect(page.locator('h1')).toHaveText('Get a price');
   await expect(page.locator('[data-rows] input[name="width_mm"]')).toHaveValue('5600');
   await expect(page.locator('[data-rows] select[name="config"]')).toHaveValue('4C');
-  await expect(page.locator('[data-total-value]')).toHaveText(/£[\d,]+–£[\d,]+ \+ VAT/);
+  await expect(page.locator('[data-total-value]')).toHaveText(/£[\d,]+–£[\d,]+ inc\. VAT/);
   await expect(page.locator('#np-riba')).toBeHidden();
   await page.fill('#np-name', 'Our kitchen');
   await page.fill('#np-loc', 'E17');
@@ -92,4 +107,43 @@ test('homeowner tracks an order like an online shop', async ({ page }) => {
   await expect(card.locator('.tracker li.is-current')).toHaveText('Made');
   await card.click();
   await expect(page.locator('.now-card')).toContainText('being made to your approved drawings');
+});
+
+test('change register: architect decides on a Brick & Pane proposal', async ({ page }) => {
+  await page.locator('[data-demo-login="client"]').click();
+  await page.locator('.pcard', { hasText: 'Mews house' }).click();
+  await expect(page.locator('[data-tab="changes"] .dot-you')).toBeVisible();
+  await page.locator('[data-tab="changes"]').click();
+  await expect(page.locator('.change-impact').first()).toContainText('No change to U-value');
+  await page.locator('[data-change] button[value="rejected"]').click();
+  await expect(page.locator('.toast')).toContainText('Please say why');
+  await page.locator('[data-change] button[value="approved"]').click();
+  await expect(page.locator('.badge-ok', { hasText: 'Approved' }).first()).toBeVisible();
+  // Drawings are reviewed, not "accepted".
+  await page.locator('[data-tab="documents"]').click();
+  await expect(page.locator('[data-approve] button[value="approved"]')).toHaveText('Reviewed — no comments');
+});
+
+test('once a client is on the team, only they can accept the quotation', async ({ page }) => {
+  await page.locator('[data-demo-login="client"]').click();
+  await page.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await page.fill('#inv-email', 'ravi@example-homes.co.uk');
+  await page.selectOption('#inv-role', 'client');
+  await page.locator('[data-invite] button').click();
+  await expect(page.locator('.team')).toContainText('Ravi Patel');
+  await page.locator('[data-tab="documents"]').click();
+  await expect(page.locator('[data-approve]')).toHaveCount(0);
+  await expect(page.locator('#panel-documents .badge-you')).toContainText('Waiting for Ravi Patel');
+});
+
+test('homeowner sees delivery dates and payments; developer demo shows the scheme', async ({ page, context }) => {
+  await page.locator('[data-demo-login="homeowner"]').click();
+  await page.locator('.pcard', { hasText: 'Kitchen extension doors' }).click();
+  await expect(page.locator('.now-card')).toContainText('Delivery');
+  await expect(page.locator('.now-card')).toContainText('Fitting');
+  await expect(page.locator('#panel-overview')).toContainText('Paid £6,984 of £23,280');
+  const dev = await context.newPage();
+  await dev.goto('/login.html');
+  await dev.locator('[data-demo-login="developer"]').click();
+  await expect(dev.locator('.pcard', { hasText: 'Northfield Terrace' })).toBeVisible();
 });

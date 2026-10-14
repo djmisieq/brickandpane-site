@@ -1,8 +1,8 @@
 // Client project portal: dashboard, project detail, new project, settings.
 import { store } from './store.js';
 import { SYSTEMS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
-import { estimateProject, estimateOpening, rangeText, fmtGBP } from '../pricing.js';
-import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
+import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat } from '../pricing.js';
+import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -74,7 +74,7 @@ async function detail(id) {
   if (id !== lastProjectId) { activeTab = 'overview'; lastProjectId = id; }
   const d = await store.getProject(id);
   document.title = `${d.project.name} | Brick & Pane`;
-  const c = counts(d, 'client');
+  const c = counts(d, 'client', user);
   const aud = audienceOf(user);
   app.innerHTML = `
     <div class="container section-tight">
@@ -88,24 +88,33 @@ async function detail(id) {
       </div>
       ${tabs(activeTab, c)}
       <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
-        ${activeTab === 'documents' ? documentsPanel(d, 'client') : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'client', aud) : overviewPanel(d, 'client')}
+        ${activeTab === 'documents' ? documentsPanel(d, 'client', user) : activeTab === 'changes' ? changesPanel(d, 'client', user) : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'client', aud) : overviewPanel(d, 'client', aud, user)}
       </div>
     </div>`;
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
 }
 
+const LAYOUTS = {
+  'lift-slide': [['2A', '2 panels, 1 sliding'], ['3T', '3 panels, 3 tracks'], ['4C', '4 panels, centre'], ['6C', '6 panels, centre']],
+  sliding: [['2A', '2 panels, 1 sliding'], ['2B', '2 panels, both sliding'], ['3T', '3 panels, 3 tracks'], ['4C', '4 panels, centre']],
+  bifold: ['3+0', '4+0', '2+2', '5+0', '4+1', '3+2', '6+0', '3+3', '7+0', '4+3'].map((l) => [l, `${l} leaves`]),
+  hinged: [['S', 'Single door'], ['D', 'Double (French) door']],
+  windows: [['', 'Not needed']],
+};
+const layoutOptions = (system, selected = '') => `<option value="">${system === 'windows' ? '—' : 'Not sure'}</option>${(LAYOUTS[system] || []).filter(([v]) => v).map(([v, l]) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(l)}</option>`).join('')}`;
+
 function openingRow(i) {
   return `<tr data-row>
-    <td><input name="ref" aria-label="Reference" value="${i < 9 ? `D0${i + 1}` : `D${i + 1}`}"></td>
-    <td><select name="system" aria-label="System">${Object.entries(SYSTEMS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></td>
-    <td><input name="width_mm" type="number" inputmode="numeric" min="300" max="30000" aria-label="Width mm" placeholder="mm"></td>
-    <td><input name="height_mm" type="number" inputmode="numeric" min="300" max="6000" aria-label="Height mm" placeholder="mm"></td>
-    <td><select name="config" aria-label="Layout"><option value="">—</option><optgroup label="Sliding"><option value="2A">2 panels, 1 sliding</option><option value="2B">2 panels, both sliding</option><option value="3T">3 panels, 3 tracks</option><option value="4C">4 panels, centre</option><option value="6C">6 panels, centre</option></optgroup><optgroup label="Bi-fold">${['3+0', '4+0', '2+2', '5+0', '4+1', '3+2', '6+0', '3+3', '7+0', '4+3'].map((l) => `<option value="${l}">${l}</option>`).join('')}</optgroup></select></td>
-    <td><select name="glazing" aria-label="Glazing"><option value="d">Double</option><option value="dl">Double lam.</option><option value="t">Triple</option></select></td>
-    <td><input name="qty" type="number" min="1" value="1" aria-label="Quantity" style="width:4.5rem"></td>
-    <td class="est num" data-est>—</td>
-    ${showPrices() ? '<td class="est num" data-price>—</td>' : ''}
-    <td><button type="button" class="linkish" data-remove aria-label="Remove row">✕</button></td>
+    <td data-label="Ref"><input name="ref" aria-label="Reference" value="${i < 9 ? `D0${i + 1}` : `D${i + 1}`}"></td>
+    <td data-label="System"><select name="system" aria-label="System">${Object.entries(SYSTEMS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></td>
+    <td data-label="Width (mm)"><input name="width_mm" type="number" inputmode="numeric" min="300" max="30000" aria-label="Width mm" placeholder="mm"></td>
+    <td data-label="Height (mm)"><input name="height_mm" type="number" inputmode="numeric" min="300" max="6000" aria-label="Height mm" placeholder="mm"></td>
+    <td data-label="Layout"><select name="config" aria-label="Layout">${layoutOptions('lift-slide')}</select></td>
+    <td data-label="Glazing"><select name="glazing" aria-label="Glazing"><option value="d">Double</option><option value="dl">Double lam.</option><option value="t">Triple</option><option value="tl">Triple lam.</option></select></td>
+    <td data-label="Qty"><input name="qty" type="number" min="1" value="1" aria-label="Quantity"></td>
+    <td class="est num" data-label="Panel weight" data-est>—</td>
+    ${showPrices() ? '<td class="est num" data-label="Est. budget" data-price>—</td>' : ''}
+    <td class="sched-remove"><button type="button" class="linkish" data-remove aria-label="Remove this opening">Remove</button></td>
   </tr>`;
 }
 
@@ -120,8 +129,8 @@ function newProject() {
       <form class="newp" novalidate>
         <section class="newp-sec"><h2 class="panel-h">Project</h2>
           <div class="field-row">
-            <div class="field"><label for="np-name">Project name</label><input id="np-name" name="name" required placeholder="e.g. Hartley Road rear extension"><span class="error"></span></div>
-            <div class="field"><label for="np-loc">Location</label><input id="np-loc" name="location" required placeholder="Postcode or borough"><span class="error"></span></div>
+            <div class="field"><label for="np-name">${aud === 'home' ? 'Give it a name' : 'Project name'}</label><input id="np-name" name="name" required placeholder="${aud === 'home' ? 'e.g. Our kitchen extension' : 'e.g. Hartley Road rear extension'}"><span class="error"></span></div>
+            <div class="field"><label for="np-loc">${aud === 'home' ? 'Postcode' : 'Location'}</label><input id="np-loc" name="location" required placeholder="${aud === 'home' ? 'e.g. E17' : 'Postcode or borough'}"><span class="error"></span></div>
           </div>
           <div class="field-row">
             <div class="field" ${aud === 'home' ? 'hidden' : ''}><label for="np-riba">RIBA stage</label><select id="np-riba" name="riba_stage"><option value="">Select</option><option>0–1 Strategic / brief</option><option>2 Concept</option><option>3 Spatial coordination</option><option>4 Technical design</option><option>5 Manufacturing &amp; construction</option></select></div>
@@ -129,12 +138,13 @@ function newProject() {
           </div>
           <div class="field-row">
             <div class="field"><label for="np-start">Start on site</label><select id="np-start" name="start_window"><option value="">Select</option><option>Within 3 months</option><option>3–6 months</option><option>6–12 months</option><option>Over 12 months / not sure</option></select></div>
-            <div class="field"><label for="np-brief">What matters most?</label><input id="np-brief" name="brief" placeholder="Sightlines, flush threshold, budget, programme…"></div>
+            <div class="field"><label for="np-brief">What matters most?</label><input id="np-brief" name="brief" placeholder="${aud === 'home' ? 'e.g. level floor to the garden, budget, timing' : 'Sightlines, flush threshold, budget, programme…'}"></div>
           </div>
         </section>
-        <section class="newp-sec"><h2 class="panel-h">Openings schedule</h2>
-          <p class="note">Structural opening sizes. For lift &amp; slide, pick a layout to see the estimated panel weight.</p>
-          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>Ref</th><th>System</th><th>Width</th><th>Height</th><th>Layout</th><th>Glazing</th><th>Qty</th><th>Est. panel</th>${showPrices() ? '<th>Est. budget</th>' : ''}<th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
+        <section class="newp-sec"><h2 class="panel-h">${aud === 'home' ? 'Your openings' : 'Openings schedule'}</h2>
+          <p class="note">${aud === 'home' ? 'Measure the hole in the wall (width × height) in millimetres. Rough sizes are fine; we measure exactly at the survey. Not sure about panels? Leave it blank.' : 'Structural opening sizes. Pick a layout to see the estimated panel weight.'}</p>
+          <div class="sched-tools">${aud === 'home' ? '' : '<label class="btn btn-sm btn-ghost" for="np-csv">Import CSV</label><input id="np-csv" type="file" accept=".csv,text/csv" class="visually-hidden"><a class="linkish" href="#" data-csv-template>Download CSV template</a>'}</div>
+          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>Ref</th><th>System</th><th>Width (mm)</th><th>Height (mm)</th><th>Layout</th><th>Glazing</th><th>Qty</th><th>Panel weight</th>${showPrices() ? '<th>Est. budget</th>' : ''}<th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
           <button type="button" class="btn btn-sm btn-ghost" data-add style="margin-top:1rem">Add opening</button>
           ${showPrices() ? `<div class="estimate" data-total style="margin-top:1.5rem"><span class="estimate-label">Budget estimate</span><span class="estimate-value" data-total-value>—</span><span class="estimate-text">Supplied &amp; installed in London. ${esc(estimateNote())}</span></div>` : ''}
         </section>
@@ -151,15 +161,51 @@ function newProject() {
     const e = o.system === 'lift-slide' ? estimatePanel(o) : null;
     $('[data-est]', tr).innerHTML = e ? `${e.kg} kg${e.over ? ' <span class="tag tag-accent">check</span>' : ''}` : '—';
     const priceCell = $('[data-price]', tr);
-    if (priceCell) { const b = estimateOpening(o); priceCell.textContent = b ? fmtGBP(b.total) : '—'; }
+    if (priceCell) { const b = estimateOpening(o); priceCell.textContent = b ? `c. ${fmtGBP(aud === 'home' ? incVat(b.total) : Math.round(b.total / 100) * 100)}` : '—'; }
   };
   const total = () => {
     const box = $('[data-total-value]', f); if (!box) return null;
     const t = estimateProject($$('tr', rows).map(rowData).filter((o) => o.width_mm && o.height_mm));
-    box.textContent = t ? rangeText(t) : '—';
+    box.textContent = t ? (aud === 'home' ? rangeTextIncVat(t) : rangeText(t)) : '—';
     return t;
   };
   rows.addEventListener('input', (e) => { const tr = e.target.closest('tr'); if (tr) est(tr); total(); });
+  rows.addEventListener('change', (e) => {
+    if (e.target.name !== 'system') return;
+    const tr = e.target.closest('tr'); tr.querySelector('[name="config"]').innerHTML = layoutOptions(e.target.value); est(tr); total();
+  });
+  // CSV import: ref,system,width_mm,height_mm,config,glazing,qty
+  const csv = $('#np-csv', f);
+  csv?.addEventListener('change', async () => {
+    const file = csv.files[0]; if (!file) return;
+    const lines = (await file.text()).split(/\r?\n/).map((l) => l.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))).filter((c) => c.length > 2 && c.some(Boolean));
+    const head = lines[0].map((h) => h.toLowerCase());
+    const body = head.includes('width_mm') ? lines.slice(1) : lines;
+    const col = (row, name, idx) => row[head.includes(name) ? head.indexOf(name) : idx] ?? '';
+    const valid = body.filter((row) => +col(row, 'width_mm', 2) > 0 && +col(row, 'height_mm', 3) > 0);
+    if (!valid.length) { toast('No openings found. Use the template columns: ref, system, width_mm, height_mm, config, glazing, qty.'); return; }
+    rows.innerHTML = '';
+    valid.forEach((row, i) => {
+      rows.insertAdjacentHTML('beforeend', openingRow(i));
+      const tr = rows.lastElementChild;
+      const sys = col(row, 'system', 1) in LAYOUTS ? col(row, 'system', 1) : 'lift-slide';
+      tr.querySelector('[name="ref"]').value = col(row, 'ref', 0) || tr.querySelector('[name="ref"]').value;
+      tr.querySelector('[name="system"]').value = sys;
+      tr.querySelector('[name="config"]').innerHTML = layoutOptions(sys, col(row, 'config', 4));
+      tr.querySelector('[name="width_mm"]').value = col(row, 'width_mm', 2);
+      tr.querySelector('[name="height_mm"]').value = col(row, 'height_mm', 3);
+      if (['d', 'dl', 't', 'tl'].includes(col(row, 'glazing', 5))) tr.querySelector('[name="glazing"]').value = col(row, 'glazing', 5);
+      tr.querySelector('[name="qty"]').value = +col(row, 'qty', 6) || 1;
+      est(tr);
+    });
+    total();
+    toast(`Imported ${valid.length} opening${valid.length === 1 ? '' : 's'}.`);
+  });
+  $('[data-csv-template]', f)?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const blob = new Blob(['ref,system,width_mm,height_mm,config,glazing,qty\nD01,lift-slide,5600,2700,4C,t,1\nD02,bifold,4800,2400,4+1,d,1\nW01,windows,1200,1400,,t,2\n'], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'openings-template.csv'; a.click(); URL.revokeObjectURL(a.href);
+  });
   rows.addEventListener('change', () => total());
   // Opening carried over from a sizing tool on the public site.
   try {
@@ -167,8 +213,7 @@ function newProject() {
     if (draft) {
       const tr = $('tr', rows);
       ['system', 'width_mm', 'height_mm', 'glazing'].forEach((k) => { if (draft[k] != null && tr.querySelector(`[name="${k}"]`)) tr.querySelector(`[name="${k}"]`).value = draft[k]; });
-      const cfgSel = tr.querySelector('[name="config"]');
-      if (draft.config && [...cfgSel.options].some((o) => o.value === draft.config)) cfgSel.value = draft.config;
+      tr.querySelector('[name="config"]').innerHTML = layoutOptions(draft.system || 'lift-slide', draft.config || '');
       localStorage.removeItem('bp-draft-opening');
       est(tr); total();
       toast('We’ve added the opening from the sizing tool.');
