@@ -363,6 +363,8 @@ fieldset{border:0;padding:0;min-width:0}
 .footer-top{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:var(--gutter)}
 .footer-brand p{color:var(--dark-ink-2);max-width:36ch;margin:var(--s-m) 0}
 .footer-brand .brand-mark{width:36px;height:36px}
+.footer-logo{display:inline-flex;align-items:center;gap:.7rem;color:var(--dark-ink)}
+.footer-logo .brand-word{font-size:1.3rem}
 .footer-h{font-size:var(--step--1);font-family:var(--mono);font-weight:400;text-transform:uppercase;letter-spacing:.04em;color:var(--dark-ink-2);margin-bottom:var(--s-s)}
 .site-footer ul{list-style:none;padding:0;display:grid;gap:.5rem}
 .site-footer a{text-decoration:none}
@@ -726,7 +728,8 @@ body.app .site-header{position:static}
   .site-footer li a{display:inline-block;padding-block:4px}
   .breadcrumb ol{align-items:center}
   .breadcrumb a{display:inline-block;padding-block:3px}
-  .footer-bottom>span>a:only-child{display:inline-block;padding-block:4px}
+  .footer-bottom{align-items:center}
+  .footer-bottom a[href$="privacy.html"]{display:inline-block;padding-block:4px}
 }
 /* five reasons fit one desktop row (and go three plus two on tablets) */
 .features:has(> :nth-child(5):last-child){grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
@@ -768,4 +771,27 @@ body.app .site-header{position:static}
   table.matrix.has-labels tbody td{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.2rem 0;font-size:var(--step--1)}
   table.matrix.has-labels tbody td::before{font-family:var(--mono);font-size:.75rem}
   table.matrix.has-labels tbody tr.grp{display:block}
+}
+
+/* ---------- on-page section nav (long product pages, phones & tablets) ---------- */
+.section-nav{display:none}
+@media (max-width:1099px){
+  .section-nav{display:block;position:sticky;top:var(--header-h);z-index:45;background:var(--bg);border-block:1px solid var(--line)}
+  .section-nav ul{list-style:none;display:flex;gap:var(--s-2xs);overflow-x:auto;scrollbar-width:none;padding-block:.5rem}
+  .section-nav ul::-webkit-scrollbar{display:none}
+  .section-nav a{display:inline-flex;align-items:center;min-height:36px;padding:.35rem .8rem;border:1px solid var(--line-strong);font-size:var(--step--1);font-weight:500;text-decoration:none;white-space:nowrap;color:var(--ink-2)}
+  .section-nav a[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  html:has(.section-nav){scroll-padding-top:calc(var(--header-h) + 72px)}
+}
+
+/* ---------- sizing tool: live result beside the inputs on small screens ---------- */
+.tool-peek{display:none}
+@media (max-width:900px){
+  .tool-peek{display:flex;justify-content:space-between;gap:var(--s-s);position:sticky;bottom:0;margin:0 calc(-1 * var(--s-l)) calc(-1 * var(--s-l));padding:.7rem var(--s-l);background:var(--ink);color:var(--bg);font-size:var(--step--1);border-left:4px solid var(--ok)}
+  .tool-peek[data-state="warn"]{border-left-color:#e0a73a}
+  .tool-peek[data-state="stop"]{border-left-color:var(--dark-accent)}
+  .tool-peek b{font-family:var(--mono);font-weight:500;margin-left:.4em;white-space:nowrap}
+}
+@media (max-width:767px){
+  body.has-action-bar:not(.is-typing) .tool-peek{bottom:72px}
 }

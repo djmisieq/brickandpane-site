@@ -10,7 +10,7 @@ const PAGES = [
 ];
 const URLS = [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)];
 // The only places where sideways scrolling is the intended design.
-const SCROLLERS_ALLOWED = ['.tabs'];
+const SCROLLERS_ALLOWED = ['.tabs', '.section-nav ul'];
 const isPhone = (page) => page.viewportSize().width < 768;
 const isTouch = (page) => page.viewportSize().width < 1100;
 
@@ -169,6 +169,37 @@ test.describe('phone layout keeps the desktop structure', () => {
       }
     }
   });
+  test('long product pages have a section bar that jumps and follows the scroll', async ({ page }) => {
+    for (const url of ['/lift-and-slide-doors.html', '/pl/windows.html']) {
+      await open(page, url);
+      const bar = page.locator('.section-nav');
+      await expect(bar).toBeVisible();
+      const link = bar.locator('a').nth(2);
+      const id = (await link.getAttribute('href')).slice(1);
+      await link.click();
+      await expect(link).toHaveAttribute('aria-current', 'true');
+      // The section heading lands below the header and the bar, not under them.
+      const [barBottom, top] = await page.evaluate((i) => [document.querySelector('.section-nav').getBoundingClientRect().bottom, document.getElementById(i).getBoundingClientRect().top], id);
+      expect(top, url).toBeGreaterThanOrEqual(barBottom - 1);
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.mouse.wheel(0, 200);
+      await expect(bar, url).toHaveCSS('position', 'sticky');
+    }
+  });
+
+  test('the sizing tool keeps its key figures in view while you type', async ({ page }) => {
+    await open(page, '/lift-and-slide-doors.html#sizing');
+    const peek = page.locator('.tool-peek');
+    await expect(peek).toBeVisible();
+    await expect(peek.locator('[data-peek="weight"]')).toHaveText('140 kg');
+    await page.fill('#t-w', '9000');
+    await page.selectOption('#t-c', '2A');
+    await expect(peek).toHaveAttribute('data-state', 'stop');
+    await page.locator('#t-h').focus();
+    const [peekBox, vh] = [await peek.boundingBox(), page.viewportSize().height];
+    expect(peekBox.y + peekBox.height).toBeLessThanOrEqual(vh + 1);
+  });
+
 
   test('the main call to action is above the fold', async ({ page }) => {
     for (const url of ['/index.html', '/homeowners.html', '/windows.html', '/lift-and-slide-doors.html', '/pl/index.html']) {

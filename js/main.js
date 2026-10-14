@@ -79,6 +79,28 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
 
   $$('[data-year]').forEach((el) => { el.textContent = new Date().getFullYear(); });
 
+  /* ---------- on-page section nav ---------- */
+  const secNav = $('.section-nav');
+  if (secNav && 'IntersectionObserver' in window) {
+    const links = $$('a', secNav);
+    const byId = new Map(links.map((a) => [a.hash.slice(1), a]));
+    const visible = new Set();
+    const mark = () => {
+      const current = [...byId.keys()].find((id) => visible.has(id));
+      links.forEach((a) => a.toggleAttribute('aria-current', false));
+      const a = byId.get(current);
+      if (!a) return;
+      a.setAttribute('aria-current', 'true');
+      const ul = a.parentElement.parentElement;
+      ul.scrollTo({ left: a.offsetLeft - ul.clientWidth / 2 + a.offsetWidth / 2, behavior: 'smooth' });
+    };
+    const so = new IntersectionObserver((entries) => {
+      entries.forEach((en) => (en.isIntersecting ? visible.add(en.target.id) : visible.delete(en.target.id)));
+      mark();
+    }, { rootMargin: '-35% 0px -60% 0px' });
+    byId.forEach((_, id) => { const el = document.getElementById(id); if (el) so.observe(el); });
+  }
+
   /* ---------- reveal on scroll ---------- */
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
@@ -276,7 +298,19 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       $('[data-tool-quote]', tool).href = `contact.html?${new URLSearchParams({ system, w: W, h: H, config: f.layout.value, glass: f.glass.value })}`;
     };
 
-    const run = system === 'bifold' ? runBifold : runSlider;
+    // Small screens: the results sit below the inputs, so mirror the two key figures in a bar that stays in view.
+    const peek = document.createElement('div');
+    peek.className = 'tool-peek';
+    peek.setAttribute('aria-hidden', 'true');
+    peek.innerHTML = ['panelw', 'weight']
+      .map((k) => `<span>${$(`[data-out="${k}"]`, tool)?.previousElementSibling?.textContent || ''}<b data-peek="${k}"></b></span>`).join('');
+    f.append(peek);
+    const syncPeek = () => {
+      $$('[data-peek]', peek).forEach((el) => { el.textContent = $(`[data-out="${el.dataset.peek}"]`, tool).textContent; });
+      const msgs = $('[data-messages]', tool);
+      peek.dataset.state = $('li.stop', msgs) ? 'stop' : $('li.warn', msgs) ? 'warn' : 'ok';
+    };
+    const run = () => { (system === 'bifold' ? runBifold : runSlider)(); syncPeek(); };
     f.addEventListener('input', run);
     f.addEventListener('submit', (e) => { e.preventDefault(); run(); });
     run();

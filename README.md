@@ -5,6 +5,7 @@ Static site published with GitHub Pages at brickandpane.co.uk.
 - Edit pages in `src/pages/` (English) and `src/pl/pages/` (Polish), shared parts in `src/partials/` and `src/pl/partials/`.
 - Build: `node build.mjs` (writes the root `*.html` and `pl/*.html`).
 - Test: `npm test` (build, database policy tests, Playwright).
+- Internal audit, strategy and deployment notes live in the private repo `djmisieq/brickandpane-docs`, not here.
 
 ## Photos
 
