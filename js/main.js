@@ -1,4 +1,6 @@
 /* Brick & Pane — site behaviour. No dependencies. */
+import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText } from './pricing.js';
+
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -141,6 +143,25 @@
     svg.innerHTML = g;
   };
 
+  const DRAFT_OPENING = 'bp-draft-opening';
+  const renderEstimate = (tool, opening) => {
+    const box = $('[data-estimate]', tool);
+    if (!box) return;
+    if (!pricingVisible()) {
+      box.innerHTML = '<span class="estimate-label">Budget</span><span class="estimate-text">Save this opening to your portal and we’ll send a budget within 2 working days.</span>';
+      return;
+    }
+    const est = estimateProject([opening]);
+    box.innerHTML = est
+      ? `<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text">Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`
+      : '';
+  };
+  const bindPortalDraft = (tool, opening) => {
+    const a = $('[data-tool-portal]', tool);
+    if (!a) return;
+    a.onclick = () => { try { localStorage.setItem(DRAFT_OPENING, JSON.stringify(opening)); } catch { /* ignore */ } };
+  };
+
   const tool = $('[data-sizing-tool]');
   if (tool) {
     const system = tool.dataset.sizingTool || 'lift-slide';
@@ -179,6 +200,8 @@
       msgs.push(partL(totalM2, +f.floor.value));
       show(msgs);
       drawSlider($('[data-elevation]', tool), cfg, W, H);
+      const opening = { system, width_mm: W, height_mm: H, config: f.config.value, glazing: f.glass.value, qty: 1, kg };
+      renderEstimate(tool, opening); bindPortalDraft(tool, opening);
       $('[data-tool-quote]', tool).href = `contact.html?${new URLSearchParams({ system, w: W, h: H, config: f.config.value, glass: f.glass.value })}`;
     };
 
@@ -211,6 +234,8 @@
       msgs.push(partL(totalM2, +f.floor.value));
       show(msgs);
       drawBifold($('[data-elevation]', tool), left, right, W, H);
+      const opening = { system, width_mm: W, height_mm: H, config: f.layout.value, glazing: f.glass.value, qty: 1, kg };
+      renderEstimate(tool, opening); bindPortalDraft(tool, opening);
       $('[data-tool-quote]', tool).href = `contact.html?${new URLSearchParams({ system, w: W, h: H, config: f.layout.value, glass: f.glass.value })}`;
     };
 

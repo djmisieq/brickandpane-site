@@ -1,9 +1,13 @@
 // Shared UI for the client portal and the staff CRM.
 import { store } from './store.js';
 import {
-  STAGES, PHASES, DOC_KINDS, SYSTEMS, stage, stageIndex, esc, fmtDate, fmtDay, ago, fmtSize,
+  STAGES, PHASES, DOC_KINDS, SYSTEMS, stage, stageIndex, stageLabel, stageText, tracker, esc, fmtDate, fmtDay, ago, fmtSize,
   stageBadge, courtLabel, estimatePanel, $, $$, toast,
 } from './core.js';
+import { PRICING, pricingVisible, pricingIsExample, estimateOpening, fmtGBP } from '../pricing.js';
+
+export const showPrices = () => pricingVisible({ demo: store.mode === 'demo' });
+export const estimateNote = () => (pricingIsExample() ? `${PRICING.label}.` : 'Automatic estimate, not a quotation.');
 
 export const route = () => {
   const h = location.hash.replace(/^#\/?/, '');
@@ -58,14 +62,14 @@ export async function renderAppBar(el, user, area) {
 }
 
 // ---------- pipeline ----------
-export function pipeline(project, events) {
+export function pipeline(project, events, audience = 'trade') {
   const reached = {};
   events.forEach((e) => { reached[e.to_stage] = e.created_at; });
   const cur = stageIndex(project.stage);
   const side = cur < 0 ? stage(project.stage) : null;
   return `
     <div class="pipeline" aria-label="Project pipeline">
-      ${side ? `<p class="pipeline-side">${stageBadge(project.stage)} ${esc(side.client)}</p>` : ''}
+      ${side ? `<p class="pipeline-side">${stageBadge(project.stage, audience)} ${esc(side.client)}</p>` : ''}
       ${PHASES.map((ph) => `
         <div class="pipeline-phase">
           <h3 class="pipeline-phase-title">${ph}</h3>
@@ -73,7 +77,7 @@ export function pipeline(project, events) {
             const st = i < cur ? 'done' : i === cur ? 'current' : 'todo';
             return `<li class="ps ps-${st}${s.court === 'you' ? ' ps-you' : ''}" ${st === 'current' ? 'aria-current="step"' : ''}>
               <span class="ps-dot" aria-hidden="true"></span>
-              <span class="ps-label">${esc(s.label)}</span>
+              <span class="ps-label">${esc(stageLabel(s.id, audience))}</span>
               <span class="ps-date">${reached[s.id] && st !== 'todo' ? fmtDate(reached[s.id]) : ''}</span>
             </li>`;
           }).join('')}</ol>
@@ -81,15 +85,16 @@ export function pipeline(project, events) {
     </div>`;
 }
 
-export function nowCard(project, viewer) {
+export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff' : 'trade') {
   const s = stage(project.stage);
   const court = courtLabel(project.stage, viewer);
   const due = project.due_at && s.court === 'us'
     ? `<li><span>${viewer === 'client' ? 'Next update by' : 'Due'}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
   return `
     <section class="now-card ${s.court === 'you' ? 'is-you' : ''}" aria-label="Current status">
-      <div class="now-head">${stageBadge(project.stage)}${court ? `<span class="court court-${s.court}">${court}</span>` : ''}</div>
-      <p class="now-text">${esc(viewer === 'client' ? s.client : s.client.replace(/\byour\b/gi, 'the client’s'))}</p>
+      ${audience === 'home' ? tracker(project.stage) : ''}
+      <div class="now-head">${stageBadge(project.stage, audience)}${court ? `<span class="court court-${s.court}">${court}</span>` : ''}</div>
+      <p class="now-text">${esc(viewer === 'client' ? stageText(project.stage, audience) : s.client.replace(/\byour\b/gi, 'the client’s'))}</p>
       ${project.next_step ? `<p class="now-next"><strong>Next step:</strong> ${esc(project.next_step)}</p>` : ''}
       <ul class="proof-list">
         ${due}
@@ -105,14 +110,23 @@ export function tabs(active, counts) {
   return `<div class="tabs" role="tablist">${t.map(([id, label]) => `<button type="button" role="tab" id="tab-${id}" aria-selected="${id === active}" aria-controls="panel-${id}" data-tab="${id}">${label}${id === 'documents' && counts.pending ? ' <span class="dot-you" aria-label="action needed"></span>' : ''}</button>`).join('')}</div>`;
 }
 
-export function overviewPanel(d) {
+export function overviewPanel(d, viewer = 'client') {
   const p = d.project;
+  const prices = showPrices();
+  const hasQuote = d.documents.some((x) => x.kind === 'quote');
+  const estBlock = p.estimate_low && prices && !hasQuote ? `
+    <div class="estimate" style="margin-bottom:var(--s-l)">
+      <span class="estimate-label">${viewer === 'staff' ? 'Automatic estimate shown to client' : 'Budget estimate'}</span>
+      <span class="estimate-value">${fmtGBP(p.estimate_low)}–${fmtGBP(p.estimate_high)} + VAT</span>
+      <span class="estimate-text">Supplied &amp; installed. ${viewer === 'staff' ? 'Calculated from the client’s schedule.' : 'Your formal quotation follows after our technical review.'} ${esc(estimateNote())}</span>
+    </div>` : '';
   return `
+    ${estBlock}
     <div class="grid-12">
       <div class="span-8">
         <h3 class="panel-h">Openings</h3>
-        ${d.openings.length ? `<div style="overflow-x:auto"><table class="spec spec-compact"><thead><tr><th scope="col">Ref</th><th scope="col">System</th><th scope="col">W × H (mm)</th><th scope="col">Layout</th><th scope="col">Qty</th><th scope="col">Est. panel</th></tr></thead><tbody>
-          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(SYSTEMS[o.system] || o.system)}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ' <span class="tag tag-accent">check</span>' : ''}` : '—'}</td></tr>${o.notes ? `<tr class="sub"><td></td><td colspan="5">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
+        ${d.openings.length ? `<div style="overflow-x:auto"><table class="spec spec-compact"><thead><tr><th scope="col">Ref</th><th scope="col">System</th><th scope="col">W × H (mm)</th><th scope="col">Layout</th><th scope="col">Qty</th><th scope="col">Est. panel</th>${prices ? '<th scope="col">Est. budget</th>' : ''}</tr></thead><tbody>
+          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(SYSTEMS[o.system] || o.system)}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ' <span class="tag tag-accent">check</span>' : ''}` : '—'}</td>${prices ? `<td>${(() => { const b = estimateOpening(o); return b ? fmtGBP(b.total) : '—'; })()}</td>` : ''}</tr>${o.notes ? `<tr class="sub"><td></td><td colspan="${prices ? 6 : 5}">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
         </tbody></table></div>` : '<p class="note">No openings listed yet.</p>'}
         ${p.brief ? `<h3 class="panel-h">Brief</h3><p class="measure">${esc(p.brief)}</p>` : ''}
       </div>
@@ -186,10 +200,10 @@ export function messagesPanel(d, user) {
     </form>`;
 }
 
-export function timelinePanel(d, viewer) {
+export function timelinePanel(d, viewer, audience = viewer === 'staff' ? 'staff' : 'trade') {
   return `<ol class="timeline">${[...d.events].reverse().map((e) => `
     <li><span class="tl-date">${fmtDate(e.created_at, true)}</span>
-      <span class="tl-body">${stageBadge(e.to_stage)}${viewer === 'staff' && !e.visible_to_client ? ' <span class="tag">hidden from client</span>' : ''}
+      <span class="tl-body">${stageBadge(e.to_stage, audience)}${viewer === 'staff' && !e.visible_to_client ? ' <span class="tag">hidden from client</span>' : ''}
       ${e.note ? `<span class="tl-note">${esc(e.note)}</span>` : ''}<span class="tl-actor">${esc(e.actor?.full_name || '')}</span></span></li>`).join('')}
   </ol>`;
 }

@@ -3,7 +3,7 @@
 // Open the client portal and the staff CRM in two tabs: changes appear live in both.
 import { addWorkingDays, stage } from './core.js';
 
-const KEY = 'bp-portal-demo-v1';
+const KEY = 'bp-portal-demo-v2';
 const SESSION = 'bp-portal-demo-session';
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
@@ -25,10 +25,11 @@ const sessionId = () => { try { return sessionStorage.getItem(SESSION); } catch 
 const setSession = (id) => { try { id ? sessionStorage.setItem(SESSION, id) : sessionStorage.removeItem(SESSION); } catch { memSession = id; } emit(); };
 
 function seed() {
-  const anna = { id: 'u-anna', email: 'anna@example-studio.co.uk', full_name: 'Anna Clarke', company: 'Example Studio (demo)', phone: '', role: 'client', notify_email: true, notify_digest: false };
-  const ravi = { id: 'u-ravi', email: 'ravi@example-homes.co.uk', full_name: 'Ravi Patel', company: 'Example Homes (demo)', phone: '', role: 'client', notify_email: true, notify_digest: false };
+  const anna = { id: 'u-anna', email: 'anna@example-studio.co.uk', full_name: 'Anna Clarke', company: 'Example Studio (demo)', phone: '', role: 'client', account_type: 'architect', notify_email: true, notify_digest: false };
+  const ravi = { id: 'u-ravi', email: 'ravi@example-homes.co.uk', full_name: 'Ravi Patel', company: 'Example Homes (demo)', phone: '', role: 'client', account_type: 'developer', notify_email: true, notify_digest: false };
+  const sam = { id: 'u-sam', email: 'sam@example.com', full_name: 'Sam Taylor', company: '', phone: '', role: 'client', account_type: 'homeowner', notify_email: true, notify_digest: false };
   const tom = { id: 'u-tom', email: 'tom@brickandpane.co.uk', full_name: 'Tom Reid', company: 'Brick & Pane', phone: '', role: 'staff', notify_email: true, notify_digest: false };
-  const s = { users: [anna, ravi, tom], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {} };
+  const s = { users: [anna, ravi, sam, tom], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {} };
 
   const mk = (p, owner, history, extra = {}) => {
     const id = uid();
@@ -75,12 +76,22 @@ function seed() {
     { id: uid(), project_id: p2, kind: 'drawing', title: 'Shop drawings — corner slider', version: 'Rev A', size_bytes: 5200000, visible_to_client: true, approval: 'pending', uploaded_by: tom.id, created_at: daysAgo(2) },
   );
 
-  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(now(), 1) }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
+  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', estimate_low: 9900, estimate_high: 13400, next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(now(), 1) }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
   s.openings.push({ id: uid(), project_id: p3, ref: 'D01', system: 'lift-slide', width_mm: 4000, height_mm: 2400, config: '3T', glazing: 'd', qty: 1, notes: '' });
 
   const p4 = mk({ name: 'Northfield Terrace — 8 houses', location: 'Ealing, W13', riba_stage: '', building_type: 'New-build houses (8)', start_window: '6–12 months', brief: 'Rear sliders and windows for 8 houses. Budget needed for appraisal.', next_step: 'Budget price by Thursday.', due_at: daysAgo(1, 17) }, ravi, [['submitted', daysAgo(4)], ['in_review', daysAgo(3), 'Reviewing the schedule.']], { value: 142000, prob: 30 });
   s.openings.push({ id: uid(), project_id: p4, ref: 'Type A rear', system: 'lift-slide', width_mm: 3600, height_mm: 2400, config: '2A', glazing: 'd', qty: 8, notes: '' });
 
+  const p5 = mk({ name: 'Kitchen extension doors', location: 'Walthamstow, E17', building_type: 'Extension to an existing house', start_window: 'Within 3 months', brief: 'Four-panel lift & slide to the garden.', next_step: 'Delivery date will be confirmed by your project manager.', estimate_low: 16800, estimate_high: 22700 }, sam, [
+    ['submitted', daysAgo(46), 'Request received.'], ['in_review', daysAgo(45)], ['quote_issued', daysAgo(43), 'Your quote is in Documents.'],
+    ['accepted', daysAgo(38), 'Thank you for your order.'], ['survey', daysAgo(33), 'Survey on Thursday at 10:00.'], ['drawings', daysAgo(27), 'Final drawings ready to approve.'],
+    ['production', daysAgo(20), 'Approved — your doors are now being made.'],
+  ], { value: 19400, prob: 100 });
+  s.openings.push({ id: uid(), project_id: p5, ref: 'D01', system: 'lift-slide', width_mm: 4800, height_mm: 2400, config: '4C', glazing: 'd', qty: 1, notes: 'Flush threshold' });
+  s.documents.push(
+    { id: uid(), project_id: p5, kind: 'quote', title: 'Quote — kitchen extension doors', version: 'Q1', size_bytes: 310000, visible_to_client: true, approval: 'approved', uploaded_by: tom.id, created_at: daysAgo(43) },
+    { id: uid(), project_id: p5, kind: 'drawing', title: 'Final drawings', version: 'Rev A', size_bytes: 2400000, visible_to_client: true, approval: 'approved', uploaded_by: tom.id, created_at: daysAgo(27) },
+  );
   const n = (u, p, type, title, body, at, read = false) => s.notifications.push({ id: uid(), user_id: u, project_id: p, type, title, body, created_at: at, read_at: read ? at : null });
   n(anna.id, p2, 'approval_request', 'Approval needed: Shop drawings — corner slider', 'Mews house, corner glazing', daysAgo(2));
   n(anna.id, p1, 'approval_request', 'Approval needed: Quotation Q1 — Hartley Road', 'Hartley Road rear extension', daysAgo(4), true);
@@ -107,16 +118,16 @@ export const store = {
   onChange(cb) { listeners.add(cb); return () => listeners.delete(cb); },
 
   async getUser() { return me(load()); },
-  async demoLogin(role) { const s = load(); setSession(s.users.find((u) => u.role === (role === 'staff' ? 'staff' : 'client')).id); },
+  async demoLogin(role) { const s = load(); const u = role === 'staff' ? s.users.find((x) => x.role === 'staff') : s.users.find((x) => x.role === 'client' && x.account_type === (role === 'homeowner' ? 'homeowner' : 'architect')); setSession(u.id); },
   async signIn(email) {
     const s = load(); const u = s.users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
     if (!u) throw new Error('No demo account with that email. Create one, or use a demo account.');
     setSession(u.id);
   },
-  async signUp({ email, full_name, company }) {
+  async signUp({ email, full_name, company, account_type = 'architect' }) {
     const s = load();
     if (s.users.some((x) => x.email.toLowerCase() === email.toLowerCase())) throw new Error('An account with that email already exists.');
-    const u = { id: uid(), email, full_name, company, phone: '', role: 'client', notify_email: true, notify_digest: false };
+    const u = { id: uid(), email, full_name, company, phone: '', role: 'client', account_type, notify_email: true, notify_digest: false };
     s.users.push(u); save(s); setSession(u.id);
     return { needsConfirmation: false };
   },

@@ -158,6 +158,19 @@ test.describe('sizing tools', () => {
   });
 });
 
+test.describe('budget estimates', () => {
+  test('hidden on public tools until the price list is live', async ({ page }) => {
+    await page.goto('/lift-and-slide-doors.html#sizing');
+    await expect(page.locator('[data-estimate]')).toContainText('Save this opening to your portal');
+    await expect(page.locator('[data-estimate]')).not.toContainText('£');
+  });
+  test('preview mode shows a labelled example estimate', async ({ page }) => {
+    await page.goto('/bifold-doors.html?preview=pricing#sizing');
+    await expect(page.locator('[data-estimate]')).toContainText(/£[\d,]+–£[\d,]+ \+ VAT/);
+    await expect(page.locator('[data-estimate]')).toContainText('Example rates');
+  });
+});
+
 test.describe('quote form', () => {
   test('validates each step and never pretends to send', async ({ page }) => {
     await page.goto('/contact.html?role=architect&system=bifold');

@@ -1,6 +1,6 @@
 // Internal CRM for Brick & Pane staff: pipeline board, list, project control panel.
 import { store } from './store.js';
-import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, stage, esc, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
+import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 
 const app = $('#app');
@@ -38,8 +38,8 @@ async function board(asList) {
     <a class="kcard ${isOverdue(p) ? 'is-overdue' : ''}" href="#/p/${esc(p.id)}">
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
-      <span class="kcard-client">${esc(p.owner?.company || p.owner?.full_name || '')}</span>
-      <span class="kcard-foot"><span>${fmtMoney(p.internal?.value_gbp)}</span><span>${isOverdue(p) ? `Overdue ${fmtDay(p.due_at)}` : p.due_at && stage(p.stage).court === 'us' ? `Due ${fmtDay(p.due_at)}` : courtLabel(p.stage, 'staff')}</span></span>
+      <span class="kcard-client">${esc(p.owner?.company || p.owner?.full_name || '')}${p.owner?.account_type === 'homeowner' ? ' <span class="tag">homeowner</span>' : ''}</span>
+      <span class="kcard-foot"><span>${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : p.estimate_low ? `est. ${fmtMoney(p.estimate_low)}+` : '—'}</span><span>${isOverdue(p) ? `Overdue ${fmtDay(p.due_at)}` : p.due_at && stage(p.stage).court === 'us' ? `Due ${fmtDay(p.due_at)}` : courtLabel(p.stage, 'staff')}</span></span>
     </a>`;
   app.innerHTML = `
     <div class="container-wide section-tight">
@@ -82,7 +82,7 @@ async function detail(id) {
     <div class="container section-tight">
       <nav class="breadcrumb" aria-label="Breadcrumb"><ol><li><a href="#/">Pipeline</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
       <div class="detail-head">
-        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${esc(p.owner?.full_name || '')}${p.owner?.company ? `, ${esc(p.owner.company)}` : ''}</p></div>
+        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${esc(p.owner?.full_name || '')}${p.owner?.company ? `, ${esc(p.owner.company)}` : ''}${p.owner?.account_type ? ` · ${esc(ACCOUNT_TYPES[p.owner.account_type] || '')}` : ''}</p></div>
       </div>
       <div class="crm-grid">
         <div class="crm-main">
@@ -90,7 +90,7 @@ async function detail(id) {
           ${pipeline(p, d.events)}
           ${tabs(activeTab, counts(d, 'staff'))}
           <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
-            ${activeTab === 'documents' ? documentsPanel(d, 'staff') : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d)}
+            ${activeTab === 'documents' ? documentsPanel(d, 'staff') : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d, 'staff')}
           </div>
         </div>
         <aside class="crm-side">
@@ -125,6 +125,7 @@ async function detail(id) {
 
           <form class="ctl" data-internal>
             <h2 class="panel-h">Commercial <span class="tag">staff only</span></h2>
+            ${p.estimate_low ? `<p class="note">Automatic estimate shown to client: ${fmtMoney(p.estimate_low)}–${fmtMoney(p.estimate_high)} + VAT</p>` : ''}
             <div class="field-row">
               <div class="field"><label for="ctl-val">Value (£)</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
               <div class="field"><label for="ctl-prob">Probability (%)</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
