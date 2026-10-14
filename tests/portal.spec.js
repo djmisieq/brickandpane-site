@@ -155,3 +155,30 @@ test('homeowner sees delivery dates and payments; developer demo shows the schem
   await dev.locator('[data-demo-login="developer"]').click();
   await expect(dev.locator('.pcard', { hasText: 'Northfield Terrace' })).toBeVisible();
 });
+
+test('an internal note stays internal when the page updates live', async ({ page, context }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-tab="messages"]').click();
+  await page.locator('.composer-mode input[value="internal"]').check();
+  await page.fill('#msg-body', 'Margin is fine at this price.');
+  // Another tab changes the data, which re-renders this panel.
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html');
+  await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await client.locator('[data-tab="messages"]').click();
+  await client.fill('#msg-body', 'Any news?');
+  await client.locator('[data-message] button[type="submit"]').click();
+  await expect(page.locator('.thread')).toContainText('Any news?');
+  await expect(page.locator('.composer-mode input[value="internal"]')).toBeChecked();
+  await expect(page.locator('#msg-body')).toHaveValue('Margin is fine at this price.');
+  await expect(page.locator('[data-message] button[type="submit"]')).toHaveText('Save internal note');
+  await page.locator('[data-message] button[type="submit"]').click();
+  await expect(client.locator('.thread')).toContainText('Any news?');
+  await client.reload();
+  await client.locator('[data-tab="messages"]').click();
+  await expect(client.locator('.thread')).not.toContainText('Margin is fine');
+});
