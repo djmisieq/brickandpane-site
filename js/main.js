@@ -2,6 +2,8 @@
 import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, rangeTextIncVat } from './pricing.js';
 
 (() => {
+  const PL = document.documentElement.lang === 'pl';
+  const t = (en, pl) => (PL ? pl : en);
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
@@ -18,7 +20,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     }
     nav.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
-    $('.menu-toggle-label', toggle).textContent = open ? 'Close' : 'Menu';
+    $('.menu-toggle-label', toggle).textContent = open ? t('Close', 'Zamknij') : 'Menu';
     document.body.classList.toggle('nav-open', open);
   };
   toggle?.addEventListener('click', () => setMenu(!nav.classList.contains('is-open')));
@@ -88,8 +90,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
   const SLIDERS = {
     'lift-slide': {
       limits: { panelKg: 400, heavyKg: 300, sashH: 3200, sashHMax: 3500, sashW: 3300, sashWMin: 700, handKg: 150, liftKg: 250 },
-      okText: 'Panel weight is inside the standard 300 kg hardware class (heavy-duty goes to 400 kg).',
-      heavyText: 'Heavy-duty roller carriages needed (300–400 kg class). Fine for the system, but it affects the track and the floor detail.',
+      okText: t('Panel weight is inside the standard 300 kg hardware class (heavy-duty goes to 400 kg).', 'Waga skrzydła mieści się w standardowej klasie okuć 300 kg (wzmocnione do 400 kg).'),
+      heavyText: t('Heavy-duty roller carriages needed (300–400 kg class). Fine for the system, but it affects the track and the floor detail.', 'Potrzebne wzmocnione wózki jezdne (klasa 300–400 kg). System to obsłuży, ale ma to wpływ na tor i detal posadzki.'),
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
         '3T': { panels: 3, dirs: { 1: -1, 2: -1 }, open: 2 / 3, label: '3 panels on 3 tracks — 2 sliding' },
@@ -99,8 +101,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     },
     sliding: {
       limits: { panelKg: 250, heavyKg: 200, sashH: 3000, sashHMax: 3200, sashW: 2800, sashWMin: 600, handKg: 150, liftKg: 220 },
-      okText: 'Panel weight is well inside the 250 kg inline hardware range.',
-      heavyText: 'Upper end of the 250 kg inline hardware range (over 200 kg). If panels grow, lift & slide hardware is the safer choice.',
+      okText: t('Panel weight is well inside the 250 kg inline hardware range.', 'Waga skrzydła mieści się z zapasem w zakresie okuć 250 kg.'),
+      heavyText: t('Upper end of the 250 kg inline hardware range (over 200 kg). If panels grow, lift & slide hardware is the safer choice.', 'Górna granica zakresu okuć 250 kg (ponad 200 kg). Jeśli skrzydła urosną, bezpieczniejsze będą okucia podnoszono-przesuwne.'),
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
         '2B': { panels: 2, dirs: { 0: 1, 1: -1 }, open: 1 / 2, label: '2 panels — both sliding' },
@@ -111,13 +113,15 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
   };
   const BIFOLD = { leafKg: 100, warnKg: 80, leafW: 1200, leafWMin: 500, leafH: 2600, leafHMax: 3000, frame: 60, stackPerLeaf: 70 };
   const FRAME = 70, OVERLAP = 70, SASH_PROFILE = 140, HEAD_SILL = 150;
-  const fmt = (n, d = 0) => n.toLocaleString('en-GB', { maximumFractionDigits: d, minimumFractionDigits: d });
+  const fmt = (n, d = 0) => n.toLocaleString(PL ? 'pl-PL' : 'en-GB', { maximumFractionDigits: d, minimumFractionDigits: d });
   const partL = (totalM2, area) => {
     if (!(area > 0)) return null;
     const pct = (totalM2 / area) * 100;
     return [pct > 25 ? 'warn' : 'ok', pct > 25
-      ? `Lots of glass: this door is ${fmt(pct)}% of the extension floor area. That's allowed. Above about 25%, Building Regulations (Part L) just ask for an energy calculation called SAP instead of the simple check. An energy assessor or your architect does it routinely, and we supply the figures. Tell them early.`
-      : `This door is ${fmt(pct)}% of the extension floor area, inside the simple 25% allowance in Building Regulations. Remember to count rooflights and other windows too.`];
+      ? t(`Lots of glass: this door is ${fmt(pct)}% of the extension floor area. That's allowed. Above about 25%, Building Regulations (Part L) just ask for an energy calculation called SAP instead of the simple check. An energy assessor or your architect does it routinely, and we supply the figures. Tell them early.`,
+          `Dużo szkła: te drzwi to ${fmt(pct)}% powierzchni dobudowy. To dozwolone. Powyżej ok. 25% brytyjskie przepisy (część L) wymagają po prostu obliczeń energetycznych SAP zamiast prostego sprawdzenia. Rutynowo robi je audytor energetyczny lub architekt, a my dostarczamy dane. Powiedz im o tym wcześnie.`)
+      : t(`This door is ${fmt(pct)}% of the extension floor area, inside the simple 25% allowance in Building Regulations. Remember to count rooflights and other windows too.`,
+          `Te drzwi to ${fmt(pct)}% powierzchni dobudowy, w granicach prostej reguły 25% z przepisów. Pamiętaj, żeby doliczyć świetliki i inne okna.`)];
   };
 
   const drawSlider = (svg, cfg, W, H) => {
@@ -133,7 +137,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         const cx = x + pw / 2, cy = y0 + h / 2, a = Math.min(pw * 0.28, 40);
         g += `<path class="acc" d="M${cx - a * dir} ${cy}H${cx + a * dir}m${-8 * dir} -6l${8 * dir} 6l${-8 * dir} 6"/>`;
       } else {
-        g += `<text class="dim" x="${x + pw / 2}" y="${y0 + h / 2 + 4}" text-anchor="middle">F</text>`;
+        g += `<text class="dim" x="${x + pw / 2}" y="${y0 + h / 2 + 4}" text-anchor="middle">${t('F', 'S')}</text>`;
       }
     }
     g += `<text class="dim" x="${x0 + w / 2}" y="${y0 + h + 16}" text-anchor="middle">${fmt(W)} mm</text>`;
@@ -156,7 +160,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     }
     const door = (count, side) => (count % 2 === 1 ? (side === 'L' ? 0 : n - 1) : -1);
     [door(left, 'L'), door(right, 'R')].filter((i) => i >= 0 && n > 0).forEach((i) => {
-      g += `<text class="dim" x="${x0 + i * lw + lw / 2}" y="${y0 + h - 14}" text-anchor="middle">door</text>`;
+      g += `<text class="dim" x="${x0 + i * lw + lw / 2}" y="${y0 + h - 14}" text-anchor="middle">${t('door', 'drzwi')}</text>`;
     });
     g += `<text class="dim" x="${x0 + w / 2}" y="${y0 + h + 16}" text-anchor="middle">${fmt(W)} mm · ${left}+${right}</text>`;
     svg.setAttribute('viewBox', `0 0 ${vbW} ${y0 + h + 24}`);
@@ -168,12 +172,14 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const box = $('[data-estimate]', tool);
     if (!box) return;
     if (!pricingVisible()) {
-      box.innerHTML = '<span class="estimate-label">Budget</span><span class="estimate-text">Save this opening to your portal and we’ll send a budget within 2 working days.</span>';
+      box.innerHTML = t('<span class="estimate-label">Budget</span><span class="estimate-text">Save this opening to your portal and we’ll send a budget within 2 working days.</span>',
+        '<span class="estimate-label">Budżet</span><span class="estimate-text">Zapisz ten otwór w panelu, a budżet prześlemy w ciągu 2 dni roboczych.</span>');
       return;
     }
     const est = estimateProject([opening]);
     box.innerHTML = est
-      ? `<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> for homeowners. Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`
+      ? t(`<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> for homeowners. Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`,
+          `<span class="estimate-label">Szacunkowy budżet</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> dla osób prywatnych. Z dostawą i montażem w Londynie. Szacunek automatyczny, nie oferta.${pricingIsExample() ? ` <strong>${PRICING.labelPl}.</strong>` : ''}</span>`)
       : '';
   };
   const bindPortalDraft = (tool, opening) => {
@@ -191,7 +197,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const invalid = (W, H) => {
       if (W >= 1200 && W <= 20000 && H >= 1800 && H <= 4000) return false;
       $$('[data-out]', tool).forEach((el) => { el.textContent = '—'; });
-      show([['warn', 'Enter an opening between 1,200–20,000 mm wide and 1,800–4,000 mm high.']]);
+      show([['warn', t('Enter an opening between 1,200–20,000 mm wide and 1,800–4,000 mm high.', 'Wpisz otwór o szerokości 1200–20 000 mm i wysokości 1800–4000 mm.')]]);
       return true;
     };
 
@@ -208,15 +214,15 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       out('clear', `${fmt(Math.round((W * cfg.open - 100) / 10) * 10)} mm`);
       out('area', `${fmt(totalM2, 1)} m²`);
       const msgs = [];
-      if (kg > L.panelKg) msgs.push(['stop', `At about ${fmt(kg)} kg per panel this is beyond the ${L.panelKg} kg hardware class. Add a panel, reduce the height${system === 'sliding' ? ', or consider lift &amp; slide' : ''}.`]);
+      if (kg > L.panelKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per panel this is beyond the ${L.panelKg} kg hardware class. Add a panel, reduce the height${system === 'sliding' ? ', or consider lift &amp; slide' : ''}.`, `Przy ok. ${fmt(kg)} kg na skrzydło przekraczasz klasę okuć ${L.panelKg} kg. Dodaj skrzydło, zmniejsz wysokość${system === 'sliding' ? ' albo rozważ drzwi podnoszono-przesuwne' : ''}.`)]);
       else if (kg > L.heavyKg) msgs.push(['warn', def.heavyText]);
       else msgs.push(['ok', def.okText]);
-      if (sashW > L.sashW) msgs.push(['stop', `Each panel would be about ${fmt(sashW)} mm wide, over the ${fmt(L.sashW)} mm limit. Choose a configuration with more panels.`]);
-      if (sashW < L.sashWMin) msgs.push(['warn', `Panels under ~${fmt(L.sashWMin)} mm wide waste the slim interlock. Fewer panels will look better and cost less.`]);
-      if (sashH > L.sashHMax) msgs.push(['stop', `A ${fmt(sashH)} mm panel height is outside the system range. Talk to us about a transom or a different system.`]);
-      else if (sashH > L.sashH) msgs.push(['warn', `Panel height over ${fmt(L.sashH)} mm needs an engineering check (deflection, glass and handling).`]);
-      if (kg > L.liftKg) msgs.push(['warn', 'Handling: plan for a glazing robot or a crane. On a London terrace with no rear access, that can mean a road licence or parking suspension from the borough, so build it into the programme.']);
-      else if (kg > L.handKg) msgs.push(['warn', 'Handling: too heavy to carry by hand safely. We plan a vacuum lifter and check the route from the kerb to the opening at survey.']);
+      if (sashW > L.sashW) msgs.push(['stop', t(`Each panel would be about ${fmt(sashW)} mm wide, over the ${fmt(L.sashW)} mm limit. Choose a configuration with more panels.`, `Każde skrzydło miałoby ok. ${fmt(sashW)} mm szerokości, ponad limit ${fmt(L.sashW)} mm. Wybierz konfigurację z większą liczbą skrzydeł.`)]);
+      if (sashW < L.sashWMin) msgs.push(['warn', t(`Panels under ~${fmt(L.sashWMin)} mm wide waste the slim interlock. Fewer panels will look better and cost less.`, `Skrzydła węższe niż ok. ${fmt(L.sashWMin)} mm marnują zaletę smukłego styku. Mniej skrzydeł będzie wyglądać lepiej i kosztować mniej.`)]);
+      if (sashH > L.sashHMax) msgs.push(['stop', t(`A ${fmt(sashH)} mm panel height is outside the system range. Talk to us about a transom or a different system.`, `Wysokość skrzydła ${fmt(sashH)} mm wykracza poza zakres systemu. Porozmawiaj z nami o naświetlu albo innym systemie.`)]);
+      else if (sashH > L.sashH) msgs.push(['warn', t(`Panel height over ${fmt(L.sashH)} mm needs an engineering check (deflection, glass and handling).`, `Skrzydło wyższe niż ${fmt(L.sashH)} mm wymaga sprawdzenia technicznego (ugięcie, szkło i transport).`)]);
+      if (kg > L.liftKg) msgs.push(['warn', t('Handling: plan for a glazing robot or a crane. On a London terrace with no rear access, that can mean a road licence or parking suspension from the borough, so build it into the programme.', 'Transport: zaplanuj robota do szkła albo dźwig. W londyńskim szeregowcu bez dojazdu od tyłu może to oznaczać pozwolenie na zajęcie drogi lub zawieszenie miejsc parkingowych z urzędu dzielnicy, więc uwzględnij to w harmonogramie.')]);
+      else if (kg > L.handKg) msgs.push(['warn', t('Handling: too heavy to carry by hand safely. We plan a vacuum lifter and check the route from the kerb to the opening at survey.', 'Transport: za ciężkie, żeby bezpiecznie przenieść ręcznie. Przy pomiarze planujemy przyssawkę próżniową i sprawdzamy trasę od krawężnika do otworu.')]);
       msgs.push(partL(totalM2, +f.floor.value));
       show(msgs);
       drawSlider($('[data-elevation]', tool), cfg, W, H);
@@ -239,18 +245,18 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       out('clear', `${fmt(Math.round(clear / 10) * 10)} mm`);
       out('stack', `${fmt(Math.round(leafW / 10) * 10)} mm`);
       const msgs = [];
-      if (kg > B.leafKg) msgs.push(['stop', `At about ${fmt(kg)} kg per leaf this is beyond the ${B.leafKg} kg bi-fold hardware range. Add leaves or consider a slider.`]);
-      else if (kg > B.warnKg) msgs.push(['warn', 'Heavy leaves (80–100 kg): fine for the hardware, but the head must be stiff. Get your engineer to design to the system deflection limit.']);
-      else msgs.push(['ok', `Leaf weight is comfortably inside the hardware range (up to ${B.warnKg} kg).`]);
-      if (leafW > B.leafW) msgs.push(['stop', `Each leaf would be about ${fmt(leafW)} mm wide, over the ${fmt(B.leafW)} mm limit. Choose a layout with more leaves.`]);
-      if (leafW < B.leafWMin) msgs.push(['warn', 'Leaves under ~500 mm wide look busy and add frames. Choose fewer leaves.']);
-      if (leafH > B.leafHMax) msgs.push(['stop', `A ${fmt(leafH)} mm leaf height is outside the bi-fold range. Consider a slider for this opening.`]);
-      else if (leafH > B.leafH) msgs.push(['warn', 'Tall leaves (over 2.6 m) need stiffer profiles and careful head detailing. We confirm at Stage 3.']);
+      if (kg > B.leafKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per leaf this is beyond the ${B.leafKg} kg bi-fold hardware range. Add leaves or consider a slider.`, `Przy ok. ${fmt(kg)} kg na skrzydło przekraczasz zakres okuć harmonijkowych ${B.leafKg} kg. Dodaj skrzydła albo rozważ drzwi przesuwne.`)]);
+      else if (kg > B.warnKg) msgs.push(['warn', t('Heavy leaves (80–100 kg): fine for the hardware, but the head must be stiff. Get your engineer to design to the system deflection limit.', 'Ciężkie skrzydła (80–100 kg): okucia to obsłużą, ale nadproże musi być sztywne. Niech konstruktor zaprojektuje je według limitu ugięcia systemu.')]);
+      else msgs.push(['ok', t(`Leaf weight is comfortably inside the hardware range (up to ${B.warnKg} kg).`, `Waga skrzydła mieści się z zapasem w zakresie okuć (do ${B.warnKg} kg).`)]);
+      if (leafW > B.leafW) msgs.push(['stop', t(`Each leaf would be about ${fmt(leafW)} mm wide, over the ${fmt(B.leafW)} mm limit. Choose a layout with more leaves.`, `Każde skrzydło miałoby ok. ${fmt(leafW)} mm szerokości, ponad limit ${fmt(B.leafW)} mm. Wybierz układ z większą liczbą skrzydeł.`)]);
+      if (leafW < B.leafWMin) msgs.push(['warn', t('Leaves under ~500 mm wide look busy and add frames. Choose fewer leaves.', 'Skrzydła węższe niż ok. 500 mm wyglądają na zatłoczone i dodają ram. Wybierz mniej skrzydeł.')]);
+      if (leafH > B.leafHMax) msgs.push(['stop', t(`A ${fmt(leafH)} mm leaf height is outside the bi-fold range. Consider a slider for this opening.`, `Wysokość skrzydła ${fmt(leafH)} mm wykracza poza zakres drzwi harmonijkowych. Rozważ drzwi przesuwne.`)]);
+      else if (leafH > B.leafH) msgs.push(['warn', t('Tall leaves (over 2.6 m) need stiffer profiles and careful head detailing. We confirm at Stage 3.', 'Wysokie skrzydła (ponad 2,6 m) wymagają sztywniejszych profili i starannego detalu nadproża. Potwierdzimy to na etapie koncepcji.')]);
       const doors = (left % 2) + (right % 2);
       msgs.push([doors ? 'ok' : 'warn', doors
-        ? `This layout has ${doors === 2 ? 'two traffic doors' : 'a traffic door'}, so you can go in and out without folding the whole set.`
-        : 'No traffic door: an even number of leaves on each side means folding the set every time you go out. Consider an odd leaf on one side.']);
-      msgs.push(['ok', `When folded, the stack projects about ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'into the room' : 'into the garden'}. Keep it clear of steps, furniture and planting.`]);
+        ? t(`This layout has ${doors === 2 ? 'two traffic doors' : 'a traffic door'}, so you can go in and out without folding the whole set.`, `Ten układ ma ${doors === 2 ? 'dwoje drzwi przechodnich' : 'drzwi przechodnie'}, więc wychodzisz bez składania całości.`)
+        : t('No traffic door: an even number of leaves on each side means folding the set every time you go out. Consider an odd leaf on one side.', 'Brak drzwi przechodnich: parzysta liczba skrzydeł po każdej stronie oznacza składanie całości przy każdym wyjściu. Rozważ nieparzystą liczbę po jednej stronie.')]);
+      msgs.push(['ok', t(`When folded, the stack projects about ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'into the room' : 'into the garden'}. Keep it clear of steps, furniture and planting.`, `Po złożeniu pakiet wystaje na ok. ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'do pomieszczenia' : 'do ogrodu'}. Zostaw tam wolne miejsce, bez schodów, mebli i roślin.`)]);
       msgs.push(partL(totalM2, +f.floor.value));
       show(msgs);
       drawBifold($('[data-elevation]', tool), left, right, W, H);
@@ -286,9 +292,12 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     if (params.get('h') && form.opening_height_mm) form.opening_height_mm.value = params.get('h');
     if (params.get('w') && params.get('h')) {
       const sysKey = params.get('system'); const cfg = SLIDERS[sysKey]?.configs[params.get('config')]; const gl = GLASS[params.get('glass')];
-      const sysName = { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold' }[sysKey] || 'Door';
+      const sysName = (PL ? { 'lift-slide': 'Drzwi podnoszono-przesuwne', sliding: 'Drzwi przesuwne slim', bifold: 'Drzwi harmonijkowe' } : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold' })[sysKey] || t('Door', 'Drzwi');
       const layout = cfg ? cfg.label : (sysKey === 'bifold' && params.get('config') ? `${params.get('config')} leaves` : '');
-      form.message.value = `${sysName} opening approx. ${params.get('w')} × ${params.get('h')} mm${layout ? `, ${layout}` : ''}${gl ? `, ${gl.label}` : ''}.\n`;
+      const glPl = { d: 'szyba podwójna', dl: 'szyba podwójna laminowana', t: 'szyba potrójna', tl: 'szyba potrójna laminowana' }[params.get('glass')];
+      form.message.value = PL
+        ? `${sysName}: otwór ok. ${params.get('w')} × ${params.get('h')} mm${params.get('config') ? `, układ ${params.get('config')}` : ''}${glPl ? `, ${glPl}` : ''}.\n`
+        : `${sysName} opening approx. ${params.get('w')} × ${params.get('h')} mm${layout ? `, ${layout}` : ''}${gl ? `, ${gl.label}` : ''}.\n`;
     }
 
     // Restore an unsent draft (text fields only).
@@ -318,9 +327,9 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     showRoleFields();
 
     const validators = {
-      name: (v) => v.trim().length > 1 || 'Enter your name.',
-      email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) || 'Enter an email like name@practice.co.uk.',
-      location: (v) => v.trim().length > 1 || 'Enter a postcode or borough so we can check access and planning context.',
+      name: (v) => v.trim().length > 1 || t('Enter your name.', 'Wpisz imię i nazwisko.'),
+      email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) || t('Enter an email like name@practice.co.uk.', 'Wpisz e-mail, np. imie@firma.co.uk.'),
+      location: (v) => v.trim().length > 1 || t('Enter a postcode or borough so we can check access and planning context.', 'Wpisz kod pocztowy lub dzielnicę, żebyśmy mogli sprawdzić dojazd i uwarunkowania planistyczne.'),
     };
     const fieldError = (field, msg) => {
       field.classList.toggle('has-error', !!msg);
@@ -331,8 +340,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       $$('[data-validate]', steps[i]).forEach((el) => {
         const field = el.closest('.field');
         let res = true;
-        if (el.dataset.validate === 'radio') res = !!form.querySelector(`input[name="${el.dataset.name}"]:checked`) || 'Choose one option.';
-        else if (el.dataset.validate === 'consent') res = el.checked || 'Please confirm so we can reply to you.';
+        if (el.dataset.validate === 'radio') res = !!form.querySelector(`input[name="${el.dataset.name}"]:checked`) || t('Choose one option.', 'Wybierz jedną opcję.');
+        else if (el.dataset.validate === 'consent') res = el.checked || t('Please confirm so we can reply to you.', 'Potwierdź, żebyśmy mogli Ci odpowiedzieć.');
         else res = validators[el.name] ? validators[el.name](el.value) : true;
         fieldError(field, res === true ? '' : res);
         if (res !== true) { ok = false; first = first || el; }
@@ -354,8 +363,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const MAX_MB = 50, MAX_TOTAL = 100;
     const renderFiles = () => {
       const files = [...fileInput.files]; let total = 0, err = '';
-      list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = `${fl.name} is over ${MAX_MB} MB — export a PDF or add a WeTransfer link in your message.`; return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');
-      if (total > MAX_TOTAL * 1e6) err = `Files total over ${MAX_TOTAL} MB — add a WeTransfer or Dropbox link in your message instead.`;
+      list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = t(`${fl.name} is over ${MAX_MB} MB — export a PDF or add a WeTransfer link in your message.`, `${fl.name} ma ponad ${MAX_MB} MB — wyeksportuj PDF albo dodaj link WeTransfer w wiadomości.`); return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');
+      if (total > MAX_TOTAL * 1e6) err = t(`Files total over ${MAX_TOTAL} MB — add a WeTransfer or Dropbox link in your message instead.`, `Pliki mają łącznie ponad ${MAX_TOTAL} MB — zamiast tego dodaj link WeTransfer lub Dropbox w wiadomości.`);
       fieldError(fileInput.closest('.field'), err);
       return !err;
     };
@@ -373,11 +382,11 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       const btn = $('button[type=submit]', form);
       status.hidden = false; status.classList.remove('is-error');
       if (!endpoint) {
-        status.innerHTML = '<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Your details are still in the form.';
+        status.innerHTML = t('<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Your details are still in the form.', '<strong>Tryb podglądu — nic nie zostało wysłane.</strong> Formularz nie jest jeszcze podłączony. Wyślij rysunki na <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Twoje dane nadal są w formularzu.');
         status.focus();
         return;
       }
-      btn.disabled = true; btn.textContent = 'Sending…';
+      btn.disabled = true; btn.textContent = t('Sending…', 'Wysyłanie…');
       try {
         const res = await fetch(endpoint, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error(String(res.status));
@@ -385,9 +394,9 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         location.href = 'thank-you.html';
       } catch {
         status.classList.add('is-error');
-        status.innerHTML = 'We couldn’t send that. Your details are still here — try again, or email <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>.';
+        status.innerHTML = t('We couldn’t send that. Your details are still here — try again, or email <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>.', 'Nie udało się wysłać. Twoje dane nadal tu są — spróbuj ponownie albo napisz na <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>.');
         status.focus();
-        btn.disabled = false; btn.textContent = 'Send for review';
+        btn.disabled = false; btn.textContent = t('Send for review', 'Wyślij do oceny');
       }
     });
   }

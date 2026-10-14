@@ -1,39 +1,78 @@
-// Minimal static build: src/pages/*.html + src/partials -> *.html in the repo root.
-// No dependencies. Run: node build.mjs
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+// Minimal static build, two languages. No dependencies. Run: node build.mjs
+//   English: src/pages/*.html    + src/partials    -> /*.html
+//   Polish:  src/pl/pages/*.html + src/pl/partials -> /pl/*.html
+// Pages share slugs across languages, so each page links to its counterpart (hreflang + EN|PL switch).
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 
 const SITE = 'https://brickandpane.co.uk';
-const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+const url = (p) => new URL(p, import.meta.url);
+const read = (p) => readFileSync(url(p), 'utf8');
 const layout = read('./src/partials/layout.html');
-const header = read('./src/partials/header.html');
-const footer = read('./src/partials/footer.html');
 
-const pages = readdirSync(new URL('./src/pages/', import.meta.url)).filter((f) => f.endsWith('.html'));
+const LOCALES = {
+  en: {
+    dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB',
+    skip: 'Skip to content',
+    prelaunch: 'Pre-launch preview. Values marked <span class="tag">Indicative</span> are being verified against test certificates.',
+    actionHref: 'login.html?next=portal.html%23%2Fnew&signup=homeowner', actionLabel: 'Get a price',
+  },
+  pl: {
+    dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL',
+    skip: 'Przejdź do treści',
+    prelaunch: 'Wersja przedpremierowa. Wartości oznaczone <span class="tag">Orientacyjnie</span> są weryfikowane na podstawie certyfikatów badań.',
+    actionHref: 'login.html?next=portal.html%23%2Fnew&signup=homeowner', actionLabel: 'Poznaj cenę',
+  },
+};
+const pagesOf = (loc) => (existsSync(url(LOCALES[loc].dir)) ? readdirSync(url(LOCALES[loc].dir)).filter((f) => f.endsWith('.html')) : []);
+const EN = new Set(pagesOf('en'));
+const PL = new Set(pagesOf('pl'));
+const pageUrl = (loc, file) => `${SITE}/${loc === 'pl' ? 'pl/' : ''}${file === 'index.html' ? '' : file}`;
 
-for (const file of pages) {
-  const src = read(`./src/pages/${file}`);
-  const m = src.match(/^<!--(\{[\s\S]*?\})-->\s*/);
-  if (!m) throw new Error(`${file}: missing front matter`);
-  const meta = JSON.parse(m[1]);
-  const body = src.slice(m[0].length);
-  const path = file === 'index.html' ? '' : file;
+mkdirSync(url('./pl/'), { recursive: true });
 
-  // Mark the active nav item.
-  let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
-  if (['lift-slide', 'sliding', 'bifold', 'products'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
+for (const [loc, L] of Object.entries(LOCALES)) {
+  const header = read(`${L.partials}header.html`);
+  const footer = read(`${L.partials}footer.html`);
+  for (const file of pagesOf(loc)) {
+    const src = read(`${L.dir}${file}`);
+    const m = src.match(/^<!--(\{[\s\S]*?\})-->\s*/);
+    if (!m) throw new Error(`${loc}/${file}: missing front matter`);
+    const meta = JSON.parse(m[1]);
+    const body = src.slice(m[0].length);
 
-  const out = layout
-    .replaceAll('{{title}}', meta.title)
-    .replaceAll('{{description}}', meta.description)
-    .replaceAll('{{canonical}}', `${SITE}/${path}`)
-    .replaceAll('{{bodyClass}}', meta.bodyClass || '')
-    .replace('{{head}}', meta.head || '')
-    .replace('{{header}}', nav)
-    .replace('{{footer}}', footer
-      .replace('{{actionHref}}', meta.actionHref || 'login.html?next=portal.html%23%2Fnew&signup=homeowner')
-      .replace('{{actionLabel}}', meta.actionLabel || 'Get a price'))
-    .replace('{{content}}', body.trim());
+    const hasEn = EN.has(file), hasPl = PL.has(file);
+    // Language switch: counterpart page if it exists, otherwise the same page with ?lang= (portal pages translate in JS).
+    const enHref = loc === 'en' ? file : (hasEn ? `../${file}` : '../index.html');
+    const plHref = loc === 'pl' ? file : (hasPl ? `pl/${file === 'index.html' ? '' : file}` : `${file}?lang=pl`);
+    const alternates = hasEn && hasPl
+      ? [`<link rel="alternate" hreflang="en-GB" href="${pageUrl('en', file)}">`, `<link rel="alternate" hreflang="pl" href="${pageUrl('pl', file)}">`, `<link rel="alternate" hreflang="x-default" href="${pageUrl('en', file)}">`].join('\n')
+      : '';
 
-  writeFileSync(new URL(`./${file}`, import.meta.url), out);
-  console.log('built', file);
+    let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
+    if (['lift-slide', 'sliding', 'bifold', 'products'].includes(meta.nav)) nav = nav.replace('data-group="doors"', 'data-group="doors" data-current');
+    nav = nav.replace('{{enHref}}', enHref).replace('{{plHref}}', plHref)
+      .replace('{{enCurrent}}', loc === 'en' && !meta.lang ? 'aria-current="true"' : '')
+      .replace('{{plCurrent}}', loc === 'pl' ? 'aria-current="true"' : '');
+
+    const out = layout
+      .replaceAll('{{title}}', meta.title)
+      .replaceAll('{{description}}', meta.description)
+      .replaceAll('{{canonical}}', pageUrl(loc, file))
+      .replaceAll('{{bodyClass}}', meta.bodyClass || '')
+      .replaceAll('{{root}}', L.root)
+      .replace('{{lang}}', L.lang)
+      .replace('{{ogLocale}}', L.og)
+      .replace('{{alternates}}', alternates)
+      .replace('{{skip}}', L.skip)
+      .replace('{{prelaunch}}', L.prelaunch)
+      .replace('{{head}}', meta.head || '')
+      .replace('{{header}}', nav)
+      .replace('{{footer}}', footer
+        .replace('{{actionHref}}', meta.actionHref || L.actionHref)
+        .replace('{{actionLabel}}', meta.actionLabel || L.actionLabel))
+      .replace('{{content}}', body.trim());
+
+    writeFileSync(url(`${L.out}${file}`), out);
+    console.log('built', `${loc}/${file}`);
+  }
 }
