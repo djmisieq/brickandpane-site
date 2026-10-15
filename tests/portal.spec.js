@@ -1,5 +1,5 @@
 // Client portal + staff CRM in demo mode. Two tabs share data (localStorage) but not sessions.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/login.html');
@@ -181,4 +181,38 @@ test('an internal note stays internal when the page updates live', async ({ page
   await client.reload();
   await client.locator('[data-tab="messages"]').click();
   await expect(client.locator('.thread')).not.toContainText('Margin is fine');
+});
+
+test('live mode offers only the sign-in providers switched on in Supabase', async ({ page }) => {
+  // Pretend the portal is connected: fake config, auth settings with Google and Microsoft on, Apple off.
+  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://fake.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
+  await page.route('https://fake.supabase.co/**', (r) => {
+    const url = r.request().url();
+    if (url.endsWith('/auth/v1/settings')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ external: { google: true, azure: true, apple: false, email: true } }) });
+    if (url.includes('/authorize')) return r.fulfill({ body: 'provider page' });
+    return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
+  });
+  await page.goto('/login.html?signup=homeowner');
+  const signup = page.locator('[data-signup] [data-oauth]');
+  await expect(signup.locator('[data-provider]')).toHaveText(['Continue with Google', 'Continue with Microsoft']);
+  await expect(page.locator('[data-demo]')).toBeHidden();
+  await signup.locator('[data-provider="google"]').click();
+  await expect(page).toHaveURL(/fake\.supabase\.co\/auth\/v1\/authorize\?provider=google/);
+  expect(decodeURIComponent(page.url())).toContain('redirect_to=http://127.0.0.1:4173/portal.html');
+  await page.goto('/404.html'); // back on our origin to read what was stored before the redirect
+  expect(await page.evaluate(() => localStorage.getItem('bp-oauth-account-type'))).toBe('homeowner');
+});
+
+test('Polish login labels the provider buttons in Polish', async ({ page }) => {
+  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://fake.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
+  await page.route('https://fake.supabase.co/**', (r) => r.request().url().endsWith('/auth/v1/settings') ? r.fulfill({ contentType: 'application/json', body: '{"external":{"google":true}}' }) : r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
+  await page.goto('/pl/login.html');
+  await expect(page.locator('[data-signin] [data-provider="google"]')).toHaveText('Kontynuuj przez Google');
+  await expect(page.locator('[data-signin] .oauth-or')).toHaveText('albo zaloguj się e-mailem');
+});
+
+test('demo mode shows no provider buttons', async ({ page }) => {
+  await page.goto('/login.html');
+  await expect(page.locator('[data-demo]')).toBeVisible();
+  await expect(page.locator('[data-oauth]').first()).toBeHidden();
 });

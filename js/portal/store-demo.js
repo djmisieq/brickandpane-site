@@ -146,6 +146,7 @@ export const store = {
     save(s); setSession(u.id);
     return { needsConfirmation: false };
   },
+  async authProviders() { return []; },
   async sendMagicLink() { throw new Error('Magic links are not available in demo mode.'); },
   async signOut() { setSession(null); },
   async resetDemo() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } mem = null; load(); emit(); },

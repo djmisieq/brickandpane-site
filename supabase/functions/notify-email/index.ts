@@ -1,5 +1,6 @@
 // Supabase Edge Function: email a notification when a row is inserted into public.notifications.
-// Wire it up with a Database Webhook (table: notifications, event: INSERT) pointing at this function.
+// Called by the trigger in supabase/migrations/0006_notify_email_trigger.sql (pg_net) on every new notification.
+// Deploy with: supabase functions deploy notify-email --no-verify-jwt
 // Secrets: RESEND_API_KEY, MAIL_FROM (e.g. "Brick & Pane <projects@brickandpane.co.uk>"), PORTAL_URL,
 // plus SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided automatically).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -10,9 +11,12 @@ const PORTAL_URL = Deno.env.get('PORTAL_URL') ?? 'https://brickandpane.co.uk/por
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 Deno.serve(async (req) => {
-  const payload = await req.json();
-  const n = payload.record;
-  if (!n || payload.type !== 'INSERT') return new Response('ignored', { status: 200 });
+  // The caller only says which notification to send. Everything else is read from the database, so a forged
+  // request cannot put its own text in an email, and each notification is emailed once, while it is fresh.
+  const payload = await req.json().catch(() => ({}));
+  if (payload.type !== 'INSERT' || typeof payload.record?.id !== 'string') return new Response('ignored', { status: 200 });
+  const { data: n } = await supabase.from('notifications').select('*').eq('id', payload.record.id).maybeSingle();
+  if (!n || n.emailed_at || Date.now() - new Date(n.created_at).getTime() > 10 * 60e3) return new Response('skipped', { status: 200 });
 
   const { data: profile } = await supabase.from('profiles').select('full_name, notify_email, role').eq('id', n.user_id).single();
   if (!profile?.notify_email) return new Response('opted out', { status: 200 });

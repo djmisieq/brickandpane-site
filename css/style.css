@@ -571,6 +571,12 @@ fieldset{border:0;padding:0;min-width:0}
 .auth-card{background:var(--surface);border:1px solid var(--line);padding:var(--s-l);display:grid;gap:var(--s-m)}
 .auth-card .tabs{margin-bottom:0}
 .auth-form{display:grid;gap:var(--s-m)}
+.oauth{display:grid;gap:var(--s-2xs)}
+.btn-oauth{display:flex;align-items:center;justify-content:center;gap:.7rem;width:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong)}
+.btn-oauth:hover{background:var(--surface-2);color:var(--ink);border-color:var(--ink)}
+.btn-oauth svg{width:1.15rem;height:1.15rem;flex:none}
+.oauth-or{display:flex;align-items:center;gap:.8rem;margin:.4rem 0 0;font-size:var(--step--1);color:var(--ink-2)}
+.oauth-or::before,.oauth-or::after{content:"";flex:1;border-top:1px solid var(--line)}
 .demo-login{border-top:1px solid var(--line);padding-top:var(--s-m);display:grid;gap:var(--s-s);font-size:var(--step--1)}
 body.app .site-footer{display:none}
 
