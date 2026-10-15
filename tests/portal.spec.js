@@ -1,5 +1,5 @@
 // Client portal + staff CRM in demo mode. Two tabs share data (localStorage) but not sessions.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/login.html');

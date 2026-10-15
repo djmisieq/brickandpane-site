@@ -1,5 +1,5 @@
 // Polish version under /pl/: pages, language switch, tools, form and client portal.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',

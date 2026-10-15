@@ -1,5 +1,5 @@
 // End-to-end tests for the public site. Run with `npm test`.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',

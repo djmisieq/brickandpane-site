@@ -1,5 +1,5 @@
 // Automated accessibility audit (axe-core, WCAG 2.2 A/AA) of every public page, English and Polish.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import AxeBuilder from '@axe-core/playwright';
 
 const PAGES = [

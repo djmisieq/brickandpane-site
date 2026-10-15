@@ -1,7 +1,7 @@
 // Layout and consistency checks for every public page, English and Polish, on desktop, tablet and phone.
 // They catch what the eye catches: content cut off or hidden in a sideways scroller, squeezed captions,
 // tiny text and tap targets, the action bar covering content, and phones losing what the desktop shows.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',

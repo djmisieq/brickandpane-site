@@ -1,6 +1,6 @@
 // Visual baselines for the key pages on desktop, tablet and phone. Tagged @visual: baselines are per OS,
 // so CI (Linux) skips them. Refresh after an intended design change: npx playwright test --grep @visual --update-snapshots
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 const PAGES = ['index', 'products', 'lift-and-slide-doors', 'windows', 'contact', 'pl/bifold-doors'];
 

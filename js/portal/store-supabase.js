@@ -57,7 +57,7 @@ export const store = {
   async authProviders() {
     try {
       const s = await (await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } })).json();
-      return ['google', 'apple', 'azure'].filter((p) => s.external?.[p]);
+      return ['google', 'azure'].filter((p) => s.external?.[p]);
     } catch { return []; }
   },
   async signInWithProvider(provider, redirectTo, accountType) {
