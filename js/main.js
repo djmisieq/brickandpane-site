@@ -440,7 +440,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       const btn = $('button[type=submit]', form);
       status.hidden = false; status.classList.remove('is-error');
       if (!endpoint) {
-        status.innerHTML = t('<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Your details are still in the form.', '<strong>Tryb podglądu — nic nie zostało wysłane.</strong> Formularz nie jest jeszcze podłączony. Wyślij rysunki na <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>. Twoje dane nadal są w formularzu.');
+        status.innerHTML = t('<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Your details are still in the form.', '<strong>Tryb podglądu — nic nie zostało wysłane.</strong> Formularz nie jest jeszcze podłączony. Wyślij rysunki na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Twoje dane nadal są w formularzu.');
         status.focus();
         return;
       }
@@ -452,7 +452,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         location.href = 'thank-you.html';
       } catch {
         status.classList.add('is-error');
-        status.innerHTML = t('We couldn’t send that. Your details are still here — try again, or email <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>.', 'Nie udało się wysłać. Twoje dane nadal tu są — spróbuj ponownie albo napisz na <a href="mailto:hello@brickandpane.co.uk">hello@brickandpane.co.uk</a>.');
+        status.innerHTML = t('We couldn’t send that. Your details are still here — try again, or email <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.', 'Nie udało się wysłać. Twoje dane nadal tu są — spróbuj ponownie albo napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.');
         status.focus();
         btn.disabled = false; btn.textContent = t('Send for review', 'Wyślij do oceny');
       }
