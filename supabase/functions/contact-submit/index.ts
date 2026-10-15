@@ -15,7 +15,8 @@ const safeName = (s: string) => s.normalize('NFKD').replace(/[^\w.\- ]+/g, '').r
 const str = (f: FormData, k: string, max = 500) => { const v = f.get(k); return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null; };
 const int = (f: FormData, k: string) => { const n = parseInt(str(f, k) ?? '', 10); return Number.isFinite(n) ? n : null; };
 
-const mail = (to: string | string[], subject: string, html: string, replyTo?: string) => fetch('https://api.resend.com/emails', {
+// Until Resend is set up (RESEND_API_KEY + MAIL_FROM) requests are only saved; staff see them in contact_requests.
+const mail = (to: string | string[], subject: string, html: string, replyTo?: string) => !Deno.env.get('RESEND_API_KEY') || !Deno.env.get('MAIL_FROM') ? Promise.resolve(null) : fetch('https://api.resend.com/emails', {
   method: 'POST',
   headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
   body: JSON.stringify({ from: Deno.env.get('MAIL_FROM'), to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),

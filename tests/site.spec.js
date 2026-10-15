@@ -176,7 +176,7 @@ test.describe('budget estimates', () => {
 test.describe('homeowner & mobile details', () => {
   test('contact form adapts to a homeowner and carries opening sizes', async ({ page }) => {
     await page.goto('/contact.html?role=homeowner&system=bifold&w=4800&h=2400');
-    await expect(page.locator('[data-preview-note]')).toBeVisible();
+    await expect(page.locator('[data-preview-note]')).toBeHidden(); // the form is connected to Supabase
     await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
     await page.locator('#step-1 [data-next]').click();
     await expect(page.locator('#f-ow')).toHaveValue('4800');
@@ -198,6 +198,12 @@ test.describe('homeowner & mobile details', () => {
 
 test.describe('quote form', () => {
   test('validates each step and never pretends to send', async ({ page }) => {
+    // Never reach the real Supabase function from tests: fail the first send, accept the second.
+    const sent = [];
+    await page.route('**/functions/v1/contact-submit', (route) => {
+      sent.push(route.request().postData() || '');
+      return route.fulfill(sent.length === 1 ? { status: 500, body: '{}' } : { status: 200, contentType: 'application/json', body: '{"ok":true,"ref":"BP-TEST"}' });
+    });
     await page.goto('/contact.html?role=architect&system=bifold');
     await expect(page.locator('input[name="role"][value="architect"]')).toBeChecked();
     await page.fill('#f-email', 'bad');
@@ -216,11 +222,21 @@ test.describe('quote form', () => {
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('#step-3 .field.has-error')).toHaveCount(1);
     await page.check('input[name="consent"]');
+    await page.fill('#f-link', 'wetransfer');
     await page.locator('button[type="submit"]').click();
-    await expect(page.locator('[data-form-status]')).toContainText('Preview mode');
+    await expect(page.locator('#f-link')).toBeFocused();
+    expect(sent).toHaveLength(0);
+    await page.fill('#f-link', 'https://we.tl/t-abc123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('[data-form-status]')).toContainText('couldn’t send');
+    expect(sent[0]).toContain('https://we.tl/t-abc123');
     await page.locator('#step-3 [data-prev]').click();
     await page.locator('#step-2 [data-prev]').click();
     await expect(page.locator('#f-name')).toHaveValue('Anna Clarke');
+    await page.locator('#step-1 [data-next]').click();
+    await page.locator('#step-2 [data-next]').click();
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/thank-you\.html$/);
   });
 });
 
