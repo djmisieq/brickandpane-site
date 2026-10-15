@@ -21,6 +21,7 @@
         </div>
         <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
         <form data-auth-panel="signin" data-signin class="auth-form">
+          <div class="oauth" data-oauth hidden></div>
           <div class="field"><label for="si-email">E-mail</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
           <div class="field"><label for="si-pw">Hasło</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
           <div class="btn-row"><button class="btn" type="submit">Zaloguj się</button><button class="linkish" type="button" data-magic>Wyślij mi link do logowania</button></div>
@@ -33,6 +34,7 @@
               <label class="choice"><input type="radio" name="account_type" value="homeowner"><span>Właścicielem domu</span></label>
             </div>
           </fieldset>
+          <div class="oauth" data-oauth hidden></div>
           <div class="field-row">
             <div class="field"><label for="su-name">Imię i nazwisko</label><input id="su-name" name="full_name" autocomplete="name" required></div>
             <div class="field"><label for="su-co">Pracownia / firma <span class="hint">opcjonalnie</span></label><input id="su-co" name="company" autocomplete="organization"></div>

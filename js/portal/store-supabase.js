@@ -22,6 +22,7 @@ const subscribe = () => {
 sb.auth.onAuthStateChange(() => emit());
 
 const PROFILE = 'id, full_name, company, role, account_type';
+const PENDING_TYPE = 'bp-oauth-account-type';
 const safeName = (n) => n.replace(/[^\w.\- ]+/g, '_').slice(-120);
 
 async function upload(pid, file) {
@@ -38,12 +39,30 @@ export const store = {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null;
     const p = ok(await sb.from('profiles').select('*').eq('id', user.id).single());
+    // First sign-in through Google/Apple/Microsoft: apply the account type picked on the sign-up panel.
+    let pending = null;
+    try { pending = localStorage.getItem(PENDING_TYPE); localStorage.removeItem(PENDING_TYPE); } catch { /* ignore */ }
+    if (['architect', 'developer', 'homeowner'].includes(pending) && pending !== p.account_type && Date.now() - new Date(user.created_at).getTime() < 15 * 60e3) {
+      ok(await sb.from('profiles').update({ account_type: pending }).eq('id', user.id));
+      p.account_type = pending;
+    }
     return { ...p, email: user.email };
   },
   async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); },
   async signUp({ email, password, full_name, company, account_type = 'architect' }) {
     const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company, account_type }, emailRedirectTo: new URL('portal.html', location.href).href } }));
     return { needsConfirmation: !data.session };
+  },
+  // Providers switched on in Supabase (Authentication → Sign In / Providers), read from the public auth settings.
+  async authProviders() {
+    try {
+      const s = await (await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } })).json();
+      return ['google', 'apple', 'azure'].filter((p) => s.external?.[p]);
+    } catch { return []; }
+  },
+  async signInWithProvider(provider, redirectTo, accountType) {
+    try { if (accountType) localStorage.setItem(PENDING_TYPE, accountType); else localStorage.removeItem(PENDING_TYPE); } catch { /* ignore */ }
+    ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo, ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
   },
   async sendMagicLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL('portal.html', location.href).href } })); },
   async signOut() { await sb.auth.signOut(); },

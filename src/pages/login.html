@@ -21,6 +21,7 @@
         </div>
         <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
         <form data-auth-panel="signin" data-signin class="auth-form">
+          <div class="oauth" data-oauth hidden></div>
           <div class="field"><label for="si-email">Email</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
           <div class="field"><label for="si-pw">Password</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
           <div class="btn-row"><button class="btn" type="submit">Sign in</button><button class="linkish" type="button" data-magic>Email me a sign-in link instead</button></div>
@@ -33,6 +34,7 @@
               <label class="choice"><input type="radio" name="account_type" value="homeowner"><span>Homeowner</span></label>
             </div>
           </fieldset>
+          <div class="oauth" data-oauth hidden></div>
           <div class="field-row">
             <div class="field"><label for="su-name">Name</label><input id="su-name" name="full_name" autocomplete="name" required></div>
             <div class="field"><label for="su-co">Practice / company <span class="hint">optional</span></label><input id="su-co" name="company" autocomplete="organization"></div>
