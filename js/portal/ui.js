@@ -293,6 +293,9 @@ export function timelinePanel(d, viewer, audience = viewer === 'staff' ? 'staff'
   </ol>`;
 }
 
+// Message composer state per project, kept across live re-renders.
+const composerDrafts = new Map();
+
 // Wires the shared panels. `refresh` re-renders after a change.
 export function bindDetail(root, d, refresh) {
   $$('[data-tab]', root).forEach((b) => b.addEventListener('click', () => refresh(b.dataset.tab)));
@@ -324,18 +327,32 @@ export function bindDetail(root, d, refresh) {
   });
   $$('[data-paid]', root).forEach((b) => b.addEventListener('click', async () => { try { await store.markPaid(b.dataset.paid); } catch (err) { toast(tr(err.message)); } }));
   const composer = $('[data-message]', root);
+  // Live updates re-render the whole panel. Keep the chosen mode and the draft, or an internal note
+  // the staff member is writing would silently flip back to "message to client".
+  const draft = composerDrafts.get(d.project.id) || { mode: 'client', body: '' };
+  const setMode = (internal) => {
+    composer.dataset.mode = internal ? 'internal' : 'client';
+    const radio = $(`input[name="mode"][value="${internal ? 'internal' : 'client'}"]`, composer);
+    if (radio) radio.checked = true;
+    $('button[type=submit]', composer).textContent = tr(internal ? 'Save internal note' : (radio ? 'Send to client' : 'Send'));
+    $('.composer-hint', composer).textContent = tr(internal ? 'Only Brick & Pane staff can see internal notes.' : (radio ? 'The client will see this and get an email.' : 'Your Brick & Pane contact gets an email.'));
+    composer.body.placeholder = tr(internal ? 'Internal note — staff only…' : (radio ? 'Write to the client…' : 'Write a message…'));
+  };
+  if (composer) {
+    composer.body.value = draft.body;
+    if (draft.mode === 'internal' && $('input[name="mode"]', composer)) setMode(true);
+  }
   composer?.addEventListener('change', (e) => {
     if (e.target.name !== 'mode') return;
-    const internal = e.target.value === 'internal';
-    composer.dataset.mode = internal ? 'internal' : 'client';
-    $('button[type=submit]', composer).textContent = tr(internal ? 'Save internal note' : 'Send to client');
-    $('.composer-hint', composer).textContent = tr(internal ? 'Only Brick & Pane staff can see internal notes.' : 'The client will see this and get an email.');
-    composer.body.placeholder = tr(internal ? 'Internal note — staff only…' : 'Write to the client…');
+    draft.mode = e.target.value === 'internal' ? 'internal' : 'client';
+    composerDrafts.set(d.project.id, draft);
+    setMode(draft.mode === 'internal');
   });
+  composer?.addEventListener('input', (e) => { if (e.target.name === 'body') { draft.body = e.target.value; composerDrafts.set(d.project.id, draft); } });
   composer?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const body = f.body.value.trim(); if (!body) return;
     const internal = f.dataset.mode === 'internal';
-    try { await store.addMessage(d.project.id, body, internal); f.body.value = ''; } catch (err) { toast(tr(err.message)); }
+    try { await store.addMessage(d.project.id, body, internal); f.body.value = ''; draft.body = ''; composerDrafts.set(d.project.id, draft); } catch (err) { toast(tr(err.message)); }
   });
   $('[data-client-upload]', root)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const files = [...e.currentTarget.files.files]; if (!files.length) return;
