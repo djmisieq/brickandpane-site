@@ -3,3 +3,4 @@ test-results/
 playwright-report/
 tests/visual.spec.js-snapshots/
 _*.mjs
+supabase/.temp/

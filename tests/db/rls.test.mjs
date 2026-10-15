@@ -97,6 +97,7 @@ test('quote requests: the public cannot read or write them, staff triage them', 
   assert.match(r.ref, /^BP-\d{6}-[0-9A-F]{4}$/);
   assert.equal(r.status, 'new');
   await fails(`insert into public.contact_requests (name, email, consent_at) values ('Bad', 'not-an-email', now())`);
+  await fails(`insert into public.contact_requests (name, email, consent_at, files_link) values ('Bad', 'a@b.co', now(), 'javascript:alert(1)')`);
   await db.exec('reset role');
   // Anyone on the internet (anon) and ordinary clients see nothing and cannot add rows directly.
   await db.exec('set role anon');
