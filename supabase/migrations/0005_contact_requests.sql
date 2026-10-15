@@ -25,6 +25,7 @@ create table public.contact_requests (
   opening_height_mm int check (opening_height_mm between 0 and 100000),
   message text check (length(message) <= 10000),
   files text[] not null default '{}',   -- paths in the private bucket "enquiries": <request id>/<file name>
+  files_link text check (files_link ~* '^https?://' and length(files_link) <= 1000),  -- WeTransfer/Dropbox/Drive link for sets over the upload limit
   consent_at timestamptz not null,
   project_id uuid references public.projects (id) on delete set null,  -- set when staff turn it into a portal project
   staff_note text

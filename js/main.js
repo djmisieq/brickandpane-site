@@ -386,6 +386,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const validators = {
       name: (v) => v.trim().length > 1 || t('Enter your name.', 'Wpisz imię i nazwisko.'),
       email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) || t('Enter an email like name@practice.co.uk.', 'Wpisz e-mail, np. imie@firma.co.uk.'),
+      files_link: (v) => !v.trim() || /^https?:\/\/\S+\.\S+$/i.test(v.trim()) || t('Paste the full link, starting with https://', 'Wklej pełny link, zaczynający się od https://'),
       location: (v) => v.trim().length > 1 || t('Enter a postcode or borough so we can check access and planning context.', 'Wpisz kod pocztowy lub dzielnicę, żebyśmy mogli sprawdzić dojazd i uwarunkowania planistyczne.'),
     };
     const fieldError = (field, msg) => {
@@ -420,8 +421,8 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const MAX_MB = 50, MAX_TOTAL = 100;
     const renderFiles = () => {
       const files = [...fileInput.files]; let total = 0, err = '';
-      list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = t(`${fl.name} is over ${MAX_MB} MB — export a PDF or add a WeTransfer link in your message.`, `${fl.name} ma ponad ${MAX_MB} MB — wyeksportuj PDF albo dodaj link WeTransfer w wiadomości.`); return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');
-      if (total > MAX_TOTAL * 1e6) err = t(`Files total over ${MAX_TOTAL} MB — add a WeTransfer or Dropbox link in your message instead.`, `Pliki mają łącznie ponad ${MAX_TOTAL} MB — zamiast tego dodaj link WeTransfer lub Dropbox w wiadomości.`);
+      list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = t(`${fl.name} is over ${MAX_MB} MB — export a PDF or paste a WeTransfer or Dropbox link in the field below.`, `${fl.name} ma ponad ${MAX_MB} MB — wyeksportuj PDF albo wklej link WeTransfer lub Dropbox w polu poniżej.`); return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');
+      if (total > MAX_TOTAL * 1e6) err = t(`Files total over ${MAX_TOTAL} MB — paste a WeTransfer or Dropbox link in the field below instead.`, `Pliki mają łącznie ponad ${MAX_TOTAL} MB — zamiast tego wklej link WeTransfer lub Dropbox w polu poniżej.`);
       fieldError(fileInput.closest('.field'), err);
       return !err;
     };
