@@ -4,13 +4,13 @@
     <div class="span-5">
       <span class="eyebrow">Panel projektu</span>
       <h1 class="app-h1" style="font-size:var(--step-4)">Każdy projekt, każdy etap, bez telefonów.</h1>
-      <ul class="checklist" style="margin-top:1.5rem;display:grid;gap:.6rem;color:var(--ink-2)">
+      <ul class="checklist" style="margin-top:1.5rem;color:var(--ink-2)">
         <li>Wysyłasz rysunki i zestawienie otworów do oceny</li>
         <li>Widzisz, kto ma teraz piłkę i kiedy wypada następna aktualizacja</li>
         <li>Akceptujesz wyceny i rysunki warsztatowe online</li>
         <li>Zadajesz pytania w jednym wątku, który widzi cały zespół</li>
         <li>Dostajesz e-mail, gdy tylko coś się zmienia</li>
-        <li>Właściciele domów: budżet od razu i śledzenie zamówienia jak w sklepie internetowym</li>
+        <li>Właściciele domów: Twoje zapytania i śledzenie zamówienia jak w sklepie internetowym</li>
       </ul>
     </div>
     <div class="start-7" style="grid-column:7 / span 6">
@@ -20,13 +20,13 @@
           <button type="button" role="tab" aria-selected="false" data-auth-tab="signup">Załóż konto</button>
         </div>
         <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
-        <form data-auth-panel="signin" data-signin class="auth-form">
+        <form data-auth-panel="signin" data-signin class="auth-form" method="post">
           <div class="oauth" data-oauth hidden></div>
           <div class="field"><label for="si-email">E-mail</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
-          <div class="field"><label for="si-pw">Hasło</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
-          <div class="btn-row"><button class="btn" type="submit">Zaloguj się</button><button class="linkish" type="button" data-magic>Wyślij mi link do logowania</button></div>
+          <div class="field"><label for="si-pw">Hasło</label><input id="si-pw" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="btn-row"><button class="btn" type="submit">Zaloguj się</button><button class="linkish" type="button" data-magic>Nie pamiętasz hasła? Wyślij mi link do logowania</button></div>
         </form>
-        <form data-auth-panel="signup" data-signup class="auth-form" hidden>
+        <form data-auth-panel="signup" data-signup class="auth-form" method="post" hidden>
           <fieldset class="field"><legend>Jestem…</legend>
             <div class="choice-grid">
               <label class="choice"><input type="radio" name="account_type" value="architect" checked><span>Architektem / projektantem</span></label>

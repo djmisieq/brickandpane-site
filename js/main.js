@@ -12,17 +12,22 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
   const nav = $('#primary-nav');
   const toggle = $('.menu-toggle');
 
+  const navTop = () => nav?.style.setProperty('--nav-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`);
   const setMenu = (open) => {
     if (!nav || !toggle) return;
     if (open) {
-      nav.style.setProperty('--nav-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`);
+      navTop();
       $$('.has-sub[data-current] .sub-toggle', nav).forEach((b) => b.setAttribute('aria-expanded', 'true'));
     }
     nav.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
     $('.menu-toggle-label', toggle).textContent = open ? t('Close', 'Zamknij') : 'Menu';
     document.body.classList.toggle('nav-open', open);
+    // The open menu covers the page: keep keyboard focus inside it, starting at the first item.
+    $$('main, .site-footer, .action-bar, .prelaunch, .header-cta').forEach((el) => { el.inert = open; });
+    if (open) $('a, button', nav)?.focus();
   };
+  addEventListener('resize', () => { if (nav?.classList.contains('is-open')) navTop(); });
   toggle?.addEventListener('click', () => setMenu(!nav.classList.contains('is-open')));
   nav?.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
   document.addEventListener('keydown', (e) => {
@@ -39,6 +44,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     closeSubs(b); b.setAttribute('aria-expanded', String(open));
   }));
   document.addEventListener('click', (e) => { if (!e.target.closest('.has-sub') && matchMedia('(min-width:1100px)').matches) closeSubs(); });
+  $$('.has-sub').forEach((li) => li.addEventListener('focusout', (e) => { if (!li.contains(e.relatedTarget) && matchMedia('(min-width:1100px)').matches) closeSubs(); }));
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const open = subs.find((b) => b.getAttribute('aria-expanded') === 'true');
@@ -72,6 +78,13 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
   // Hide the sticky mobile action bar while typing so it never covers a field.
   document.addEventListener('focusin', (e) => { if (e.target.matches('input, select, textarea')) document.body.classList.add('is-typing'); });
   document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement?.matches?.('input, select, textarea')) document.body.classList.remove('is-typing'); }, 50));
+
+  $$('.lang-switch a').forEach((a) => { if (!a.hasAttribute('aria-current')) a.href = a.href.split(/[?#]/)[0] + location.search + location.hash; });
+
+  // The sticky action bar can wrap to two lines on narrow phones: pad the page by its real height.
+  const actionBar = $('.action-bar');
+  const barHeight = () => { if (actionBar?.offsetHeight) document.documentElement.style.setProperty('--action-bar-h', `${actionBar.offsetHeight}px`); };
+  barHeight(); addEventListener('resize', barHeight);
 
   const onScroll = () => header?.classList.toggle('is-scrolled', scrollY > 8);
   addEventListener('scroll', onScroll, { passive: true });
@@ -389,9 +402,15 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       files_link: (v) => !v.trim() || /^https?:\/\/\S+\.\S+$/i.test(v.trim()) || t('Paste the full link, starting with https://', 'Wklej pełny link, zaczynający się od https://'),
       location: (v) => v.trim().length > 1 || t('Enter a postcode or borough so we can check access and planning context.', 'Wpisz kod pocztowy lub dzielnicę, żebyśmy mogli sprawdzić dojazd i uwarunkowania planistyczne.'),
     };
+    let errId = 0;
     const fieldError = (field, msg) => {
       field.classList.toggle('has-error', !!msg);
       const err = $('.error', field); if (err) err.textContent = msg || '';
+      const ctl = $('[role=radiogroup], input:not([type=hidden]), select, textarea', field);
+      if (!ctl || !err) return;
+      if (!err.id) err.id = `err-${++errId}`;
+      if (msg) { ctl.setAttribute('aria-invalid', 'true'); ctl.setAttribute('aria-describedby', err.id); }
+      else { ctl.removeAttribute('aria-invalid'); ctl.removeAttribute('aria-describedby'); }
     };
     const validateStep = (i) => {
       let ok = true, first = null;
@@ -433,8 +452,17 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
       zone.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) { fileInput.files = e.dataTransfer.files; renderFiles(); } });
     }
 
+    const SUBMIT = t('Send enquiry', 'Wyślij zapytanie');
+    const ERRORS = {
+      files: t('The files are too large or too many (up to 20 files, 50 MB each, 100 MB in total). Paste a WeTransfer or Dropbox link instead.', 'Pliki są za duże albo jest ich za dużo (do 20 plików, po 50 MB, łącznie 100 MB). Zamiast tego wklej link WeTransfer lub Dropbox.'),
+      consent: t('Please tick the consent box so we can reply to you.', 'Zaznacz zgodę, żebyśmy mogli Ci odpowiedzieć.'),
+      name_email: t('Check your name and email address on step 1.', 'Sprawdź imię i adres e-mail w kroku 1.'),
+      timeout: t('This is taking too long, probably because of large files. Try again with a link to the files instead.', 'To trwa za długo, pewnie przez duże pliki. Spróbuj ponownie z linkiem do plików zamiast załączników.'),
+    };
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      // Enter in a field on step 1 or 2 means "Continue", not "send the whole form".
+      if (current < steps.length - 1) { if (validateStep(current)) go(current + 1); return; }
       if (!validateStep(current) || (fileInput && !renderFiles())) return;
       const endpoint = form.dataset.endpoint;
       const btn = $('button[type=submit]', form);
@@ -444,19 +472,40 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         status.focus();
         return;
       }
+      const big = [...(fileInput?.files || [])].reduce((n, x) => n + x.size, 0) > 10e6;
       btn.disabled = true; btn.textContent = t('Sending…', 'Wysyłanie…');
+      status.textContent = big ? t('Uploading your files. With large drawings this can take a minute or two, please keep this page open.', 'Wysyłamy pliki. Przy dużych rysunkach może to potrwać minutę lub dwie, nie zamykaj tej strony.') : '';
+      status.hidden = !big;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5 * 60e3);
       try {
-        const res = await fetch(endpoint, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(String(res.status));
+        const res = await fetch(endpoint, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' }, signal: ctrl.signal });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || String(res.status));
         try { localStorage.removeItem(DRAFT); } catch { /* ignore */ }
-        location.href = 'thank-you.html';
-      } catch {
+        // The thank-you page shows the reference, any files that didn't upload, and offers the portal for this email.
+        try { sessionStorage.setItem('bp-enquiry', JSON.stringify({ ref: data.ref || '', email: form.email.value.trim(), rejected: data.rejected || [] })); } catch { /* ignore */ }
+        location.href = `thank-you.html${data.ref ? `?ref=${encodeURIComponent(data.ref)}` : ''}`;
+      } catch (err) {
+        const code = err.name === 'AbortError' ? 'timeout' : err.message;
+        status.hidden = false;
         status.classList.add('is-error');
-        status.innerHTML = t('We couldn’t send that. Your details are still here — try again, or email <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.', 'Nie udało się wysłać. Twoje dane nadal tu są — spróbuj ponownie albo napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.');
+        status.innerHTML = `${ERRORS[code] || t('We couldn’t send that.', 'Nie udało się wysłać.')} ${t('Your details are still here. Try again, or email <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.', 'Twoje dane nadal tu są. Spróbuj ponownie albo napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.')}`;
         status.focus();
-        btn.disabled = false; btn.textContent = t('Send for review', 'Wyślij do oceny');
-      }
+        btn.disabled = false; btn.textContent = SUBMIT;
+      } finally { clearTimeout(timer); }
     });
+  }
+
+  /* ---------- thank-you page ---------- */
+  const refBox = $('[data-ref]');
+  if (refBox) {
+    let saved = {};
+    try { saved = JSON.parse(sessionStorage.getItem('bp-enquiry') || '{}'); } catch { /* ignore */ }
+    const ref = new URLSearchParams(location.search).get('ref') || saved.ref;
+    if (ref) { $('[data-ref-value]', refBox).textContent = ref; refBox.hidden = false; }
+    const rej = $('[data-rejected]');
+    if (rej && saved.rejected?.length) { $('[data-rejected-list]', rej).textContent = saved.rejected.join(', '); rej.hidden = false; }
   }
 
   // Material advisor (materials page): three answers -> a suggested material, with the reasons and caveats.

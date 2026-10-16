@@ -14,13 +14,13 @@ const LOCALES = {
     dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB',
     skip: 'Skip to content',
     prelaunch: 'Pre-launch preview. Values marked <span class="tag">Indicative</span> are being verified against test certificates.',
-    actionHref: 'login.html?next=portal.html%23%2Fnew&signup=homeowner', actionLabel: 'Get a price',
+    actionHref: 'portal.html', actionLabel: 'Client portal',
   },
   pl: {
     dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL',
     skip: 'Przejdź do treści',
     prelaunch: 'Wersja przedpremierowa. Wartości oznaczone <span class="tag">Orientacyjnie</span> są weryfikowane na podstawie certyfikatów badań.',
-    actionHref: 'login.html?next=portal.html%23%2Fnew&signup=homeowner', actionLabel: 'Poznaj cenę',
+    actionHref: 'portal.html', actionLabel: 'Panel klienta',
   },
 };
 const pagesOf = (loc) => (existsSync(url(LOCALES[loc].dir)) ? readdirSync(url(LOCALES[loc].dir)).filter((f) => f.endsWith('.html')) : []);
@@ -48,7 +48,10 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       ? [`<link rel="alternate" hreflang="en-GB" href="${pageUrl('en', file)}">`, `<link rel="alternate" hreflang="pl" href="${pageUrl('pl', file)}">`, `<link rel="alternate" hreflang="x-default" href="${pageUrl('en', file)}">`].join('\n')
       : '';
 
-    let nav = header.replace(new RegExp(`data-nav="${meta.nav}"`, 'g'), `data-nav="${meta.nav}" aria-current="page"`);
+    // aria-current="page" only on the link to this very page; a link to a sibling in the same section
+    // (the other guides, portal while on login) gets aria-current="true".
+    let nav = header.replace(new RegExp(`href="([^"]*)"([^>]*) data-nav="${meta.nav}"`, 'g'),
+      (m, href) => `${m} aria-current="${href.split('#')[0] === file ? 'page' : 'true'}"`);
     if (['lift-slide', 'sliding', 'bifold', 'products', 'windows', 'doors', 'facades', 'heritage'].includes(meta.nav)) nav = nav.replace('data-group="products"', 'data-group="products" data-current');
     nav = nav.replace('{{enHref}}', enHref).replace('{{plHref}}', plHref)
       .replace('{{enCurrent}}', loc === 'en' && !meta.lang ? 'aria-current="true"' : '')
@@ -67,7 +70,9 @@ for (const [loc, L] of Object.entries(LOCALES)) {
     content = content.replace(/<section([^>]*) data-tech>([\s\S]*?)<\/section>/g, (m, attrs, inner) => {
       const h2 = inner.match(/<h2[^>]*>[\s\S]*?<\/h2>/)[0];
       const label = loc === 'pl' ? 'Dane techniczne dla architektów' : 'Technical data for architects';
-      return `<section${attrs} data-tech><div class="container"><details class="tech"><summary><span class="tech-label">${label}</span>${h2}</summary>${inner.replace(h2, '')}</details></div></section>`;
+      // Moving the h2 out can leave its wrapper empty, which would hold an empty grid column: drop it.
+      const rest = inner.replace(h2, '').replace(/<div>\s*<\/div>/, '');
+      return `<section${attrs} data-tech><div class="container"><details class="tech"><summary><span class="tech-label">${label}</span>${h2}</summary>${rest}</details></div></section>`;
     });
 
     const out = layout
@@ -89,7 +94,8 @@ for (const [loc, L] of Object.entries(LOCALES)) {
         .replace('{{actionLabel}}', meta.actionLabel || L.actionLabel))
       .replace('{{content}}', content);
 
-    writeFileSync(url(`${L.out}${file}`), out);
+    // Always LF: sources may be checked out with CRLF (Windows), and CI compares the output byte for byte.
+    writeFileSync(url(`${L.out}${file}`), out.replace(/\r\n/g, '\n'));
     console.log('built', `${loc}/${file}`);
   }
 }

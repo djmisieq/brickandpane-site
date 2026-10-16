@@ -4,13 +4,13 @@
     <div class="span-5">
       <span class="eyebrow">Project portal</span>
       <h1 class="app-h1" style="font-size:var(--step-4)">Every project, every stage, without a phone call.</h1>
-      <ul class="checklist" style="margin-top:1.5rem;display:grid;gap:.6rem;color:var(--ink-2)">
+      <ul class="checklist" style="margin-top:1.5rem;color:var(--ink-2)">
         <li>Send drawings and an openings schedule for review</li>
         <li>See who has the ball, and when the next update is due</li>
         <li>Approve quotations and shop drawings online</li>
         <li>Ask questions in one thread the whole team sees</li>
         <li>Get an email the moment anything changes</li>
-        <li>Homeowners: get a budget straight away and track your order like an online shop</li>
+        <li>Homeowners: see your enquiries and track your order like an online shop</li>
       </ul>
     </div>
     <div class="start-7" style="grid-column:7 / span 6">
@@ -20,13 +20,13 @@
           <button type="button" role="tab" aria-selected="false" data-auth-tab="signup">Create account</button>
         </div>
         <div class="form-status" data-auth-status tabindex="-1" hidden role="status"></div>
-        <form data-auth-panel="signin" data-signin class="auth-form">
+        <form data-auth-panel="signin" data-signin class="auth-form" method="post">
           <div class="oauth" data-oauth hidden></div>
           <div class="field"><label for="si-email">Email</label><input id="si-email" name="email" type="email" autocomplete="email" required></div>
-          <div class="field"><label for="si-pw">Password</label><input id="si-pw" name="password" type="password" autocomplete="current-password"></div>
-          <div class="btn-row"><button class="btn" type="submit">Sign in</button><button class="linkish" type="button" data-magic>Email me a sign-in link instead</button></div>
+          <div class="field"><label for="si-pw">Password</label><input id="si-pw" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="btn-row"><button class="btn" type="submit">Sign in</button><button class="linkish" type="button" data-magic>Forgot your password? Email me a sign-in link</button></div>
         </form>
-        <form data-auth-panel="signup" data-signup class="auth-form" hidden>
+        <form data-auth-panel="signup" data-signup class="auth-form" method="post" hidden>
           <fieldset class="field"><legend>I'm a…</legend>
             <div class="choice-grid">
               <label class="choice"><input type="radio" name="account_type" value="architect" checked><span>Architect / designer</span></label>

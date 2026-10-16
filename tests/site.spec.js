@@ -236,7 +236,7 @@ test.describe('quote form', () => {
     await page.locator('#step-1 [data-next]').click();
     await page.locator('#step-2 [data-next]').click();
     await page.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(/thank-you\.html$/);
+    await expect(page).toHaveURL(/thank-you\.html\?ref=BP-TEST$/);
   });
 });
 

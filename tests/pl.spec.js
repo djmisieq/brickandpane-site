@@ -98,7 +98,7 @@ test.describe('Polish client portal', () => {
     await expect(page.locator('.appbar-title')).toHaveText('Twoje zamówienia');
     await expect(page.locator('.tracker').first()).toContainText('Oferta');
     await page.goto('/pl/portal.html#/new');
-    await expect(page.locator('h1')).toHaveText('Poznaj cenę');
+    await expect(page.locator('h1')).toHaveText('Dodaj swój otwór');
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('.field.has-error .error').first()).toHaveText('Pole wymagane.');
   });
