@@ -260,8 +260,8 @@ function newProject() {
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
     const sum = estimateProject(openings);
-    // Example rates are placeholders: don't store their totals, or the CRM would show them as a real estimate.
-    if (sum && !pricingIsExample()) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
+    // Example rates are placeholders: in the live portal don't store their totals, or the CRM would show them as a real estimate.
+    if (sum && (store.mode === 'demo' || !pricingIsExample())) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
     try { const id = await store.createProject(data, openings, files); toast(tr(home ? 'Sent. Your formal quote follows within two working days.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
     catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }
