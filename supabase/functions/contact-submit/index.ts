@@ -8,6 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const ORIGINS = (Deno.env.get('ALLOWED_ORIGIN') ?? 'https://brickandpane.co.uk').split(',').map((s) => s.trim());
+const SITE = 'https://brickandpane.co.uk';
 const MAX_FILE = 50 * 1024 * 1024, MAX_TOTAL = 100 * 1024 * 1024, MAX_FILES = 20;
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -46,7 +47,9 @@ Deno.serve(async (req) => {
   const link = str(f, 'files_link', 1000);
   const filesLink = link && /^https?:\/\/\S+$/i.test(link) ? link : null;
 
-  const lang = (req.headers.get('referer') ?? '').includes('/pl/') ? 'pl' : 'en';
+  // The form says which language it was sent in. Browsers strip the path from a cross-origin Referer,
+  // so the header is only a fallback for older copies of the page.
+  const lang = str(f, 'lang', 5) === 'pl' || (req.headers.get('referer') ?? '').includes('/pl/') ? 'pl' : 'en';
   const { data: row, error } = await supabase.from('contact_requests').insert({
     lang, name, email,
     role: str(f, 'role'), phone: str(f, 'phone', 60), company: str(f, 'company', 200), topic: str(f, 'topic'),
@@ -57,11 +60,11 @@ Deno.serve(async (req) => {
   }).select('id, ref').single();
   if (error || !row) return reply(500, { error: 'save' });
 
-  const paths: string[] = [];
+  const paths: string[] = [], rejected: string[] = [];
   for (const file of files) {
     const path = `${row.id}/${crypto.randomUUID().slice(0, 8)}-${safeName(file.name)}`;
     const up = await supabase.storage.from('enquiries').upload(path, file, { contentType: file.type || 'application/octet-stream' });
-    if (!up.error) paths.push(path);
+    if (up.error) rejected.push(file.name.slice(0, 120)); else paths.push(path);
   }
   if (paths.length) await supabase.from('contact_requests').update({ files: paths }).eq('id', row.id);
 
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
     ['Systems', f.getAll('systems').join(', ')], ['Material', f.getAll('material').join(', ')], ['Location', str(f, 'location')],
     ['RIBA stage', str(f, 'riba_stage')], ['Building', str(f, 'building')], ['Units', str(f, 'units')], ['Start', str(f, 'start')],
     ['Opening', int(f, 'opening_width_mm') ? `${int(f, 'opening_width_mm')} × ${int(f, 'opening_height_mm') ?? '?'} mm` : null],
-    ['Files', paths.length ? `${paths.length} in storage: enquiries/${row.id}/` : null], ['Files link', filesLink]].filter(([, v]) => v);
+    ['Files', paths.length ? `${paths.length} in storage: enquiries/${row.id}/` : null], ['Files NOT uploaded', rejected.join(', ') || null], ['Files link', filesLink]].filter(([, v]) => v);
   const team = Deno.env.get('ENQUIRY_TO');
   if (team) {
     await mail(team.split(','), `${row.ref} · ${name}${str(f, 'location') ? ` · ${str(f, 'location')}` : ''}`, `
@@ -91,7 +94,11 @@ Deno.serve(async (req) => {
         : 'Your request has reached us. One person will handle it from the first reply onwards. To add anything, just reply to this email.'}</p>
       ${paths.length ? `<p style="font-size:15px">${pl ? 'Załączone pliki' : 'Files received'}: ${paths.length}</p>` : ''}
       ${filesLink ? `<p style="font-size:15px">${pl ? 'Link do plików' : 'Files link'}: ${escape(filesLink)}</p>` : ''}
+      ${rejected.length ? `<p style="font-size:15px">${pl ? 'Tych plików nie udało się przesłać, wyślij je linkiem w odpowiedzi' : 'These files did not upload, please send them as a link in a reply'}: ${escape(rejected.join(', '))}</p>` : ''}
+      <p style="font-size:15px;line-height:1.5">${pl
+        ? `Możesz śledzić to zapytanie w <a href="${SITE}/pl/login.html?signup=1&amp;next=portal.html">panelu klienta</a>. Załóż konto na ten adres e-mail, a zapytanie pojawi się tam automatycznie.`
+        : `You can follow this enquiry in the <a href="${SITE}/login.html?signup=1&amp;next=portal.html">client portal</a>. Create an account with this email address and the enquiry appears there automatically.`}</p>
     </div>`, team?.split(',')[0]);
 
-  return reply(200, { ok: true, ref: row.ref });
+  return reply(200, { ok: true, ref: row.ref, rejected });
 });

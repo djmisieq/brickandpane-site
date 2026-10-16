@@ -21,7 +21,7 @@
         <h2 style="font-size:var(--step-2)">About you</h2>
         <div class="field">
           <span class="field-label" id="role-label" style="font-size:var(--step--1);font-weight:500">I'm a…</span>
-          <div class="choice-grid" role="radiogroup" aria-labelledby="role-label" data-validate="radio" data-name="role">
+          <div class="choice-grid" role="radiogroup" aria-labelledby="role-label" aria-required="true" data-validate="radio" data-name="role">
             <label class="choice"><input type="radio" name="role" value="architect"><span>Architect / designer</span></label>
             <label class="choice"><input type="radio" name="role" value="developer"><span>Developer / contractor</span></label>
             <label class="choice"><input type="radio" name="role" value="homeowner"><span>Homeowner</span></label>
@@ -35,7 +35,7 @@
         </div>
         <div class="field-row">
           <div class="field"><label for="f-phone">Phone <span class="hint">optional — only if you'd like a call</span></label><input id="f-phone" name="phone" type="tel" autocomplete="tel"></div>
-          <div class="field" data-for-role="architect developer other"><label for="f-company">Practice / company</label><input id="f-company" name="company" type="text" autocomplete="organization"></div>
+          <div class="field" data-for-role="architect developer other"><label for="f-company">Practice / company <span class="hint">optional</span></label><input id="f-company" name="company" type="text" autocomplete="organization"></div>
         </div>
         <div class="form-nav"><span></span><button class="btn" type="button" data-next>Continue</button></div>
       </fieldset>
@@ -61,9 +61,9 @@
           <div class="field"><label for="f-ow">Opening width (mm) <span class="hint">optional</span></label><input id="f-ow" name="opening_width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="e.g. 4800"></div>
           <div class="field"><label for="f-oh">Opening height (mm) <span class="hint">optional</span></label><input id="f-oh" name="opening_height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="e.g. 2400"></div>
         </div>
-        <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
+        <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" required aria-required="true" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
-          <legend>Products</legend>
+          <legend>Products <span class="hint">optional</span></legend>
           <div class="choice-grid">
             <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Windows</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>Entrance / French doors</span></label>
@@ -76,7 +76,7 @@
           </div>
         </fieldset>
         <fieldset class="field">
-          <legend>Material</legend>
+          <legend>Material <span class="hint">optional</span></legend>
           <div class="choice-grid">
             <label class="choice"><input type="radio" name="material" value="alu"><span>Aluminium</span></label>
             <label class="choice"><input type="radio" name="material" value="timber"><span>Timber</span></label>
@@ -86,10 +86,10 @@
           </div>
         </fieldset>
         <div class="field-row">
-          <div class="field" data-for-role="architect"><label for="f-stage">RIBA stage</label><select id="f-stage" name="riba_stage"><option value="">Select</option><option>0–1 Strategic / brief</option><option>2 Concept</option><option>3 Spatial coordination</option><option>4 Technical design</option><option>5 Manufacturing &amp; construction</option></select></div>
-          <div class="field" data-for-role="developer"><label for="f-units">Number of units / openings</label><input id="f-units" name="units" type="text" inputmode="numeric" placeholder="e.g. 24 units, c. 120 openings"></div>
-          <div class="field" data-for-role="homeowner other"><label for="f-type">Building</label><select id="f-type" name="building"><option value="">Select</option><option>Extension to an existing house</option><option>New-build house</option><option>Residential scheme</option><option>Flat / apartment</option><option>Listed or in a conservation area</option></select></div>
-          <div class="field"><label for="f-start">Start on site</label><select id="f-start" name="start"><option value="">Select</option><option>Within 3 months</option><option>3–6 months</option><option>6–12 months</option><option>Over 12 months / not sure</option></select></div>
+          <div class="field" data-for-role="architect"><label for="f-stage">RIBA stage <span class="hint">optional</span></label><select id="f-stage" name="riba_stage"><option value="">Select</option><option>0–1 Strategic / brief</option><option>2 Concept</option><option>3 Spatial coordination</option><option>4 Technical design</option><option>5 Manufacturing &amp; construction</option></select></div>
+          <div class="field" data-for-role="developer"><label for="f-units">Number of units / openings <span class="hint">optional</span></label><input id="f-units" name="units" type="text" inputmode="numeric" placeholder="e.g. 24 units, c. 120 openings"></div>
+          <div class="field" data-for-role="homeowner other"><label for="f-type">Building <span class="hint">optional</span></label><select id="f-type" name="building"><option value="">Select</option><option>Extension to an existing house</option><option>New-build house</option><option>Residential scheme</option><option>Flat / apartment</option><option>Listed or in a conservation area</option></select></div>
+          <div class="field"><label for="f-start">Start on site <span class="hint">optional</span></label><select id="f-start" name="start"><option value="">Select</option><option>Within 3 months</option><option>3–6 months</option><option>6–12 months</option><option>Over 12 months / not sure</option></select></div>
         </div>
         <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Back</button><button class="btn" type="button" data-next>Continue</button></div>
       </fieldset>
@@ -105,17 +105,18 @@
         </div>
         <div class="field"><label for="f-link">Link to larger files <span class="hint">optional</span></label><input id="f-link" name="files_link" type="url" inputmode="url" autocomplete="off" placeholder="WeTransfer, Dropbox or Google Drive link" data-validate><span class="error" role="alert"></span></div>
         <div class="field"><label for="f-msg">Anything else? <span class="hint">optional</span></label><textarea id="f-msg" name="message" placeholder="Opening sizes, what matters most (sightlines, threshold, budget, programme)…"></textarea></div>
-        <div class="field"><label class="consent"><input type="checkbox" name="consent" value="yes" data-validate="consent"> <span>I agree that Brick &amp; Pane can use these details to reply to my enquiry, as set out in the <a href="privacy.html">privacy notice</a>.</span></label><span class="error" role="alert"></span></div>
+        <div class="field"><label class="consent"><input type="checkbox" name="consent" value="yes" data-validate="consent" required> <span>I agree that Brick &amp; Pane can use these details to reply to my enquiry, as set out in the <a href="privacy.html">privacy notice</a>.</span></label><span class="error" role="alert"></span></div>
+        <input type="hidden" name="lang" value="en">
         <input type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
         <div class="form-status" data-form-status tabindex="-1" hidden role="status"></div>
-        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Back</button><button class="btn" type="submit">Send for review</button></div>
+        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Back</button><button class="btn" type="submit">Send enquiry</button></div>
       </fieldset>
     </form>
 
     <aside class="start-9" style="grid-column:9 / span 4">
       <h2 class="eyebrow">What happens next</h2>
       <ol class="process" style="grid-template-columns:1fr">
-        <li><h3>Confirmation</h3><p>An email with a copy of your enquiry and a reference.</p></li>
+        <li><h3>Confirmation</h3><p>An email confirming we have your enquiry, with its reference number.</p></li>
         <li><h3>A named person</h3><p>One person handles your project from first reply onwards.</p></li>
         <li><h3>Our response</h3><p>Architects: comments within 2 working days. Developers: a budget within 5. Homeowners: a first view and next steps within 2.</p></li>
       </ol>

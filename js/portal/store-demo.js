@@ -157,6 +157,11 @@ export const store = {
     Object.assign(s.users.find((x) => x.id === u.id), safe); save(s);
   },
 
+  async myEnquiries() {
+    const u = me(load());
+    if (u?.account_type !== 'homeowner') return [];
+    return [{ id: 'demo-enquiry', ref: 'BP-261013-7A3C', created_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'replied', topic: 'quote', systems: ['lift-slide'], project_id: null }];
+  },
   async listProjects() {
     const s = load(); const u = need(s);
     return s.projects.filter((p) => canSee(s, u, p.id))

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -15,7 +15,7 @@ const O = '55555555-5555-5555-5555-555555555555'; // unrelated client
 async function setup() {
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now());
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;
     create publication supabase_realtime; create schema storage;
@@ -111,4 +111,24 @@ test('quote requests: the public cannot read or write them, staff triage them', 
   assert.deepEqual(seen, [{ status: 'new' }]);
   await db.query(`update public.contact_requests set status = 'replied', staff_note = 'Called back' where id = $1`, [r.id]);
   assert.equal((await db.query('select status from public.contact_requests where id = $1', [r.id])).rows[0].status, 'replied');
+});
+
+test('quote requests appear in the portal of the account with the same confirmed email', async () => {
+  const { db, as } = await setup();
+  await db.exec('grant all on public.contact_requests to service_role; grant usage on schema public to service_role; set role service_role');
+  await db.query(`insert into public.contact_requests (name, email, consent_at, systems) values ('Jo', 'Client@X.com', now(), '{bifold}'), ('Spam', 'client@x.com', now(), '{}'), ('Anna', 'arch@x.com', now(), '{}')`);
+  await db.query(`update public.contact_requests set status = 'spam' where name = 'Spam'`);
+  await db.exec('reset role');
+  await as(C);
+  const mine = (await db.query('select ref, status, systems from public.my_enquiries()')).rows;
+  assert.equal(mine.length, 1); // case-insensitive match, spam hidden
+  assert.deepEqual(mine[0].systems, ['bifold']);
+  assert.equal((await db.query('select * from public.contact_requests')).rows.length, 0); // the table itself stays closed
+  await as(O);
+  assert.equal((await db.query('select * from public.my_enquiries()')).rows.length, 0);
+  // An unconfirmed address sees nothing, even if it matches.
+  await db.exec('reset role');
+  await db.query(`update auth.users set email_confirmed_at = null where id = $1`, [A]);
+  await as(A);
+  assert.equal((await db.query('select * from public.my_enquiries()')).rows.length, 0);
 });

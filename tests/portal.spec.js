@@ -94,7 +94,7 @@ test('sizing tool opening carries into a homeowner’s new request with a budget
   await expect(page).toHaveURL(/login\.html\?next=portal\.html/);
   await page.locator('[data-demo-login="homeowner"]').click();
   await expect(page).toHaveURL(/portal\.html#\/new$/);
-  await expect(page.locator('h1')).toHaveText('Get a price');
+  await expect(page.locator('h1')).toHaveText('Add your opening');
   await expect(page.locator('[data-rows] input[name="width_mm"]')).toHaveValue('5600');
   await expect(page.locator('[data-rows] select[name="config"]')).toHaveValue('4C');
   await expect(page.locator('[data-total-value]')).toHaveText(/£[\d,]+–£[\d,]+ inc\. VAT/);

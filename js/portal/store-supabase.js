@@ -49,8 +49,8 @@ export const store = {
     return { ...p, email: user.email };
   },
   async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); },
-  async signUp({ email, password, full_name, company, account_type = 'architect' }) {
-    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company, account_type }, emailRedirectTo: new URL('portal.html', location.href).href } }));
+  async signUp({ email, password, full_name, company, account_type = 'architect', next = 'portal.html' }) {
+    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company, account_type }, emailRedirectTo: new URL(next, location.href).href } }));
     return { needsConfirmation: !data.session };
   },
   // Providers switched on in Supabase (Authentication → Sign In / Providers), read from the public auth settings.
@@ -64,7 +64,7 @@ export const store = {
     try { if (accountType) localStorage.setItem(PENDING_TYPE, accountType); else localStorage.removeItem(PENDING_TYPE); } catch { /* ignore */ }
     ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo, ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
   },
-  async sendMagicLink(email) { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL('portal.html', location.href).href } })); },
+  async sendMagicLink(email, next = 'portal.html') { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL(next, location.href).href } })); },
   async signOut() { await sb.auth.signOut(); },
 
   async updateProfile(patch) {
@@ -73,6 +73,12 @@ export const store = {
     ok(await sb.from('profiles').update({ full_name, company, phone, notify_email, notify_digest }).eq('id', user.id));
   },
 
+  // Quote requests sent through the public form with this account's confirmed email (migration 0007).
+  // A missing function (migration not applied yet) must not break the dashboard.
+  async myEnquiries() {
+    const { data, error } = await sb.rpc('my_enquiries');
+    return error ? [] : data || [];
+  },
   async listProjects() {
     const me = await this.getUser();
     const rows = ok(await sb.from('projects')

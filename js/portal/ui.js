@@ -27,10 +27,10 @@ export async function renderAppBar(el, user, area) {
   el.innerHTML = `
     ${store.mode === 'demo' ? `<div class="demo-bar" role="note"><strong>${tr('Demo mode.')}</strong> ${tr('Sample data stored in this browser only. Open the')} <a href="${crmLink}" target="_blank" rel="noopener">${tr(area === 'admin' ? 'client portal' : 'staff CRM')}</a> ${tr('in another tab to see updates arrive live.')} <button type="button" class="linkish" data-reset-demo>${tr('Reset demo')}</button></div>` : ''}
     <div class="appbar">
-      <div class="container appbar-inner">
+      <div class="${area === 'admin' ? 'container-wide' : 'container'} appbar-inner">
         <a class="appbar-title" href="${home}">${area === 'admin' ? tr('Projects CRM') : tr(user.account_type === 'homeowner' ? 'Your orders' : 'Your projects')}</a>
         <div class="appbar-actions">
-          ${area === 'portal' ? `<a class="btn btn-sm" href="#/new">${tr(user.account_type === 'homeowner' ? 'Get a price' : 'New project')}</a>` : ''}
+          ${area === 'portal' ? `<a class="btn btn-sm" href="#/new">${tr(user.account_type === 'homeowner' ? 'Add your opening' : 'New project')}</a>` : ''}
           <div class="notif">
             <button type="button" class="notif-btn" aria-expanded="false" aria-controls="notif-panel" aria-label="${tr('Notifications')}${unread ? `, ${tr('{n} unread', { n: unread })}` : ''}">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>

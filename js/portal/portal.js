@@ -1,7 +1,7 @@
 // Client project portal: dashboard, project detail, new project, settings.
 import { store } from './store.js';
 import { SYSTEMS, MATERIALS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
-import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat } from '../pricing.js';
+import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat, pricingIsExample } from '../pricing.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
 import { tr } from './i18n.js';
 
@@ -46,7 +46,7 @@ async function dashboard() {
   const aud = audienceOf(user);
   const home = aud === 'home';
   document.title = `${tr(home ? 'Your orders' : 'Your projects')} | Brick & Pane`;
-  const projects = await store.listProjects();
+  const [projects, enquiries] = await Promise.all([store.listProjects(), store.myEnquiries ? store.myEnquiries() : []]);
   const you = projects.filter((p) => stage(p.stage).court === 'you');
   const us = projects.filter((p) => stage(p.stage).court === 'us');
   const done = projects.filter((p) => ['completed', 'closed'].includes(p.stage));
@@ -69,12 +69,26 @@ async function dashboard() {
           <div class="stat"><dt>${tr('Completed')}</dt><dd>${done.length}</dd></div>
         </dl>
       </div>
+      ${enquiryList(enquiries)}
       ${projects.length ? `
         ${you.length ? `<h2 class="list-h">${tr('Needs your action')}</h2><div class="pgrid">${you.map(card).join('')}</div>` : ''}
         <h2 class="list-h">${tr(you.length ? (home ? 'Other orders' : 'Other projects') : (home ? 'All orders' : 'All projects'))}</h2>
         <div class="pgrid">${projects.filter((p) => !you.includes(p)).map(card).join('') || `<p class="note">${tr('Nothing else right now.')}</p>`}</div>`
-      : `<div class="empty"><h2>${tr(home ? 'No orders yet' : 'No projects yet')}</h2><p>${tr(home ? 'Tell us the sizes of your opening, or add a few phone photos. You’ll get a budget straight away and can follow your order here, like an online shop.' : 'Send us drawings, a window schedule or a sketch. You’ll follow every step here, with no need to phone for updates.')}</p><a class="btn" href="#/new">${tr(home ? 'Get a price' : 'Start a project')}</a></div>`}
+      : `<div class="empty"><h2>${tr(home ? 'No orders yet' : 'No projects yet')}</h2><p>${tr(home ? 'Tell us the sizes of your opening, or add a few phone photos. We’ll send a budget within two working days, and you can follow your order here, like an online shop.' : 'Send us drawings, a window schedule or a sketch. You’ll follow every step here, with no need to phone for updates.')}</p><a class="btn" href="#/new">${tr(home ? 'Add your opening' : 'Start a project')}</a></div>`}
     </div>`;
+}
+
+// Enquiries sent through the website form before (or without) an account. Once staff turn one into
+// a project it links there; until then it shows the reference and where it stands.
+const ENQUIRY_STATUS = { new: 'Enquiry received', replied: 'We’ve replied by email', converted: 'Now a project', closed: 'Enquiry closed' };
+function enquiryList(list) {
+  if (!list.length) return '';
+  const row = (e) => {
+    const inner = `<div class="pcard-top"><span class="pcard-ref">${esc(e.ref)}</span><span class="badge">${esc(tr(ENQUIRY_STATUS[e.status] || e.status))}</span></div>
+      <p class="pcard-loc">${tr('Sent {date}', { date: fmtDay(e.created_at) })}</p>`;
+    return e.project_id ? `<a class="pcard" href="#/p/${esc(e.project_id)}">${inner}</a>` : `<div class="pcard">${inner}</div>`;
+  };
+  return `<h2 class="list-h">${tr('Your enquiries')}</h2><div class="pgrid">${list.map(row).join('')}</div>`;
 }
 
 async function detail(id) {
@@ -131,12 +145,12 @@ function openingRow(i) {
 function newProject() {
   const aud = audienceOf(user);
   const home = aud === 'home';
-  document.title = `${tr(home ? 'Get a price' : 'New project')} | Brick & Pane`;
+  document.title = `${tr(home ? 'Add your opening' : 'New project')} | Brick & Pane`;
   app.innerHTML = `
     <div class="container section-tight">
-      <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/">${tr(home ? 'Orders' : 'Projects')}</a></li><li aria-current="page">${tr(home ? 'Get a price' : 'New project')}</li></ol></nav>
-      <h1 class="app-h1">${tr(home ? 'Get a price' : 'New project')}</h1>
-      <p class="lead" style="margin-bottom:2rem">${tr(home ? 'Add the size of each opening. You’ll see a budget straight away, and our formal quote follows within two working days.' : 'Fill in what you know. A sketch with dimensions is enough to start. You’ll see your project move through each stage here.')}</p>
+      <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/">${tr(home ? 'Orders' : 'Projects')}</a></li><li aria-current="page">${tr(home ? 'Add your opening' : 'New project')}</li></ol></nav>
+      <h1 class="app-h1">${tr(home ? 'Add your opening' : 'New project')}</h1>
+      <p class="lead" style="margin-bottom:2rem">${tr(home ? 'Add the size of each opening. We’ll send a budget and our formal quote within two working days.' : 'Fill in what you know. A sketch with dimensions is enough to start. You’ll see your project move through each stage here.')}</p>
       <form class="newp" novalidate>
         <section class="newp-sec"><h2 class="panel-h">${tr('Project')}</h2>
           <div class="field-row">
@@ -246,7 +260,8 @@ function newProject() {
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
     const sum = estimateProject(openings);
-    if (sum) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
+    // Example rates are placeholders: don't store their totals, or the CRM would show them as a real estimate.
+    if (sum && !pricingIsExample()) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
     try { const id = await store.createProject(data, openings, files); toast(tr(home ? 'Sent. Your formal quote follows within two working days.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
     catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }

@@ -33,6 +33,8 @@
       <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg>
       <span class="brand-word">Brick &amp; Pane</span>
     </a>
+    <a class="btn btn-sm header-cta" href="contact.html">Zapytaj o wycenę</a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav"><span class="menu-toggle-label">Menu</span><span class="menu-toggle-icon" aria-hidden="true"></span></button>
     <nav class="primary-nav" id="primary-nav" aria-label="Menu główne">
       <ul>
         <li class="has-sub" data-group="products">
@@ -54,12 +56,12 @@
         <li><a href="architects.html" data-nav="architects">Architekci</a></li>
         <li><a href="developers.html" data-nav="developers">Deweloperzy</a></li>
         <li><a href="guide-large-sliding-doors-london.html" data-nav="guide">Poradnik</a></li>
+        <li><a href="about.html" data-nav="about">O nas</a></li>
       </ul>
-      <span class="lang-switch" aria-label="Język"><a href="../contact.html" hreflang="en" lang="en" >EN</a><a href="contact.html" hreflang="pl" lang="pl" aria-current="true">PL</a></span>
+      <span class="lang-switch" role="group" aria-label="Język"><a href="../contact.html" hreflang="en" lang="en" >EN</a><a href="contact.html" hreflang="pl" lang="pl" aria-current="true">PL</a></span>
       <a class="nav-login" href="portal.html" data-nav="portal">Panel klienta</a>
-      <a class="btn btn-sm nav-cta" href="contact.html">Zapytaj o wycenę</a>
-    </nav>
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav"><span class="menu-toggle-label">Menu</span><span class="menu-toggle-icon" aria-hidden="true"></span></button>
+      <a class="btn btn-sm nav-cta" href="contact.html" data-nav="contact" aria-current="page">Zapytaj o wycenę</a>
+    </nav>
   </div>
 </header>
 
@@ -86,7 +88,7 @@
         <h2 style="font-size:var(--step-2)">O Tobie</h2>
         <div class="field">
           <span class="field-label" id="role-label" style="font-size:var(--step--1);font-weight:500">Jestem…</span>
-          <div class="choice-grid" role="radiogroup" aria-labelledby="role-label" data-validate="radio" data-name="role">
+          <div class="choice-grid" role="radiogroup" aria-labelledby="role-label" aria-required="true" data-validate="radio" data-name="role">
             <label class="choice"><input type="radio" name="role" value="architect"><span>Architektem / projektantem</span></label>
             <label class="choice"><input type="radio" name="role" value="developer"><span>Deweloperem / wykonawcą</span></label>
             <label class="choice"><input type="radio" name="role" value="homeowner"><span>Właścicielem domu</span></label>
@@ -100,7 +102,7 @@
         </div>
         <div class="field-row">
           <div class="field"><label for="f-phone">Telefon <span class="hint">opcjonalnie — tylko jeśli chcesz, żebyśmy zadzwonili</span></label><input id="f-phone" name="phone" type="tel" autocomplete="tel"></div>
-          <div class="field" data-for-role="architect developer other"><label for="f-company">Pracownia / firma</label><input id="f-company" name="company" type="text" autocomplete="organization"></div>
+          <div class="field" data-for-role="architect developer other"><label for="f-company">Pracownia / firma <span class="hint">opcjonalnie</span></label><input id="f-company" name="company" type="text" autocomplete="organization"></div>
         </div>
         <div class="form-nav"><span></span><button class="btn" type="button" data-next>Dalej</button></div>
       </fieldset>
@@ -126,9 +128,9 @@
           <div class="field"><label for="f-ow">Szerokość otworu (mm) <span class="hint">opcjonalnie</span></label><input id="f-ow" name="opening_width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="np. 4800"></div>
           <div class="field"><label for="f-oh">Wysokość otworu (mm) <span class="hint">opcjonalnie</span></label><input id="f-oh" name="opening_height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="np. 2400"></div>
         </div>
-        <div class="field"><label for="f-loc">Lokalizacja projektu</label><input id="f-loc" name="location" type="text" placeholder="Kod pocztowy lub dzielnica, np. SE22 albo Hackney" data-validate><span class="hint">Sprawdzamy dojazd, strefę konserwatorską i ekspozycję na wiatr.</span><span class="error" role="alert"></span></div>
+        <div class="field"><label for="f-loc">Lokalizacja projektu</label><input id="f-loc" name="location" type="text" required aria-required="true" placeholder="Kod pocztowy lub dzielnica, np. SE22 albo Hackney" data-validate><span class="hint">Sprawdzamy dojazd, strefę konserwatorską i ekspozycję na wiatr.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
-          <legend>Produkty</legend>
+          <legend>Produkty <span class="hint">opcjonalnie</span></legend>
           <div class="choice-grid">
             <label class="choice"><input type="checkbox" name="systems" value="windows"><span>Okna</span></label>
             <label class="choice"><input type="checkbox" name="systems" value="hinged"><span>Drzwi wejściowe / balkonowe</span></label>
@@ -141,7 +143,7 @@
           </div>
         </fieldset>
         <fieldset class="field">
-          <legend>Materiał</legend>
+          <legend>Materiał <span class="hint">opcjonalnie</span></legend>
           <div class="choice-grid">
             <label class="choice"><input type="radio" name="material" value="alu"><span>Aluminium</span></label>
             <label class="choice"><input type="radio" name="material" value="timber"><span>Drewno</span></label>
@@ -151,10 +153,10 @@
           </div>
         </fieldset>
         <div class="field-row">
-          <div class="field" data-for-role="architect"><label for="f-stage">Etap RIBA</label><select id="f-stage" name="riba_stage"><option value="">Wybierz</option><option value="0–1 Strategic / brief">0–1 Strategia / założenia</option><option value="2 Concept">2 Koncepcja</option><option value="3 Spatial coordination">3 Koordynacja przestrzenna</option><option value="4 Technical design">4 Projekt techniczny</option><option value="5 Manufacturing & construction">5 Produkcja i budowa</option></select></div>
-          <div class="field" data-for-role="developer"><label for="f-units">Liczba lokali / otworów</label><input id="f-units" name="units" type="text" inputmode="numeric" placeholder="np. 24 lokale, ok. 120 otworów"></div>
-          <div class="field" data-for-role="homeowner other"><label for="f-type">Budynek</label><select id="f-type" name="building"><option value="">Wybierz</option><option value="Extension to an existing house">Dobudowa do istniejącego domu</option><option value="New-build house">Nowy dom</option><option value="Residential scheme">Inwestycja mieszkaniowa</option><option value="Flat / apartment">Mieszkanie</option><option value="Listed or in a conservation area">Budynek zabytkowy lub w strefie konserwatorskiej</option></select></div>
-          <div class="field"><label for="f-start">Start budowy</label><select id="f-start" name="start"><option value="">Wybierz</option><option value="Within 3 months">W ciągu 3 miesięcy</option><option value="3–6 months">3–6 miesięcy</option><option value="6–12 months">6–12 miesięcy</option><option value="Over 12 months / not sure">Ponad 12 miesięcy / nie wiem</option></select></div>
+          <div class="field" data-for-role="architect"><label for="f-stage">Etap RIBA <span class="hint">opcjonalnie</span></label><select id="f-stage" name="riba_stage"><option value="">Wybierz</option><option value="0–1 Strategic / brief">0–1 Strategia / założenia</option><option value="2 Concept">2 Koncepcja</option><option value="3 Spatial coordination">3 Koordynacja przestrzenna</option><option value="4 Technical design">4 Projekt techniczny</option><option value="5 Manufacturing & construction">5 Produkcja i budowa</option></select></div>
+          <div class="field" data-for-role="developer"><label for="f-units">Liczba lokali / otworów <span class="hint">opcjonalnie</span></label><input id="f-units" name="units" type="text" inputmode="numeric" placeholder="np. 24 lokale, ok. 120 otworów"></div>
+          <div class="field" data-for-role="homeowner other"><label for="f-type">Budynek <span class="hint">opcjonalnie</span></label><select id="f-type" name="building"><option value="">Wybierz</option><option value="Extension to an existing house">Dobudowa do istniejącego domu</option><option value="New-build house">Nowy dom</option><option value="Residential scheme">Inwestycja mieszkaniowa</option><option value="Flat / apartment">Mieszkanie</option><option value="Listed or in a conservation area">Budynek zabytkowy lub w strefie konserwatorskiej</option></select></div>
+          <div class="field"><label for="f-start">Start budowy <span class="hint">opcjonalnie</span></label><select id="f-start" name="start"><option value="">Wybierz</option><option value="Within 3 months">W ciągu 3 miesięcy</option><option value="3–6 months">3–6 miesięcy</option><option value="6–12 months">6–12 miesięcy</option><option value="Over 12 months / not sure">Ponad 12 miesięcy / nie wiem</option></select></div>
         </div>
         <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Wstecz</button><button class="btn" type="button" data-next>Dalej</button></div>
       </fieldset>
@@ -170,17 +172,18 @@
         </div>
         <div class="field"><label for="f-link">Link do większych plików <span class="hint">opcjonalnie</span></label><input id="f-link" name="files_link" type="url" inputmode="url" autocomplete="off" placeholder="Link WeTransfer, Dropbox lub Google Drive" data-validate><span class="error" role="alert"></span></div>
         <div class="field"><label for="f-msg">Coś jeszcze? <span class="hint">opcjonalnie</span></label><textarea id="f-msg" name="message" placeholder="Wymiary otworów, co jest najważniejsze (smukłe ramy, próg, budżet, termin)…"></textarea></div>
-        <div class="field"><label class="consent"><input type="checkbox" name="consent" value="yes" data-validate="consent"> <span>Zgadzam się, aby Brick &amp; Pane wykorzystało te dane do odpowiedzi na moje zapytanie, zgodnie z <a href="privacy.html">informacją o prywatności</a>.</span></label><span class="error" role="alert"></span></div>
+        <div class="field"><label class="consent"><input type="checkbox" name="consent" value="yes" data-validate="consent" required> <span>Zgadzam się, aby Brick &amp; Pane wykorzystało te dane do odpowiedzi na moje zapytanie, zgodnie z <a href="privacy.html">informacją o prywatności</a>.</span></label><span class="error" role="alert"></span></div>
+        <input type="hidden" name="lang" value="pl">
         <input type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
         <div class="form-status" data-form-status tabindex="-1" hidden role="status"></div>
-        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Wstecz</button><button class="btn" type="submit">Wyślij do oceny</button></div>
+        <div class="form-nav"><button class="btn btn-ghost" type="button" data-prev>Wstecz</button><button class="btn" type="submit">Wyślij zapytanie</button></div>
       </fieldset>
     </form>
 
     <aside class="start-9" style="grid-column:9 / span 4">
       <h2 class="eyebrow">Co dalej</h2>
       <ol class="process" style="grid-template-columns:1fr">
-        <li><h3>Potwierdzenie</h3><p>E-mail z kopią zapytania i numerem referencyjnym.</p></li>
+        <li><h3>Potwierdzenie</h3><p>E-mail z potwierdzeniem, że mamy Twoje zapytanie, i jego numerem.</p></li>
         <li><h3>Jedna osoba kontaktowa</h3><p>Od pierwszej odpowiedzi Twoim projektem zajmuje się jedna osoba.</p></li>
         <li><h3>Nasza odpowiedź</h3><p>Architekci: uwagi w ciągu 2 dni roboczych. Deweloperzy: budżet w ciągu 5. Właściciele domów: pierwsza opinia i kolejne kroki w ciągu 2.</p></li>
       </ol>
@@ -193,14 +196,15 @@
   <div class="container">
     <div class="footer-top">
       <div class="footer-brand">
-        <span class="footer-logo"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg><span class="brand-word">Brick &amp; Pane</span></span>
-        <p>Okna, drzwi, drzwi przesuwne i przeszklone fasady z aluminium, drewna i PVC. Na zamówienie, projektowane razem z Tobą, montowane przez nasz własny zespół w Londynie.</p>
-        <a class="btn btn-light btn-sm" href="contact.html">Wyślij rysunki do oceny</a>
+        <a class="footer-logo" href="index.html"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="28" height="28"/><rect x="8" y="8" width="16" height="18" stroke-width="1.6"/><path d="M15.2 8v18M17.8 8v18" stroke-width="1.6"/></svg><span class="brand-word">Brick &amp; Pane</span></a>
+        <p>Okna, drzwi, drzwi przesuwne i przeszklone fasady z aluminium, drewna i PVC. Na zamówienie, projektowane razem z Tobą, z montażem w Londynie.</p>
+        <a class="btn btn-light btn-sm" href="contact.html">Zapytaj o wycenę</a>
       </div>
       <div>
         <h2 class="footer-h">Produkty</h2>
         <ul>
           <li><a href="windows.html">Okna</a></li>
+          <li><a href="heritage-conservation.html">Zabytki i strefy konserwatorskie</a></li>
           <li><a href="doors.html">Drzwi wejściowe i balkonowe</a></li>
           <li><a href="lift-and-slide-doors.html">Drzwi podnoszono-przesuwne</a></li>
           <li><a href="sliding-doors.html">Drzwi przesuwne slim</a></li>
@@ -210,17 +214,27 @@
         </ul>
       </div>
       <div>
-        <h2 class="footer-h">Współpraca</h2>
+        <h2 class="footer-h">Dla kogo</h2>
         <ul>
-          <li><a href="homeowners.html">Dla właścicieli domów</a></li>
+          <li><a href="homeowners.html">Dla domu</a></li>
           <li><a href="architects.html">Dla architektów</a></li>
           <li><a href="developers.html">Dla deweloperów i wykonawców</a></li>
-          <li><a href="projects.html">Projekty założycielskie</a></li>
-          <li><a href="about.html">O nas</a></li>
-          <li><a href="guide-large-sliding-doors-london.html">Poradnik projektowy</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-h">Poradniki</h2>
+        <ul>
+          <li><a href="guide-large-sliding-doors-london.html">Duże drzwi przesuwne</a></li>
           <li><a href="guide-bifold-or-sliding.html">Harmonijkowe czy przesuwne?</a></li>
           <li><a href="guide-replacing-windows.html">Wymiana okien</a></li>
-          <li><a href="heritage-conservation.html">Zabytki i strefy konserwatorskie</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-h">Firma</h2>
+        <ul>
+          <li><a href="about.html">O nas</a></li>
+          <li><a href="projects.html">Projekty założycielskie</a></li>
+          <li><a href="portal.html">Panel klienta</a></li>
         </ul>
       </div>
       <div>
@@ -240,7 +254,7 @@
   </div>
 </footer>
 <div class="action-bar" role="region" aria-label="Szybkie akcje">
-  <a class="btn btn-ghost" href="login.html?next=portal.html%23%2Fnew&signup=homeowner">Poznaj cenę</a>
+  <a class="btn btn-ghost" href="portal.html">Panel klienta</a>
   <a class="btn" href="contact.html">Zapytaj o wycenę</a>
 </div>
 

@@ -146,7 +146,7 @@ async function detail(id) {
 
           <form class="ctl" data-internal>
             <h2 class="panel-h">${tr('Commercial')} <span class="tag">${tr('staff only')}</span></h2>
-            ${p.estimate_low ? `<p class="note">${tr('Automatic estimate shown to client')}: ${fmtMoney(p.estimate_low)}–${fmtMoney(p.estimate_high)} + VAT</p>` : ''}
+            ${p.estimate_low ? `<p class="note">${tr('Automatic estimate')}: ${fmtMoney(p.estimate_low)}–${fmtMoney(p.estimate_high)} + VAT</p>` : ''}
             <div class="field-row">
               <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
               <div class="field"><label for="ctl-prob">${tr('Probability (%)')}</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
