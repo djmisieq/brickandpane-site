@@ -94,7 +94,8 @@ for (const [loc, L] of Object.entries(LOCALES)) {
         .replace('{{actionLabel}}', meta.actionLabel || L.actionLabel))
       .replace('{{content}}', content);
 
-    writeFileSync(url(`${L.out}${file}`), out);
+    // Always LF: sources may be checked out with CRLF (Windows), and CI compares the output byte for byte.
+    writeFileSync(url(`${L.out}${file}`), out.replace(/\r\n/g, '\n'));
     console.log('built', `${loc}/${file}`);
   }
 }
