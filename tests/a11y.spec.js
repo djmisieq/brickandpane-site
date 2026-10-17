@@ -22,12 +22,14 @@ test('pages stay light and load nothing from other domains', async ({ page }, in
   for (const url of ['/index.html', '/lift-and-slide-doors.html', '/pl/bifold-doors.html', '/contact.html']) {
     const foreign = [];
     let bytes = 0;
+    let photoBytes = 0;
     page.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1')) foreign.push(r.url()); });
-    page.on('response', async (r) => { try { bytes += (await r.body()).length; } catch { /* redirects have no body */ } });
+    page.on('response', async (r) => { try { const n = (await r.body()).length; if (r.url().includes('/img/photos/')) photoBytes += n; else bytes += n; } catch { /* redirects have no body */ } });
     await page.goto(url, { waitUntil: 'networkidle' });
     expect(foreign, url).toEqual([]);
-    // Budget: HTML + CSS + JS + fonts. Today about 350 kB; photos will need their own budget.
+    // Budget: HTML + CSS + JS + fonts. Today about 350 kB. Photos have their own budget (lazy-loaded below the fold).
     expect(bytes, url).toBeLessThan(500 * 1024);
+    expect(photoBytes, url).toBeLessThan(900 * 1024);
     page.removeAllListeners('request'); page.removeAllListeners('response');
   }
 });
