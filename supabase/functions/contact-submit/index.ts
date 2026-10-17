@@ -90,14 +90,14 @@ Deno.serve(async (req) => {
       <p style="font-size:13px;color:#6f6a62;margin:0 0 16px">Brick &amp; Pane · ${row.ref}</p>
       <h1 style="font-size:20px;font-weight:600;margin:0 0 12px">${pl ? `Dziękujemy, ${escape(name)}.` : `Thank you, ${escape(name)}.`}</h1>
       <p style="font-size:15px;line-height:1.5">${pl
-        ? 'Twoje zapytanie do nas dotarło. Jedna osoba poprowadzi je od pierwszej odpowiedzi do końca. Jeśli chcesz coś dodać, po prostu odpowiedz na tę wiadomość.'
-        : 'Your request has reached us. One person will handle it from the first reply onwards. To add anything, just reply to this email.'}</p>
+        ? 'Twoje zapytanie do nas dotarło. Jeśli chcesz coś dodać, po prostu odpowiedz na tę wiadomość.'
+        : 'Your request has reached us. To add anything, just reply to this email.'}</p>
       ${paths.length ? `<p style="font-size:15px">${pl ? 'Załączone pliki' : 'Files received'}: ${paths.length}</p>` : ''}
       ${filesLink ? `<p style="font-size:15px">${pl ? 'Link do plików' : 'Files link'}: ${escape(filesLink)}</p>` : ''}
       ${rejected.length ? `<p style="font-size:15px">${pl ? 'Tych plików nie udało się przesłać, wyślij je linkiem w odpowiedzi' : 'These files did not upload, please send them as a link in a reply'}: ${escape(rejected.join(', '))}</p>` : ''}
       <p style="font-size:15px;line-height:1.5">${pl
-        ? `Możesz śledzić to zapytanie w <a href="${SITE}/pl/login.html?signup=1&amp;next=portal.html">panelu klienta</a>. Załóż konto na ten adres e-mail, a zapytanie pojawi się tam automatycznie.`
-        : `You can follow this enquiry in the <a href="${SITE}/login.html?signup=1&amp;next=portal.html">client portal</a>. Create an account with this email address and the enquiry appears there automatically.`}</p>
+        ? `Możesz śledzić to zapytanie w <a href="${SITE}/pl/login.html?next=portal.html">panelu klienta</a>. Zaloguj się lub załóż konto na ten adres e-mail, a zapytanie pojawi się tam automatycznie.`
+        : `You can follow this enquiry in the <a href="${SITE}/login.html?next=portal.html">client portal</a>. Sign in or create an account with this email address and the enquiry appears there automatically.`}</p>
     </div>`, team?.split(',')[0]);
 
   return reply(200, { ok: true, ref: row.ref, rejected });
