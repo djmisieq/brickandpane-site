@@ -83,7 +83,7 @@ function seed() {
   const p4 = mk({ name: 'Northfield Terrace — 8 houses', location: 'Ealing, W13', riba_stage: '', building_type: 'New-build houses (8)', start_window: '6–12 months', brief: 'Rear sliders and windows for 8 houses. Budget needed for appraisal.', next_step: 'Budget price by Thursday.', due_at: daysAgo(1, 17) }, ravi, [['submitted', daysAgo(4)], ['in_review', daysAgo(3), 'Reviewing the schedule.']], { value: 86000, prob: 30 });
   s.openings.push({ id: uid(), project_id: p4, ref: 'Type A rear', system: 'lift-slide', width_mm: 3600, height_mm: 2400, config: '2A', glazing: 'd', qty: 8, notes: '' });
 
-  const p5 = mk({ name: 'Kitchen extension doors', location: 'Walthamstow, E17', building_type: 'Extension to an existing house', start_window: 'Within 3 months', brief: 'Four-panel lift & slide to the garden.', next_step: 'Delivery date will be confirmed by your project manager.', estimate_low: 16800, estimate_high: 22700 }, sam, [
+  const p5 = mk({ name: 'Kitchen extension doors', location: 'Walthamstow, E17', building_type: 'Extension to an existing house', start_window: 'Within 3 months', brief: 'Four-panel lift & slide to the garden.', next_step: 'We will confirm the delivery date.', estimate_low: 16800, estimate_high: 22700 }, sam, [
     ['submitted', daysAgo(46), 'Request received.'], ['in_review', daysAgo(45)], ['quote_issued', daysAgo(43), 'Your quote is in Documents.'],
     ['accepted', daysAgo(38), 'Thank you for your order.'], ['survey', daysAgo(33), 'Survey on Thursday at 10:00.'], ['drawings', daysAgo(27), 'Final drawings ready to approve.'],
     ['production', daysAgo(20), 'Approved — your doors are now being made.'],
