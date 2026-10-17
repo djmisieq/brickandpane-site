@@ -390,7 +390,7 @@ const PL = {
   'We’ll confirm receipt and assign a technical lead.': 'Potwierdzimy przyjęcie i przydzielimy opiekuna technicznego.',
   'Review the quotation and accept it, or ask for changes.': 'Przejrzyj ofertę i zaakceptuj ją albo poproś o zmiany.',
   'Approve shop drawings Rev A, or request changes.': 'Zaakceptuj rysunki warsztatowe Rev A albo poproś o zmiany.',
-  'Delivery date will be confirmed by your project manager.': 'Termin dostawy potwierdzi Twój kierownik projektu.',
+  'We will confirm the delivery date.': 'Potwierdzimy termin dostawy.',
   'Project received.': 'Projekt przyjęty.',
   'Request received.': 'Zapytanie przyjęte.',
   'Tom Reid is your technical lead.': 'Tom Reid jest Twoim opiekunem technicznym.',

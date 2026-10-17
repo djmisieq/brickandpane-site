@@ -15,7 +15,8 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
   // Confirmed services: survey of existing windows and measurement. No corner samples, nothing "free",
   // no budget "straight away" while the price list is off, no "own team only" claims.
   const BANNED = [/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
-    /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i];
+    /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
+    /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\w* osob/i];
   for (const url of URLS) {
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
