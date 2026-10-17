@@ -124,16 +124,6 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     byId.forEach((_, id) => { const el = document.getElementById(id); if (el) so.observe(el); });
   }
 
-  /* ---------- reveal on scroll ---------- */
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); } });
-    }, { rootMargin: '0px 0px -8% 0px' });
-    $$('.reveal').forEach((el) => io.observe(el));
-  } else {
-    $$('.reveal').forEach((el) => el.classList.add('is-in'));
-  }
-
   /* ---------- sizing tools (lift & slide, slim sliding, bi-fold) ---------- */
   // Indicative envelopes for each system class. Update from the certified system data sheets.
   const GLASS = { // total glass thickness in mm; glass weighs ~2.5 kg per m² per mm

@@ -66,7 +66,7 @@
 </header>
 
 <main id="main">
-<section class="page-hero" style="padding-bottom:1rem">
+<section class="page-hero pb-s">
   <div class="container">
     <nav class="breadcrumb" aria-label="Okruszki"><ol><li><a href="index.html">Start</a></li><li aria-current="page">Kontakt</li></ol></nav>
     <span class="eyebrow">Zapytaj o wycenę</span>
@@ -75,10 +75,10 @@
   </div>
 </section>
 
-<section class="section" style="padding-top:2rem">
+<section class="section pt-l">
   <div class="container grid-12">
     <form class="span-7" data-quote-form data-endpoint="https://kgnjyyzjmyilorgaeabc.supabase.co/functions/v1/contact-submit" novalidate enctype="multipart/form-data">
-      <p class="form-status" data-preview-note hidden style="margin-bottom:1.5rem"><strong>Podgląd:</strong> ten formularz nie jest jeszcze podłączony, więc nic nie zostanie wysłane. Napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a> albo <a href="login.html">załóż darmowe konto</a>, żeby wysłać projekt i śledzić go online.</p>
+      <p class="form-status mb-m" data-preview-note hidden><strong>Podgląd:</strong> ten formularz nie jest jeszcze podłączony, więc nic nie zostanie wysłane. Napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a> albo <a href="login.html">załóż darmowe konto</a>, żeby wysłać projekt i śledzić go online.</p>
       <ol class="steps-indicator" aria-label="Postęp formularza">
         <li class="is-active" aria-current="step">1 · Ty</li><li>2 · Projekt</li><li>3 · Pliki</li>
       </ol>
@@ -166,7 +166,7 @@
         <h2 style="font-size:var(--step-2)">Pliki i uwagi</h2>
         <div class="field">
           <label for="f-files">Rysunki, zestawienie lub zdjęcia <span class="hint">opcjonalnie</span></label>
-          <div class="dropzone"><p>Przeciągnij pliki tutaj albo wybierz je poniżej. PDF, DWG, XLSX lub JPG, do 50 MB każdy. Większy zestaw? Wklej link w następnym polu.</p><input id="f-files" name="files" type="file" multiple accept=".pdf,.dwg,.dxf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic" style="margin-top:.8rem"></div>
+          <div class="dropzone"><p>Przeciągnij pliki tutaj albo wybierz je poniżej. PDF, DWG, XLSX lub JPG, do 50 MB każdy. Większy zestaw? Wklej link w następnym polu.</p><input class="mt-xs" id="f-files" name="files" type="file" multiple accept=".pdf,.dwg,.dxf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic"></div>
           <ul class="file-list" data-file-list></ul>
           <span class="error" role="alert"></span>
         </div>
@@ -180,14 +180,14 @@
       </fieldset>
     </form>
 
-    <aside class="start-9" style="grid-column:9 / span 4">
+    <aside class="start-9">
       <h2 class="eyebrow">Co dalej</h2>
       <ol class="process" style="grid-template-columns:1fr">
         <li><h3>Potwierdzenie</h3><p>E-mail z potwierdzeniem, że mamy Twoje zapytanie, i jego numerem.</p></li>
         <li><h3>Jedna osoba kontaktowa</h3><p>Od pierwszej odpowiedzi Twoim projektem zajmuje się jedna osoba.</p></li>
         <li><h3>Nasza odpowiedź</h3><p>Architekci: uwagi w ciągu 2 dni roboczych. Deweloperzy: budżet w ciągu 5. Właściciele domów: pierwsza opinia i kolejne kroki w ciągu 2.</p></li>
       </ol>
-      <div class="callout" style="margin-top:2rem"><h3>Wolisz e-mail?</h3><p>Wyślij pliki na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Duże komplety przez WeTransfer albo Dropbox też są w porządku.</p></div>
+      <div class="callout mt-l"><h3>Wolisz e-mail?</h3><p>Wyślij pliki na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Duże komplety przez WeTransfer albo Dropbox też są w porządku.</p></div>
     </aside>
   </div>
 </section>

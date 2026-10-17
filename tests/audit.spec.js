@@ -173,3 +173,37 @@ test('a homeowner sees the enquiries sent through the website form in the portal
   await expect(page.locator('.list-h', { hasText: 'Twoje zapytania' })).toBeVisible();
   await expect(page.locator('.pcard', { hasText: 'BP-261013-7A3C' })).toContainText('Odpowiedzieliśmy mailem');
 });
+
+test('right-hand columns line up: content starts at grid column 7 or 9, never in between', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let seen = 0;
+  for (const url of URLS) {
+    await page.goto(url);
+    const starts = await page.evaluate(() => {
+      const out = [];
+      for (const grid of document.querySelectorAll('main .grid-12, main .section-head, main .system, main .cta-band .container, main .hero .container')) {
+        const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+        if (cols !== 12) continue;
+        const left = grid.getBoundingClientRect().left;
+        const step = (grid.clientWidth + parseFloat(getComputedStyle(grid).columnGap)) / 12;
+        for (const el of grid.children) {
+          const x = el.getBoundingClientRect().left - left;
+          if (x > step / 2 && el.offsetWidth) out.push(Math.round(x / step) + 1);
+        }
+      }
+      return out;
+    });
+    seen += starts.length;
+    for (const s of starts) expect([7, 9], `${url} right column starts at ${s}`).toContain(s);
+  }
+  expect(seen).toBeGreaterThan(40);
+});
+
+test('page markup keeps spacing on the scale: no inline margins or paddings', async ({ page }) => {
+  for (const url of URLS) {
+    await page.goto(url);
+    const inline = await page.evaluate(() => [...document.querySelectorAll('main [style]')]
+      .map((el) => el.getAttribute('style')).filter((s) => /(margin|padding)(-top|-bottom)?\s*:/.test(s)));
+    expect(inline, url).toEqual([]);
+  }
+});
