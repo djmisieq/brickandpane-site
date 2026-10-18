@@ -24,7 +24,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     $('.menu-toggle-label', toggle).textContent = open ? t('Close', 'Zamknij') : 'Menu';
     document.body.classList.toggle('nav-open', open);
     // The open menu covers the page: keep keyboard focus inside it, starting at the first item.
-    $$('main, .site-footer, .action-bar, .prelaunch, .header-cta').forEach((el) => { el.inert = open; });
+    $$('main, .site-footer, .action-bar, .header-cta').forEach((el) => { el.inert = open; });
     if (open) $('a, button', nav)?.focus();
   };
   addEventListener('resize', () => { if (nav?.classList.contains('is-open')) navTop(); });

@@ -13,13 +13,11 @@ const LOCALES = {
   en: {
     dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB',
     skip: 'Skip to content',
-    prelaunch: 'Pre-launch preview. Values marked <span class="tag">Indicative</span> are being verified against test certificates.',
     actionHref: 'portal.html', actionLabel: 'Client portal',
   },
   pl: {
     dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL',
     skip: 'Przejdź do treści',
-    prelaunch: 'Wersja przedpremierowa. Wartości oznaczone <span class="tag">Orientacyjnie</span> są weryfikowane na podstawie certyfikatów badań.',
     actionHref: 'portal.html', actionLabel: 'Panel klienta',
   },
 };
@@ -85,7 +83,6 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       .replace('{{ogLocale}}', L.og)
       .replace('{{alternates}}', alternates)
       .replace('{{skip}}', L.skip)
-      .replace('{{prelaunch}}', L.prelaunch)
       .replace('{{base}}', meta.base ? `<base href="${meta.base}">\n` : '')
       .replace('{{head}}', meta.head || '')
       .replace('{{header}}', nav)
