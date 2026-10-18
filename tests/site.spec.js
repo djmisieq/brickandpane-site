@@ -125,8 +125,13 @@ test.describe('sizing tools', () => {
     await expect(page.locator('[data-messages]')).toContainText('Building Regulations (Part L)');
     await page.locator('[data-tool-quote]').click();
     await expect(page).toHaveURL(/contact\.html\?system=lift-slide/);
-    await expect(page.locator('#f-msg')).toHaveValue(/Lift & slide opening approx\. 9000 × 2700 mm, 2 panels/);
     await expect(page.locator('input[name="systems"][value="lift-slide"]')).toBeChecked();
+    await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
+    await page.locator('#step-1 [data-next]').click();
+    const row = page.locator('[data-op]').first();
+    await expect(row.locator('[data-k="system"]')).toHaveValue('lift-slide');
+    await expect(row.locator('[data-k="width_mm"]')).toHaveValue('9000');
+    await expect(row.locator('[data-k="note"]')).toHaveValue(/2 panels/);
   });
 
   test('slim sliding: recommends lift & slide when too heavy', async ({ page }) => {
@@ -136,7 +141,7 @@ test.describe('sizing tools', () => {
     await page.selectOption('#t-c', '2A'); await page.selectOption('#t-g', 't');
     await expect(page.locator('[data-messages]')).toContainText('consider lift & slide');
     await page.locator('[data-tool-quote]').click();
-    await expect(page.locator('#f-msg')).toHaveValue(/Slim sliding opening/);
+    await expect(page.locator('[data-op] [data-k="system"]').first()).toHaveValue('sliding');
   });
 
   test('bi-fold: traffic door, stack projection, leaf limits', async ({ page }) => {
@@ -179,8 +184,8 @@ test.describe('homeowner & mobile details', () => {
     await expect(page.locator('[data-preview-note]')).toBeHidden(); // the form is connected to Supabase
     await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
     await page.locator('#step-1 [data-next]').click();
-    await expect(page.locator('#f-ow')).toHaveValue('4800');
-    await expect(page.locator('#f-oh')).toHaveValue('2400');
+    await expect(page.locator('[data-op] [data-k="width_mm"]')).toHaveValue('4800');
+    await expect(page.locator('[data-op] [data-k="height_mm"]')).toHaveValue('2400');
     const visible = await page.$$eval('#f-topic option', (os) => os.filter((o) => !o.hidden).map((o) => o.value));
     expect(visible).not.toContain('cpd');
     expect(visible).not.toContain('pqq');
@@ -237,6 +242,52 @@ test.describe('quote form', () => {
     await page.locator('#step-2 [data-next]').click();
     await page.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(/thank-you\.html\?ref=BP-TEST$/);
+  });
+
+  test('a list of openings built on product pages goes out with one enquiry, no account', async ({ page }) => {
+    const sent = [];
+    await page.route('**/functions/v1/contact-submit', (route) => {
+      sent.push(route.request().postData() || '');
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"ref":"BP-LIST"}' });
+    });
+    await page.goto('/lift-and-slide-doors.html#sizing');
+    await page.locator('[data-tool-add]').click();
+    await expect(page.locator('[data-tool-list]')).toContainText('Added as D01. Your list has 1 opening.');
+    await page.goto('/bifold-doors.html#sizing');
+    await page.fill('#t-w', '4200');
+    await page.locator('[data-tool-add]').click();
+    await expect(page.locator('[data-tool-list]')).toContainText('Your list has 2 openings');
+    await page.locator('[data-tool-list] a').click();
+    await page.locator('input[name="role"][value="homeowner"]').check({ force: true });
+    await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
+    await page.locator('#step-1 [data-next]').click();
+    await expect(page.locator('[data-op]')).toHaveCount(2);
+    await page.locator('[data-openings-add]').click();
+    const third = page.locator('[data-op]').nth(2);
+    await third.locator('[data-k="system"]').selectOption('windows');
+    await expect(third.locator('[data-op-ref]')).toHaveText('W01');
+    await third.locator('[data-k="width_mm"]').fill('1200');
+    await third.locator('[data-k="height_mm"]').fill('140');
+    await third.locator('[data-k="qty"]').fill('3');
+    await page.fill('#f-loc', 'E17');
+    await page.locator('#step-2 [data-next]').click();
+    await expect(page.locator('[data-openings]')).toHaveClass(/has-error/);
+    await third.locator('[data-k="height_mm"]').fill('1400');
+    // The list survives a reload while the visitor is still filling in the form.
+    await page.reload();
+    await page.locator('input[name="role"][value="homeowner"]').check({ force: true });
+    await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
+    await page.locator('#step-1 [data-next]').click();
+    await expect(page.locator('[data-op]')).toHaveCount(3);
+    await page.fill('#f-loc', 'E17');
+    await page.locator('#step-2 [data-next]').click();
+    await page.check('input[name="consent"]');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/thank-you\.html\?ref=BP-LIST$/);
+    const json = sent[0].match(/name="openings"\r\n\r\n(.*)\r\n/)[1];
+    const openings = JSON.parse(json);
+    expect(openings.map((o) => [o.ref, o.system, o.width_mm, o.qty])).toEqual([['D01', 'lift-slide', 5600, 1], ['D02', 'bifold', 4200, 1], ['W01', 'windows', 1200, 3]]);
+    expect(await page.evaluate(() => localStorage.getItem('bp-openings-list'))).toBeNull();
   });
 });
 

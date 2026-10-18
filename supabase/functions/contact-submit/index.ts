@@ -16,6 +16,25 @@ const safeName = (s: string) => s.normalize('NFKD').replace(/[^\w.\- ]+/g, '').r
 const str = (f: FormData, k: string, max = 500) => { const v = f.get(k); return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null; };
 const int = (f: FormData, k: string) => { const n = parseInt(str(f, k) ?? '', 10); return Number.isFinite(n) ? n : null; };
 
+// The list of openings arrives as one JSON field. Keep only known values and sizes the portal accepts.
+const SYSTEMS = ['lift-slide', 'sliding', 'bifold', 'hinged', 'windows', 'facades', 'rooflights'];
+const MATERIALS = ['alu', 'timber', 'pvc', 'alutimber'];
+type Opening = { ref: string; system: string; material: string; width_mm: number | null; height_mm: number | null; qty: number; note: string };
+const openingsOf = (f: FormData): Opening[] => {
+  let raw: unknown;
+  try { raw = JSON.parse(str(f, 'openings', 50000) ?? '[]'); } catch { return []; }
+  if (!Array.isArray(raw)) return [];
+  const size = (v: unknown, min: number, max: number) => { const n = Math.round(Number(v)); return n >= min && n <= max ? n : null; };
+  const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  return raw.slice(0, 100).filter((o) => o && typeof o === 'object').map((o: Record<string, unknown>) => ({
+    ref: text(o.ref, 20),
+    system: SYSTEMS.includes(String(o.system)) ? String(o.system) : 'windows',
+    material: MATERIALS.includes(String(o.material)) ? String(o.material) : '',
+    width_mm: size(o.width_mm, 300, 30000), height_mm: size(o.height_mm, 300, 6000),
+    qty: size(o.qty, 1, 999) ?? 1, note: text(o.note, 200),
+  })).filter((o) => o.width_mm || o.height_mm || o.note);
+};
+
 // Until Resend is set up (RESEND_API_KEY + MAIL_FROM) requests are only saved; staff see them in contact_requests.
 const mail = (to: string | string[], subject: string, html: string, replyTo?: string) => !Deno.env.get('RESEND_API_KEY') || !Deno.env.get('MAIL_FROM') ? Promise.resolve(null) : fetch('https://api.resend.com/emails', {
   method: 'POST',
@@ -50,7 +69,9 @@ Deno.serve(async (req) => {
   // The form says which language it was sent in. Browsers strip the path from a cross-origin Referer,
   // so the header is only a fallback for older copies of the page.
   const lang = str(f, 'lang', 5) === 'pl' || (req.headers.get('referer') ?? '').includes('/pl/') ? 'pl' : 'en';
+  const openings = openingsOf(f);
   const { data: row, error } = await supabase.from('contact_requests').insert({
+    openings,
     lang, name, email,
     role: str(f, 'role'), phone: str(f, 'phone', 60), company: str(f, 'company', 200), topic: str(f, 'topic'),
     systems: f.getAll('systems').map(String).slice(0, 20), material: f.getAll('material').map(String).slice(0, 10),
@@ -81,6 +102,8 @@ Deno.serve(async (req) => {
         <h1 style="font-size:20px;font-weight:600;margin:0 0 12px">${escape(name)} &lt;${escape(email)}&gt;</h1>
         ${filesLink ? `<p style="font-size:15px;margin:0 0 12px"><strong>Large files:</strong> <a href="${escape(filesLink)}">${escape(filesLink)}</a> (links like this often expire within a week, download them early)</p>` : ''}
         <table style="font-size:14px;border-collapse:collapse">${fields.map(([k, v]) => `<tr><td style="padding:4px 16px 4px 0;color:#6f6a62">${k}</td><td style="padding:4px 0">${escape(String(v))}</td></tr>`).join('')}</table>
+        ${openings.length ? `<p style="font-size:13px;color:#6f6a62;margin:16px 0 4px">Openings (${openings.reduce((n, o) => n + o.qty, 0)})</p>
+        <table style="font-size:14px;border-collapse:collapse">${openings.map((o) => `<tr><td style="padding:3px 12px 3px 0">${escape(o.ref)}</td><td style="padding:3px 12px 3px 0">${o.system}${o.material ? `, ${o.material}` : ''}</td><td style="padding:3px 12px 3px 0">${o.width_mm ?? '?'} × ${o.height_mm ?? '?'} mm</td><td style="padding:3px 12px 3px 0">× ${o.qty}</td><td style="padding:3px 0">${escape(o.note)}</td></tr>`).join('')}</table>` : ''}
         ${str(f, 'message', 10000) ? `<p style="font-size:15px;line-height:1.5;white-space:pre-wrap;margin-top:16px">${escape(str(f, 'message', 10000)!)}</p>` : ''}
       </div>`, email);
   }

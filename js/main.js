@@ -1,5 +1,6 @@
 /* Brick & Pane — site behaviour. No dependencies. */
 import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, rangeTextIncVat } from './pricing.js';
+import { readList, writeList, addToList, clearList, nextRef } from './openings-list.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -230,8 +231,17 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
   };
   const bindPortalDraft = (tool, opening) => {
     const a = $('[data-tool-portal]', tool);
-    if (!a) return;
-    a.onclick = () => { try { localStorage.setItem(DRAFT_OPENING, JSON.stringify(opening)); } catch { /* ignore */ } };
+    if (a) a.onclick = () => { try { localStorage.setItem(DRAFT_OPENING, JSON.stringify(opening)); } catch { /* ignore */ } };
+    // Build a list of several openings across product pages, then send it with the quote form.
+    const add = $('[data-tool-add]', tool), note = $('[data-tool-list]', tool);
+    if (add) add.onclick = () => {
+      const { kg, ...o } = opening; void kg;
+      const saved = addToList(o);
+      const n = readList().length;
+      note.innerHTML = t(`Added as ${saved.ref}. Your list has ${n} opening${n === 1 ? '' : 's'}. <a href="contact.html">Send the list for a quote</a>`,
+        `Dodano jako ${saved.ref}. Na liście: ${n} ${n === 1 ? 'otwór' : n < 5 ? 'otwory' : 'otworów'}. <a href="contact.html">Wyślij listę do wyceny</a>`);
+      note.hidden = false;
+    };
   };
 
   const tool = $('[data-sizing-tool]');
@@ -348,17 +358,72 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
     const topic = params.get('topic');
     if (topic && form.topic) form.topic.value = topic;
     if (!form.dataset.endpoint) { const note = $('[data-preview-note]', form); if (note) note.hidden = false; }
-    if (params.get('w') && form.opening_width_mm) form.opening_width_mm.value = params.get('w');
-    if (params.get('h') && form.opening_height_mm) form.opening_height_mm.value = params.get('h');
+    /* Openings: one row per window or door, kept in the visitor's list (js/openings-list.js). */
+    const SYS_NAMES = PL
+      ? { 'lift-slide': 'Podnoszono-przesuwne', sliding: 'Przesuwne slim', bifold: 'Harmonijkowe', hinged: 'Balkonowe / wejściowe', windows: 'Okna', facades: 'Fasada słupowo-ryglowa', rooflights: 'Latarnia dachowa / świetlik' }
+      : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance door', windows: 'Windows', facades: 'Curtain walling', rooflights: 'Roof lantern / rooflight' };
+    const MAT_NAMES = PL ? { '': 'Doradźcie', alu: 'Aluminium', timber: 'Drewno', pvc: 'PVC', alutimber: 'Drewno-aluminium' } : { '': 'Advise me', alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium' };
+    const opBox = $('[data-openings-rows]', form);
     if (params.get('w') && params.get('h')) {
-      const sysKey = params.get('system'); const cfg = SLIDERS[sysKey]?.configs[params.get('config')]; const gl = GLASS[params.get('glass')];
-      const sysName = (PL ? { 'lift-slide': 'Drzwi podnoszono-przesuwne', sliding: 'Drzwi przesuwne slim', bifold: 'Drzwi harmonijkowe' } : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold' })[sysKey] || t('Door', 'Drzwi');
-      const layout = cfg ? cfg.label : (sysKey === 'bifold' && params.get('config') ? `${params.get('config')} leaves` : '');
+      // Arriving from a sizing tool: add that opening to the list once, with its layout and glass in the note.
+      const sysKey = SYS_NAMES[params.get('system')] ? params.get('system') : 'lift-slide';
+      const cfg = SLIDERS[sysKey]?.configs[params.get('config')]; const gl = GLASS[params.get('glass')];
       const glPl = { d: 'szyba podwójna', dl: 'szyba podwójna laminowana', t: 'szyba potrójna', tl: 'szyba potrójna laminowana' }[params.get('glass')];
-      form.message.value = PL
-        ? `${sysName}: otwór ok. ${params.get('w')} × ${params.get('h')} mm${params.get('config') ? `, układ ${params.get('config')}` : ''}${glPl ? `, ${glPl}` : ''}.\n`
-        : `${sysName} opening approx. ${params.get('w')} × ${params.get('h')} mm${layout ? `, ${layout}` : ''}${gl ? `, ${gl.label}` : ''}.\n`;
+      const layout = PL ? (params.get('config') ? `układ ${params.get('config')}` : '') : cfg ? cfg.label : (sysKey === 'bifold' && params.get('config') ? `${params.get('config')} leaves` : '');
+      const o = { system: sysKey, width_mm: +params.get('w'), height_mm: +params.get('h'), config: params.get('config') || '', glazing: params.get('glass') || '', note: [layout, PL ? glPl : gl?.label].filter(Boolean).join(', ') };
+      if (!readList().some((x) => x.system === o.system && x.width_mm === o.width_mm && x.height_mm === o.height_mm && (x.config || '') === o.config)) addToList(o);
     }
+    const opRow = (o) => `
+      <div class="op-row" data-op>
+        <span class="op-ref" data-op-ref>${String(o.ref || '').replace(/</g, '&lt;')}</span>
+        <label class="op-f op-sys"><span>${t('Product', 'Produkt')}</span><select data-k="system">${Object.entries(SYS_NAMES).map(([k, v]) => `<option value="${k}"${k === o.system ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="op-f op-mat"><span>${t('Material', 'Materiał')}</span><select data-k="material">${Object.entries(MAT_NAMES).map(([k, v]) => `<option value="${k}"${k === (o.material || '') ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="op-f op-w"><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="${t('e.g. 4800', 'np. 4800')}" value="${o.width_mm || ''}"></label>
+        <label class="op-f op-h"><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="${t('e.g. 2400', 'np. 2400')}" value="${o.height_mm || ''}"></label>
+        <label class="op-f op-qty"><span>${t('Qty', 'Szt.')}</span><input data-k="qty" type="number" inputmode="numeric" min="1" max="999" value="${o.qty || 1}"></label>
+        <label class="op-f op-note"><span>${t('Note', 'Uwagi')}</span><input data-k="note" type="text" maxlength="200" value="${String(o.note || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"></label>
+        <button type="button" class="linkish op-remove" data-op-remove>${t('Remove', 'Usuń')}</button>
+      </div>`;
+    // Keys the rows don't show (layout, glass) ride along unchanged.
+    const opRead = () => (opBox ? $$('[data-op]', opBox) : []).map((row) => {
+      const o = { ...row._o };
+      $$('[data-k]', row).forEach((el) => { o[el.dataset.k] = el.type === 'number' ? (el.value === '' ? null : +el.value) : el.value; });
+      o.qty = o.qty || 1;
+      return o;
+    });
+    const opRender = (list) => {
+      opBox.innerHTML = list.map(opRow).join('');
+      $$('[data-op]', opBox).forEach((row, i) => { row._o = list[i]; });
+    };
+    if (opBox) {
+      // An empty list still shows one blank row; it is only saved once something is typed in it.
+      const start = readList();
+      const sys0 = SYS_NAMES[params.get('system')] ? params.get('system') : 'windows';
+      opRender(start.length ? start : [{ system: sys0, material: '', ref: nextRef([], sys0), qty: 1 }]);
+      opBox.addEventListener('input', () => writeList(opRead()));
+      opBox.addEventListener('change', (e) => {
+        // A new product type gets a matching reference (W for windows, D for doors) if it still has the default one.
+        if (e.target.dataset.k !== 'system') return;
+        const list = opRead(); const row = e.target.closest('[data-op]'); const i = $$('[data-op]', opBox).indexOf(row);
+        list[i].ref = nextRef(list.filter((_, j) => j !== i), list[i].system); list[i].config = ''; list[i].glazing = '';
+        writeList(list); opRender(list);
+      });
+      opBox.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-op-remove]'); if (!rm) return;
+        const list = opRead(); list.splice($$('[data-op]', opBox).indexOf(rm.closest('[data-op]')), 1);
+        writeList(list); opRender(list);
+        $('[data-openings-add]', form).focus();
+      });
+      $('[data-openings-add]', form).addEventListener('click', () => {
+        const list = opRead(); const last = list[list.length - 1];
+        const sys = last?.system || params.get('system') || 'windows';
+        list.push({ system: SYS_NAMES[sys] ? sys : 'windows', material: last?.material || '', ref: nextRef(list, SYS_NAMES[sys] ? sys : 'windows'), qty: 1 });
+        writeList(list); opRender(list);
+        $('[data-op]:last-child [data-k="width_mm"]', opBox).focus();
+      });
+    }
+    const openingsValid = () => opRead().every((o) => (o.width_mm == null || (o.width_mm >= 300 && o.width_mm <= 30000)) && (o.height_mm == null || (o.height_mm >= 300 && o.height_mm <= 6000)))
+      || t('Check the sizes: width 300–30,000 mm, height 300–6,000 mm. Leave a size blank if you don’t know it yet.', 'Sprawdź wymiary: szerokość 300–30 000 mm, wysokość 300–6000 mm. Zostaw pole puste, jeśli jeszcze nie znasz wymiaru.');
 
     // Restore an unsent draft (text fields only).
     try {
@@ -409,6 +474,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         let res = true;
         if (el.dataset.validate === 'radio') res = !!form.querySelector(`input[name="${el.dataset.name}"]:checked`) || t('Choose one option.', 'Wybierz jedną opcję.');
         else if (el.dataset.validate === 'consent') res = el.checked || t('Please confirm so we can reply to you.', 'Potwierdź, żebyśmy mogli Ci odpowiedzieć.');
+        else if (el.dataset.validate === 'openings') res = openingsValid();
         else res = validators[el.name] ? validators[el.name](el.value) : true;
         fieldError(field, res === true ? '' : res);
         if (res !== true) { ok = false; first = first || el; }
@@ -462,6 +528,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         status.focus();
         return;
       }
+      if (form.openings) form.openings.value = JSON.stringify(opRead().filter((o) => o.width_mm || o.height_mm || o.note));
       const big = [...(fileInput?.files || [])].reduce((n, x) => n + x.size, 0) > 10e6;
       btn.disabled = true; btn.textContent = t('Sending…', 'Wysyłanie…');
       status.textContent = big ? t('Uploading your files. With large drawings this can take a minute or two, please keep this page open.', 'Wysyłamy pliki. Przy dużych rysunkach może to potrwać minutę lub dwie, nie zamykaj tej strony.') : '';
@@ -473,6 +540,7 @@ import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || String(res.status));
         try { localStorage.removeItem(DRAFT); } catch { /* ignore */ }
+        clearList();
         // The thank-you page shows the reference, any files that didn't upload, and offers the portal for this email.
         try { sessionStorage.setItem('bp-enquiry', JSON.stringify({ ref: data.ref || '', email: form.email.value.trim(), rejected: data.rejected || [] })); } catch { /* ignore */ }
         location.href = `thank-you.html${data.ref ? `?ref=${encodeURIComponent(data.ref)}` : ''}`;

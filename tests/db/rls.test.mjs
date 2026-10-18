@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -131,4 +131,36 @@ test('quote requests appear in the portal of the account with the same confirmed
   await db.query(`update auth.users set email_confirmed_at = null where id = $1`, [A]);
   await as(A);
   assert.equal((await db.query('select * from public.my_enquiries()')).rows.length, 0);
+});
+
+test('staff turn an enquiry into a project with its openings; a new account takes it over', async () => {
+  const { db, as, fails } = await setup();
+  await db.exec('grant all on public.contact_requests to service_role; grant usage on schema public to service_role; set role service_role');
+  const openings = JSON.stringify([{ ref: 'D01', system: 'sliding', material: 'alu', width_mm: 3600, height_mm: 2200, qty: 1 }, { ref: 'W01', system: 'windows', material: 'unsure', width_mm: 1200, height_mm: 1400, qty: 3 }]);
+  const [noAcc, known] = (await db.query(`insert into public.contact_requests (name, email, consent_at, location, openings, staff_note) values
+    ('Kim', 'Kim@New.com', now(), 'E17', $1, 'Called back'), ('Jo', 'client@x.com', now(), 'N1', '[]', null) returning id`, [openings])).rows.map((x) => x.id);
+  await db.query(`update public.contact_requests set opening_width_mm = 4000, opening_height_mm = 2400, systems = '{bifold}' where id = $1`, [known]);
+  await db.exec('reset role');
+  await as(C);
+  await fails('select public.convert_request($1)', [noAcc]);
+  await as(S);
+  const P = (await db.query('select public.convert_request($1) as id', [noAcc])).rows[0].id;
+  assert.equal((await db.query('select public.convert_request($1) as id', [noAcc])).rows[0].id, P); // twice = same project
+  const ops = (await db.query('select system, material, qty from public.openings where project_id = $1 order by ref', [P])).rows;
+  assert.deepEqual(ops, [{ system: 'sliding', material: 'alu', qty: 1 }, { system: 'windows', material: '', qty: 3 }]);
+  assert.deepEqual((await db.query('select status, project_id from public.contact_requests where id = $1', [noAcc])).rows[0], { status: 'converted', project_id: P });
+  assert.equal((await db.query('select notes from public.project_internal where project_id = $1', [P])).rows[0].notes, 'Called back');
+  assert.equal((await db.query('select * from public.project_members where project_id = $1', [P])).rows.length, 0); // staff not left on the team
+  // An existing account with that email owns the project straight away.
+  const P2 = (await db.query('select public.convert_request($1) as id', [known])).rows[0].id;
+  assert.equal((await db.query('select owner_id from public.projects where id = $1', [P2])).rows[0].owner_id, C);
+  assert.equal((await db.query('select width_mm from public.openings where project_id = $1', [P2])).rows[0].width_mm, 4000);
+  // Signing up with the enquiry's email hands over the first project.
+  await db.exec('reset role');
+  const K = '66666666-6666-6666-6666-666666666666';
+  await db.query(`insert into auth.users values ($1, 'kim@new.com', '{"full_name":"Kim","account_type":"homeowner"}')`, [K]);
+  await as(K);
+  const mine = (await db.query('select id, owner_id from public.projects')).rows;
+  assert.deepEqual(mine, [{ id: P, owner_id: K }]);
+  assert.equal((await db.query('select role from public.project_members where project_id = $1 and user_id = $2', [P, K])).rows[0].role, 'owner');
 });

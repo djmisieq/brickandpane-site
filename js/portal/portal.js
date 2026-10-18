@@ -4,6 +4,7 @@ import { SYSTEMS, MATERIALS, stage, esc, fmtDay, ago, stageBadge, stageText, cou
 import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat, pricingIsExample } from '../pricing.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
 import { tr } from './i18n.js';
+import { readList, clearList } from '../openings-list.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -245,6 +246,23 @@ function newProject() {
       toast(tr('We’ve added the opening from the sizing tool.'));
     }
   } catch { /* ignore */ }
+  // Openings the visitor listed on the public site before signing in (js/openings-list.js).
+  const listed = readList();
+  if (listed.length) {
+    const first = $('tr', rows);
+    if (!first.querySelector('[name="width_mm"]').value) first.remove();
+    listed.forEach((o) => {
+      rows.insertAdjacentHTML('beforeend', openingRow(rows.children.length));
+      const row = rows.lastElementChild;
+      const set = (k, v) => { const el = row.querySelector(`[name="${k}"]`); if (el && v != null && v !== '') el.value = v; };
+      ['ref', 'system', 'material', 'width_mm', 'height_mm', 'glazing', 'qty'].forEach((k) => set(k, o[k]));
+      row.querySelector('[name="config"]').innerHTML = layoutOptions(o.system || 'lift-slide', o.config || '');
+      if (o.note) row.dataset.note = o.note;
+      est(row);
+    });
+    total();
+    toast(tr(listed.length === 1 ? 'We’ve added the opening from your list.' : 'We’ve added {n} openings from your list.', { n: listed.length }));
+  }
   rows.addEventListener('click', (e) => { if (e.target.closest('[data-remove]') && rows.children.length > 1) e.target.closest('tr').remove(); });
   $('[data-add]', f).addEventListener('click', () => rows.insertAdjacentHTML('beforeend', openingRow(rows.children.length)));
   f.addEventListener('submit', async (e) => {
@@ -254,16 +272,16 @@ function newProject() {
     if (bad) { bad.focus(); return; }
     const files = [...f.files.files];
     if (files.some((x) => x.size > 50e6)) { toast(tr('Each file must be under 50 MB.')); return; }
-    const openings = $$('tr', rows).map((row) => Object.fromEntries($$('input,select', row).map((el) => [el.name, el.value])))
+    const openings = $$('tr', rows).map((row) => ({ ...Object.fromEntries($$('input,select', row).map((el) => [el.name, el.value])), notes: row.dataset.note || '' }))
       .filter((o) => o.width_mm && o.height_mm)
-      .map((o) => ({ ...o, width_mm: +o.width_mm, height_mm: +o.height_mm, qty: +o.qty || 1, notes: '' }));
+      .map((o) => ({ ...o, width_mm: +o.width_mm, height_mm: +o.height_mm, qty: +o.qty || 1 }));
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
     const sum = estimateProject(openings);
     // Example rates are placeholders: in the live portal don't store their totals, or the CRM would show them as a real estimate.
     if (sum && (store.mode === 'demo' || !pricingIsExample())) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
-    try { const id = await store.createProject(data, openings, files); toast(tr(home ? 'Sent. Your formal quote follows within two working days.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
+    try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. Your formal quote follows within two working days.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
     catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }
   });
 }

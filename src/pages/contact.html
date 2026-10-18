@@ -57,10 +57,14 @@
             <option value="question" data-roles="homeowner other">Just a question</option>
           </select>
         </div>
-        <div class="field-row">
-          <div class="field"><label for="f-ow">Opening width (mm) <span class="hint">optional</span></label><input id="f-ow" name="opening_width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="e.g. 4800"></div>
-          <div class="field"><label for="f-oh">Opening height (mm) <span class="hint">optional</span></label><input id="f-oh" name="opening_height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="e.g. 2400"></div>
-        </div>
+        <fieldset class="field" data-openings data-validate="openings">
+          <legend>Openings <span class="hint">optional</span></legend>
+          <span class="hint">Add each window or door with an approximate size. Openings you add in the sizing tools on product pages appear here too.</span>
+          <div class="op-rows" data-openings-rows></div>
+          <button type="button" class="btn btn-sm btn-ghost" data-openings-add>Add an opening</button>
+          <input type="hidden" name="openings">
+          <span class="error" role="alert"></span>
+        </fieldset>
         <div class="field"><label for="f-loc">Project location</label><input id="f-loc" name="location" type="text" required aria-required="true" placeholder="Postcode or borough, e.g. SE22 or Hackney" data-validate><span class="hint">We check access, conservation area status and exposure.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
           <legend>Products <span class="hint">optional</span></legend>
