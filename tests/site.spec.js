@@ -165,17 +165,15 @@ test.describe('sizing tools', () => {
   });
 });
 
-test.describe('budget estimates', () => {
-  test('hidden on public tools until the price list is live', async ({ page }) => {
-    await page.goto('/lift-and-slide-doors.html#sizing');
-    await expect(page.locator('[data-estimate]')).toContainText('Save this opening to your portal');
-    await expect(page.locator('[data-estimate]')).not.toContainText('£');
-  });
-  test('preview mode shows a labelled example estimate', async ({ page }) => {
-    await page.goto('/bifold-doors.html?preview=pricing#sizing');
-    await expect(page.locator('[data-estimate]')).toContainText(/£[\d,]+–£[\d,]+ \+ VAT/);
-    await expect(page.locator('[data-estimate]')).toContainText('Example rates');
-  });
+test.describe('no automatic prices', () => {
+  // Every project is quoted individually: the tools never show an amount, whatever the URL says.
+  for (const url of ['/lift-and-slide-doors.html#sizing', '/bifold-doors.html?preview=pricing#sizing', '/pl/sliding-doors.html#sizing']) {
+    test(`sizing tool shows no amount: ${url}`, async ({ page }) => {
+      await page.goto(url);
+      await expect(page.locator('[data-estimate]')).toContainText(/priced individually|wyceniamy indywidualnie/);
+      await expect(page.locator('[data-sizing-tool]')).not.toContainText('£');
+    });
+  }
 });
 
 test.describe('homeowner & mobile details', () => {
@@ -245,6 +243,7 @@ test.describe('quote form', () => {
   });
 
   test('a list of openings built on product pages goes out with one enquiry, no account', async ({ page }) => {
+    test.slow(); // several page loads in one flow
     const sent = [];
     await page.route('**/functions/v1/contact-submit', (route) => {
       sent.push(route.request().postData() || '');
@@ -258,10 +257,11 @@ test.describe('quote form', () => {
     await page.locator('[data-tool-add]').click();
     await expect(page.locator('[data-tool-list]')).toContainText('Your list has 2 openings');
     await page.locator('[data-tool-list] a').click();
-    await page.locator('input[name="role"][value="homeowner"]').check({ force: true });
+    // The rows are drawn by the page script: once they are there, the form's buttons work too.
+    await expect(page.locator('[data-op]')).toHaveCount(2);
+    await page.locator('label.choice', { has: page.locator('input[value="homeowner"]') }).click();
     await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
     await page.locator('#step-1 [data-next]').click();
-    await expect(page.locator('[data-op]')).toHaveCount(2);
     await page.locator('[data-openings-add]').click();
     const third = page.locator('[data-op]').nth(2);
     await third.locator('[data-k="system"]').selectOption('windows');
@@ -275,10 +275,10 @@ test.describe('quote form', () => {
     await third.locator('[data-k="height_mm"]').fill('1400');
     // The list survives a reload while the visitor is still filling in the form.
     await page.reload();
-    await page.locator('input[name="role"][value="homeowner"]').check({ force: true });
+    await expect(page.locator('[data-op]')).toHaveCount(3);
+    await page.locator('label.choice', { has: page.locator('input[value="homeowner"]') }).click();
     await page.fill('#f-name', 'Sam'); await page.fill('#f-email', 'sam@example.com');
     await page.locator('#step-1 [data-next]').click();
-    await expect(page.locator('[data-op]')).toHaveCount(3);
     await page.fill('#f-loc', 'E17');
     await page.locator('#step-2 [data-next]').click();
     await page.check('input[name="consent"]');

@@ -1,8 +1,7 @@
 // Client project portal: dashboard, project detail, new project, settings.
 import { store } from './store.js';
 import { SYSTEMS, MATERIALS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
-import { estimateProject, estimateOpening, rangeText, rangeTextIncVat, fmtGBP, incVat, pricingIsExample } from '../pricing.js';
-import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts, showPrices, estimateNote } from './ui.js';
+import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 import { tr } from './i18n.js';
 import { readList, clearList } from '../openings-list.js';
 
@@ -75,7 +74,7 @@ async function dashboard() {
         ${you.length ? `<h2 class="list-h">${tr('Needs your action')}</h2><div class="pgrid">${you.map(card).join('')}</div>` : ''}
         <h2 class="list-h">${tr(you.length ? (home ? 'Other orders' : 'Other projects') : (home ? 'All orders' : 'All projects'))}</h2>
         <div class="pgrid">${projects.filter((p) => !you.includes(p)).map(card).join('') || `<p class="note">${tr('Nothing else right now.')}</p>`}</div>`
-      : `<div class="empty"><h2>${tr(home ? 'No orders yet' : 'No projects yet')}</h2><p>${tr(home ? 'Tell us the sizes of your opening, or add a few phone photos. We’ll send a budget within two working days, and you can follow your order here, like an online shop.' : 'Send us drawings, a window schedule or a sketch. You’ll follow every step here, with no need to phone for updates.')}</p><a class="btn" href="#/new">${tr(home ? 'Add your opening' : 'Start a project')}</a></div>`}
+      : `<div class="empty"><h2>${tr(home ? 'No orders yet' : 'No projects yet')}</h2><p>${tr(home ? 'Tell us the sizes of your opening, or add a few phone photos. We’ll prepare an individual quote, and you can follow your order here, like an online shop.' : 'Send us drawings, a window schedule or a sketch. You’ll follow every step here, with no need to phone for updates.')}</p><a class="btn" href="#/new">${tr(home ? 'Add your opening' : 'Start a project')}</a></div>`}
     </div>`;
 }
 
@@ -138,7 +137,6 @@ function openingRow(i) {
     <td data-label="${tr('Glazing')}"><select name="glazing" aria-label="${tr('Glazing')}"><option value="d">${tr('Double')}</option><option value="dl">${tr('Double lam.')}</option><option value="t">${tr('Triple')}</option><option value="tl">${tr('Triple lam.')}</option></select></td>
     <td data-label="${tr('Qty')}"><input name="qty" type="number" min="1" value="1" aria-label="${tr('Quantity')}"></td>
     <td class="est num" data-label="${tr('Panel weight')}" data-est>—</td>
-    ${showPrices() ? `<td class="est num" data-label="${tr('Est. budget')}" data-price>—</td>` : ''}
     <td class="sched-remove"><button type="button" class="linkish" data-remove aria-label="${tr('Remove this opening')}">${tr('Remove')}</button></td>
   </tr>`;
 }
@@ -151,7 +149,7 @@ function newProject() {
     <div class="container section-tight">
       <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/">${tr(home ? 'Orders' : 'Projects')}</a></li><li aria-current="page">${tr(home ? 'Add your opening' : 'New project')}</li></ol></nav>
       <h1 class="app-h1">${tr(home ? 'Add your opening' : 'New project')}</h1>
-      <p class="lead" style="margin-bottom:2rem">${tr(home ? 'Add the size of each opening. We’ll send a budget and our formal quote within two working days.' : 'Fill in what you know. A sketch with dimensions is enough to start. You’ll see your project move through each stage here.')}</p>
+      <p class="lead" style="margin-bottom:2rem">${tr(home ? 'Add the size of each opening. We’ll look at your project and prepare an individual quote.' : 'Fill in what you know. A sketch with dimensions is enough to start. You’ll see your project move through each stage here.')}</p>
       <form class="newp" novalidate>
         <section class="newp-sec"><h2 class="panel-h">${tr('Project')}</h2>
           <div class="field-row">
@@ -170,9 +168,8 @@ function newProject() {
         <section class="newp-sec"><h2 class="panel-h">${tr(home ? 'Your openings' : 'Openings schedule')}</h2>
           <p class="note">${tr(home ? 'Measure the hole in the wall (width × height) in millimetres. Rough sizes are fine; we measure exactly at the survey. Not sure about panels? Leave it blank.' : 'Structural opening sizes. Pick a layout to see the estimated panel weight.')}</p>
           <div class="sched-tools">${home ? '' : `<label class="btn btn-sm btn-ghost" for="np-csv">${tr('Import CSV')}</label><input id="np-csv" type="file" accept=".csv,text/csv" class="visually-hidden"><a class="linkish" href="#" data-csv-template>${tr('Download CSV template')}</a>`}</div>
-          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>${tr('Ref')}</th><th>${tr('System')}</th><th>${tr('Material')}</th><th>${tr('Width (mm)')}</th><th>${tr('Height (mm)')}</th><th>${tr('Layout')}</th><th>${tr('Glazing')}</th><th>${tr('Qty')}</th><th>${tr('Panel weight')}</th>${showPrices() ? `<th>${tr('Est. budget')}</th>` : ''}<th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
+          <div style="overflow-x:auto"><table class="sched"><thead><tr><th>${tr('Ref')}</th><th>${tr('System')}</th><th>${tr('Material')}</th><th>${tr('Width (mm)')}</th><th>${tr('Height (mm)')}</th><th>${tr('Layout')}</th><th>${tr('Glazing')}</th><th>${tr('Qty')}</th><th>${tr('Panel weight')}</th><th></th></tr></thead><tbody data-rows>${openingRow(0)}</tbody></table></div>
           <button type="button" class="btn btn-sm btn-ghost" data-add style="margin-top:1rem">${tr('Add opening')}</button>
-          ${showPrices() ? `<div class="estimate" data-total style="margin-top:1.5rem"><span class="estimate-label">${tr('Budget estimate')}</span><span class="estimate-value" data-total-value>—</span><span class="estimate-text">${tr('Supplied & installed in London.')} ${esc(estimateNote())}</span></div>` : ''}
         </section>
         <section class="newp-sec"><h2 class="panel-h">${tr('Files')}</h2>
           <div class="field"><label for="np-files">${tr('Drawings, schedule or photos')}</label><input id="np-files" name="files" type="file" multiple accept=".pdf,.dwg,.dxf,.xlsx,.xls,.csv,.jpg,.jpeg,.png"><span class="hint">${tr('PDF, DWG, XLSX or images, up to 50 MB each.')}</span></div>
@@ -186,19 +183,11 @@ function newProject() {
     const o = rowData(row);
     const e = o.system === 'lift-slide' ? estimatePanel(o) : null;
     $('[data-est]', row).innerHTML = e ? `${e.kg} kg${e.over ? ` <span class="tag tag-accent">${tr('check')}</span>` : ''}` : '—';
-    const priceCell = $('[data-price]', row);
-    if (priceCell) { const b = estimateOpening(o); priceCell.textContent = b ? `${tr('c.')} ${fmtGBP(home ? incVat(b.total) : Math.round(b.total / 100) * 100)}` : '—'; }
   };
-  const total = () => {
-    const box = $('[data-total-value]', f); if (!box) return null;
-    const sum = estimateProject($$('tr', rows).map(rowData).filter((o) => o.width_mm && o.height_mm));
-    box.textContent = sum ? (home ? rangeTextIncVat(sum) : rangeText(sum)) : '—';
-    return sum;
-  };
-  rows.addEventListener('input', (e) => { const row = e.target.closest('tr'); if (row) est(row); total(); });
+  rows.addEventListener('input', (e) => { const row = e.target.closest('tr'); if (row) est(row); });
   rows.addEventListener('change', (e) => {
     if (e.target.name !== 'system') return;
-    const row = e.target.closest('tr'); row.querySelector('[name="config"]').innerHTML = layoutOptions(e.target.value); est(row); total();
+    const row = e.target.closest('tr'); row.querySelector('[name="config"]').innerHTML = layoutOptions(e.target.value); est(row);
   });
   // CSV import: ref,system,width_mm,height_mm,config,glazing,qty
   const csv = $('#np-csv', f);
@@ -225,7 +214,6 @@ function newProject() {
       if (col(row, 'material', 7) in MATERIALS) tr2.querySelector('[name="material"]').value = col(row, 'material', 7);
       est(tr2);
     });
-    total();
     toast(tr('Imported {n} openings.', { n: valid.length }));
   });
   $('[data-csv-template]', f)?.addEventListener('click', (e) => {
@@ -233,7 +221,6 @@ function newProject() {
     const blob = new Blob(['ref,system,width_mm,height_mm,config,glazing,qty,material\nD01,lift-slide,5600,2700,4C,t,1,alu\nD02,bifold,4800,2400,4+1,d,1,alu\nW01,windows,1200,1400,,t,2,timber\n'], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'openings-template.csv'; a.click(); URL.revokeObjectURL(a.href);
   });
-  rows.addEventListener('change', () => total());
   // Opening carried over from a sizing tool on the public site.
   try {
     const draft = JSON.parse(localStorage.getItem('bp-draft-opening') || 'null');
@@ -242,7 +229,7 @@ function newProject() {
       ['system', 'width_mm', 'height_mm', 'glazing'].forEach((k) => { if (draft[k] != null && row.querySelector(`[name="${k}"]`)) row.querySelector(`[name="${k}"]`).value = draft[k]; });
       row.querySelector('[name="config"]').innerHTML = layoutOptions(draft.system || 'lift-slide', draft.config || '');
       localStorage.removeItem('bp-draft-opening');
-      est(row); total();
+      est(row);
       toast(tr('We’ve added the opening from the sizing tool.'));
     }
   } catch { /* ignore */ }
@@ -260,7 +247,6 @@ function newProject() {
       if (o.note) row.dataset.note = o.note;
       est(row);
     });
-    total();
     toast(tr(listed.length === 1 ? 'We’ve added the opening from your list.' : 'We’ve added {n} openings from your list.', { n: listed.length }));
   }
   rows.addEventListener('click', (e) => { if (e.target.closest('[data-remove]') && rows.children.length > 1) e.target.closest('tr').remove(); });
@@ -277,11 +263,8 @@ function newProject() {
       .map((o) => ({ ...o, width_mm: +o.width_mm, height_mm: +o.height_mm, qty: +o.qty || 1 }));
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
-    const sum = estimateProject(openings);
-    // Example rates are placeholders: in the live portal don't store their totals, or the CRM would show them as a real estimate.
-    if (sum && (store.mode === 'demo' || !pricingIsExample())) { data.estimate_low = sum.low; data.estimate_high = sum.high; }
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
-    try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. Your formal quote follows within two working days.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
+    try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. We’ll prepare your individual quote.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
     catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }
   });
 }
