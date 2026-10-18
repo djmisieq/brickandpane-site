@@ -13,8 +13,12 @@ test.beforeEach(({}, info) => { test.skip(info.project.name !== 'desktop', 'sets
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
   // Confirmed services: survey of existing windows and measurement. No corner samples, nothing "free",
-  // no budget "straight away" while the price list is off, no "own team only" claims.
-  const BANNED = [/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
+  // no budget "straight away", no "own team only" claims.
+  // No prices at all (18.10.2026): every project is quoted individually, so no amounts, rates, ranges, discounts
+  // or deadlines for a budget anywhere on the site. Relative cost (£ / ££ / £££) is a comparison, not a price.
+  const PRICES = [/£\s?\d/, /£\/m²/, /±\s?\d/, /discount/i, /rabat/i, /zniżk/i, /promoc/i, /example rates/i, /stawki przykładowe/i,
+    /budget within/i, /budżet w (ciągu )?\d/i, /budżet (wróci|przyślemy) w/i, /(quote|price) (arrives|follows) within/i, /wycena przyjdzie w/i, /price\s+within/i];
+  const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
     /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
     /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\w* osob/i];
   for (const url of URLS) {

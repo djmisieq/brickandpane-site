@@ -63,7 +63,7 @@ function seed() {
   s.messages.push(
     { id: uid(), project_id: p1, author_id: tom.id, body: 'Hi Anna, two questions before we price.\n1) Is the slab recess for a flush threshold possible, or should we allow a 15 mm upstand?\n2) Can your engineer design the beam to a 3 mm live-load deflection at the head?', internal: false, created_at: daysAgo(8) },
     { id: uid(), project_id: p1, author_id: anna.id, body: '1) Flush, the slab is being recast anyway. 2) Yes, engineer confirms 3 mm is achievable with a 254 UC.', internal: false, created_at: daysAgo(7) },
-    { id: uid(), project_id: p1, author_id: tom.id, body: 'Perfect, thank you. Quotation to follow within two working days.', internal: false, created_at: daysAgo(6) },
+    { id: uid(), project_id: p1, author_id: tom.id, body: 'Perfect, thank you. Quotation to follow.', internal: false, created_at: daysAgo(6) },
     { id: uid(), project_id: p1, author_id: tom.id, body: 'Internal: discount headroom c. 5%. Do not offer yet.', internal: true, created_at: daysAgo(4) },
   );
 
@@ -78,13 +78,13 @@ function seed() {
     { id: uid(), project_id: p2, kind: 'drawing', title: 'Shop drawings — corner slider', version: 'Rev A', size_bytes: 5200000, visible_to_client: true, approval: 'pending', uploaded_by: tom.id, created_at: daysAgo(2) },
   );
 
-  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', estimate_low: 9900, estimate_high: 13400, next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(now(), 1) }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
+  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(now(), 1) }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
   s.openings.push({ id: uid(), project_id: p3, ref: 'D01', system: 'lift-slide', width_mm: 4000, height_mm: 2400, config: '3T', glazing: 'd', qty: 1, notes: '' });
 
   const p4 = mk({ name: 'Northfield Terrace — 8 houses', location: 'Ealing, W13', riba_stage: '', building_type: 'New-build houses (8)', start_window: '6–12 months', brief: 'Rear sliders and windows for 8 houses. Budget needed for appraisal.', next_step: 'Budget price by Thursday.', due_at: daysAgo(1, 17) }, ravi, [['submitted', daysAgo(4)], ['in_review', daysAgo(3), 'Reviewing the schedule.']], { value: 86000, prob: 30 });
   s.openings.push({ id: uid(), project_id: p4, ref: 'Type A rear', system: 'lift-slide', width_mm: 3600, height_mm: 2400, config: '2A', glazing: 'd', qty: 8, notes: '' });
 
-  const p5 = mk({ name: 'Kitchen extension doors', location: 'Walthamstow, E17', building_type: 'Extension to an existing house', start_window: 'Within 3 months', brief: 'Four-panel lift & slide to the garden.', next_step: 'We will confirm the delivery date.', estimate_low: 16800, estimate_high: 22700 }, sam, [
+  const p5 = mk({ name: 'Kitchen extension doors', location: 'Walthamstow, E17', building_type: 'Extension to an existing house', start_window: 'Within 3 months', brief: 'Four-panel lift & slide to the garden.', next_step: 'We will confirm the delivery date.' }, sam, [
     ['submitted', daysAgo(46), 'Request received.'], ['in_review', daysAgo(45)], ['quote_issued', daysAgo(43), 'Your quote is in Documents.'],
     ['accepted', daysAgo(38), 'Thank you for your order.'], ['survey', daysAgo(33), 'Survey on Thursday at 10:00.'], ['drawings', daysAgo(27), 'Final drawings ready to approve.'],
     ['production', daysAgo(20), 'Approved — your doors are now being made.'],

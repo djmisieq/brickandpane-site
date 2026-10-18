@@ -135,7 +135,7 @@ test('clients cannot use the staff CRM', async ({ page }) => {
   await expect(page.locator('#app')).toContainText('This area is for Brick & Pane staff');
 });
 
-test('sizing tool opening carries into a homeowner’s new request with a budget', async ({ page }) => {
+test('sizing tool opening carries into a homeowner’s new request, with no automatic price', async ({ page }) => {
   await page.goto('/lift-and-slide-doors.html#sizing');
   await page.locator('[data-tool-portal]').click();
   await expect(page).toHaveURL(/login\.html\?next=portal\.html/);
@@ -144,13 +144,13 @@ test('sizing tool opening carries into a homeowner’s new request with a budget
   await expect(page.locator('h1')).toHaveText('Add your opening');
   await expect(page.locator('[data-rows] input[name="width_mm"]')).toHaveValue('5600');
   await expect(page.locator('[data-rows] select[name="config"]')).toHaveValue('4C');
-  await expect(page.locator('[data-total-value]')).toHaveText(/£[\d,]+–£[\d,]+ inc\. VAT/);
+  await expect(page.locator('.newp')).not.toContainText('£');
   await expect(page.locator('#np-riba')).toBeHidden();
   await page.fill('#np-name', 'Our kitchen');
   await page.fill('#np-loc', 'E17');
   await page.locator('.newp button[type="submit"]').click();
   await expect(page.locator('.now-card')).toContainText('Request received');
-  await expect(page.locator('.estimate')).toContainText('Budget estimate');
+  await expect(page.locator('#panel-overview .estimate')).toHaveCount(0);
   await expect(page.locator('.tracker li.is-current')).toHaveText('Quote');
 });
 

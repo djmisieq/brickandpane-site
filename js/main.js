@@ -1,5 +1,4 @@
 /* Brick & Pane — site behaviour. No dependencies. */
-import { PRICING, pricingVisible, pricingIsExample, estimateProject, rangeText, rangeTextIncVat } from './pricing.js';
 import { readList, writeList, addToList, clearList, nextRef } from './openings-list.js';
 
 (() => {
@@ -215,19 +214,12 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
   };
 
   const DRAFT_OPENING = 'bp-draft-opening';
-  const renderEstimate = (tool, opening) => {
+  // No automatic prices: every project is quoted individually by the team.
+  const renderEstimate = (tool) => {
     const box = $('[data-estimate]', tool);
     if (!box) return;
-    if (!pricingVisible()) {
-      box.innerHTML = t('<span class="estimate-label">Budget</span><span class="estimate-text">Save this opening to your portal and we’ll send a budget within 2 working days.</span>',
-        '<span class="estimate-label">Budżet</span><span class="estimate-text">Zapisz ten otwór w panelu, a budżet prześlemy w ciągu 2 dni roboczych.</span>');
-      return;
-    }
-    const est = estimateProject([opening]);
-    box.innerHTML = est
-      ? t(`<span class="estimate-label">Budget estimate</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> for homeowners. Supplied &amp; installed in London. Automatic estimate, not a quotation.${pricingIsExample() ? ` <strong>${PRICING.label}.</strong>` : ''}</span>`,
-          `<span class="estimate-label">Szacunkowy budżet</span><span class="estimate-value">${rangeText(est)}</span><span class="estimate-text"><strong>${rangeTextIncVat(est)}</strong> dla osób prywatnych. Z dostawą i montażem w Londynie. Szacunek automatyczny, nie oferta.${pricingIsExample() ? ` <strong>${PRICING.labelPl}.</strong>` : ''}</span>`)
-      : '';
+    box.innerHTML = t('<span class="estimate-label">Price</span><span class="estimate-text">Every project is priced individually. Add this opening to your list or send it to us, and we’ll prepare a quote.</span>',
+      '<span class="estimate-label">Wycena</span><span class="estimate-text">Każdy projekt wyceniamy indywidualnie. Dodaj ten otwór do listy albo wyślij go nam, a przygotujemy wycenę.</span>');
   };
   const bindPortalDraft = (tool, opening) => {
     const a = $('[data-tool-portal]', tool);
@@ -283,7 +275,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       show(msgs);
       drawSlider($('[data-elevation]', tool), cfg, W, H);
       const opening = { system, width_mm: W, height_mm: H, config: f.config.value, glazing: f.glass.value, qty: 1, kg };
-      renderEstimate(tool, opening); bindPortalDraft(tool, opening);
+      renderEstimate(tool); bindPortalDraft(tool, opening);
       $('[data-tool-quote]', tool).href = `contact.html?${new URLSearchParams({ system, w: W, h: H, config: f.config.value, glass: f.glass.value })}`;
     };
 
@@ -317,7 +309,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       show(msgs);
       drawBifold($('[data-elevation]', tool), left, right, W, H);
       const opening = { system, width_mm: W, height_mm: H, config: f.layout.value, glazing: f.glass.value, qty: 1, kg };
-      renderEstimate(tool, opening); bindPortalDraft(tool, opening);
+      renderEstimate(tool); bindPortalDraft(tool, opening);
       $('[data-tool-quote]', tool).href = `contact.html?${new URLSearchParams({ system, w: W, h: H, config: f.layout.value, glass: f.glass.value })}`;
     };
 

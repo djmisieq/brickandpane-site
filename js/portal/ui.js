@@ -2,15 +2,11 @@
 import { store } from './store.js';
 import {
   STAGES, PHASES, DOC_KINDS, SYSTEMS, MATERIALS, stage, stageIndex, stageLabel, stageText, tracker, esc, fmtDate, fmtDay, ago, fmtSize,
-  stageBadge, courtLabel, estimatePanel, $, $$, toast, MEMBER_ROLES, decisionRights, decisionLabels, CHANGE_STATUS,
+  stageBadge, courtLabel, estimatePanel, $, $$, toast, MEMBER_ROLES, decisionRights, decisionLabels, CHANGE_STATUS, fmtGBP, incVat,
 } from './core.js';
-import { PRICING, pricingVisible, pricingIsExample, estimateOpening, fmtGBP, incVat } from '../pricing.js';
-import { tr, LANG } from './i18n.js';
+import { tr } from './i18n.js';
 
 const ADMIN = 'admin.html';
-
-export const showPrices = () => pricingVisible({ demo: store.mode === 'demo' });
-export const estimateNote = () => (pricingIsExample() ? `${LANG === 'pl' && PRICING.labelPl ? PRICING.labelPl : PRICING.label}.` : tr('Automatic estimate, not a quotation.'));
 
 export const route = () => {
   const h = location.hash.replace(/^#\/?/, '');
@@ -128,27 +124,17 @@ const money = (n, audience) => (audience === 'home' ? `${fmtGBP(incVat(n))} ${tr
 
 export function overviewPanel(d, viewer = 'client', audience = 'trade', user = null) {
   const p = d.project;
-  const prices = showPrices();
-  const hasQuote = d.documents.some((x) => x.kind === 'quote');
-  const linePrices = prices && !hasQuote;
   const members = d.members || [];
   const isOwner = viewer === 'staff' || members.some((m) => m.user_id === user?.id && m.role === 'owner');
-  const estBlock = p.estimate_low && prices && !hasQuote ? `
-    <div class="estimate" style="margin-bottom:var(--s-l)">
-      <span class="estimate-label">${tr(viewer === 'staff' ? 'Automatic estimate shown to client' : 'Budget estimate')}</span>
-      <span class="estimate-value">${audience === 'home' ? `${fmtGBP(incVat(p.estimate_low))}–${fmtGBP(incVat(p.estimate_high))} ${tr('inc. VAT')}` : `${fmtGBP(p.estimate_low)}–${fmtGBP(p.estimate_high)} + VAT`}</span>
-      <span class="estimate-text">${tr('Supplied & installed.')} ${tr(viewer === 'staff' ? 'Calculated from the client’s schedule.' : 'Your formal quotation follows after our technical review.')} ${esc(estimateNote())}</span>
-    </div>` : '';
   const payments = d.payments || [];
   const paid = payments.filter((x) => x.paid_at).reduce((t, x) => t + Number(x.amount), 0);
   const total = payments.reduce((t, x) => t + Number(x.amount), 0);
   return `
-    ${estBlock}
     <div class="grid-12">
       <div class="span-8">
         <h3 class="panel-h">${tr('Openings')}</h3>
-        ${d.openings.length ? `<table class="spec spec-compact"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('System')}</th><th scope="col">${tr('W × H (mm)')}</th><th scope="col">${tr('Layout')}</th><th scope="col">${tr('Qty')}</th><th scope="col">${tr('Panel weight')}</th>${linePrices ? `<th scope="col">${tr('Est. budget (line)')}</th>` : ''}</tr></thead><tbody>
-          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(tr(SYSTEMS[o.system] || o.system))}${o.material && MATERIALS[o.material] ? ` · ${esc(tr(MATERIALS[o.material]))}` : ''}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ` <span class="tag tag-accent">${tr('check')}</span>` : ''}` : '—'}</td>${linePrices ? `<td>${(() => { const b = estimateOpening(o); return b ? (audience === 'home' ? `${tr('c.')} ${fmtGBP(incVat(b.total))} ${tr('inc. VAT')}` : `${tr('c.')} ${fmtGBP(Math.round(b.total / 100) * 100)}`) : '—'; })()}</td>` : ''}</tr>${o.notes ? `<tr class="sub"><td colspan="${linePrices ? 7 : 6}">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
+        ${d.openings.length ? `<table class="spec spec-compact"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('System')}</th><th scope="col">${tr('W × H (mm)')}</th><th scope="col">${tr('Layout')}</th><th scope="col">${tr('Qty')}</th><th scope="col">${tr('Panel weight')}</th></tr></thead><tbody>
+          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(tr(SYSTEMS[o.system] || o.system))}${o.material && MATERIALS[o.material] ? ` · ${esc(tr(MATERIALS[o.material]))}` : ''}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ` <span class="tag tag-accent">${tr('check')}</span>` : ''}` : '—'}</td></tr>${o.notes ? `<tr class="sub"><td colspan="6">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
         </tbody></table>` : `<p class="note">${tr('No openings listed yet.')}</p>`}
         ${p.brief ? `<h3 class="panel-h">${tr('Brief')}</h3><p class="measure">${esc(p.brief)}</p>` : ''}
         ${payments.length ? `
@@ -260,7 +246,7 @@ export function changesPanel(d, viewer, user) {
       <h3 class="panel-h">${tr(viewer === 'staff' ? 'Propose a change to the client' : 'Request a change')}</h3>
       <div class="field"><label for="ch-title">${tr('What should change?')}</label><input id="ch-title" name="title" required placeholder="${viewer === 'staff' ? tr('e.g. Handle finish satin → black') : tr('e.g. Add a third panel')}"></div>
       <div class="field"><label for="ch-desc">${tr('Details')}</label><textarea id="ch-desc" name="description" rows="2"></textarea></div>
-      ${viewer === 'staff' ? `<div class="field"><label for="ch-impact">${tr('Impact on U-value, security, weather, cost and programme')}</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="${tr('e.g. No change to U-value or PAS 24. Cost +£420 + VAT. Programme: no change.')}"></textarea></div>` : ''}
+      ${viewer === 'staff' ? `<div class="field"><label for="ch-impact">${tr('Impact on U-value, security, weather, cost and programme')}</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="${tr('e.g. No change to U-value or PAS 24. Cost and programme: no change.')}"></textarea></div>` : ''}
       <div><button class="btn btn-sm" type="submit">${tr(viewer === 'staff' ? 'Send for approval' : 'Send request')}</button></div>
     </form>`;
 }

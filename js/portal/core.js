@@ -65,6 +65,10 @@ export const ago = (iso) => {
   if (s < 86400 * 7) return tr('{n} d ago', { n: Math.floor(s / 86400) });
   return fmtDate(iso);
 };
+// Amounts entered by staff (payment schedule, quotation). Homeowners see them with VAT.
+export const VAT = 0.2;
+export const fmtGBP = (n) => `£${Math.round(n).toLocaleString('en-GB')}`;
+export const incVat = (n) => Math.round((n * (1 + VAT)) / 100) * 100;
 export const fmtMoney = (n) => (n == null || n === '' ? '—' : `£${Number(n).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`);
 export const fmtSize = (b) => (b == null ? '' : b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 

@@ -50,7 +50,7 @@ async function board(asList) {
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
       <span class="kcard-client">${esc(p.owner?.company || p.owner?.full_name || '')}${p.owner?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
-      <span class="kcard-foot"><span>${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : p.estimate_low ? `${tr('est.')} ${fmtMoney(p.estimate_low)}+` : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
+      <span class="kcard-foot"><span>${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
     </a>`;
   app.innerHTML = `
     <div class="container-wide section-tight">
@@ -247,7 +247,6 @@ async function detail(id) {
 
           <form class="ctl" data-internal>
             <h2 class="panel-h">${tr('Commercial')} <span class="tag">${tr('staff only')}</span></h2>
-            ${p.estimate_low ? `<p class="note">${tr('Automatic estimate')}: ${fmtMoney(p.estimate_low)}–${fmtMoney(p.estimate_high)} + VAT</p>` : ''}
             <div class="field-row">
               <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
               <div class="field"><label for="ctl-prob">${tr('Probability (%)')}</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
