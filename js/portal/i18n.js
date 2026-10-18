@@ -114,6 +114,8 @@ const PL = {
   'No openings found. Use the template columns: ref, system, width_mm, height_mm, config, glazing, qty.': 'Nie znaleziono otworów. Użyj kolumn z szablonu: ref, system, width_mm, height_mm, config, glazing, qty.',
   'Imported {n} openings.': 'Zaimportowano otwory: {n}.',
   'We’ve added the opening from the sizing tool.': 'Dodaliśmy otwór z kalkulatora.',
+  'We’ve added the opening from your list.': 'Dodaliśmy otwór z Twojej listy.',
+  'We’ve added {n} openings from your list.': 'Dodaliśmy otwory z Twojej listy: {n}.',
   'Required.': 'Pole wymagane.',
   'Each file must be under 50 MB.': 'Każdy plik musi mieć mniej niż 50 MB.',
   'Submitting…': 'Wysyłanie…',
@@ -553,6 +555,13 @@ const PL = {
   "Files are not stored in demo mode.": "W trybie demo pliki nie są zapisywane.",
   "Requests sent through the website form, with or without an account.": "Zgłoszenia z formularza na stronie, wysłane z kontem lub bez.",
   "Flat / apartment": "Mieszkanie",
+  "Product": "Produkt",
+  "Size": "Wymiar",
+  "Note": "Uwagi",
+  "Open the project": "Otwórz projekt",
+  "Turn into a project": "Zamień w projekt",
+  "Project created.": "Projekt założony.",
+  "Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.": "Przenosi dane i otwory do projektu w panelu. Jeśli na ten e-mail nie ma konta, klient zostanie właścicielem projektu po rejestracji na ten adres.",
 };
 
 export const tr = (s, vars) => {

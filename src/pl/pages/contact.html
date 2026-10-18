@@ -57,10 +57,14 @@
             <option value="question" data-roles="homeowner other">Mam tylko pytanie</option>
           </select>
         </div>
-        <div class="field-row">
-          <div class="field"><label for="f-ow">Szerokość otworu (mm) <span class="hint">opcjonalnie</span></label><input id="f-ow" name="opening_width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="np. 4800"></div>
-          <div class="field"><label for="f-oh">Wysokość otworu (mm) <span class="hint">opcjonalnie</span></label><input id="f-oh" name="opening_height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="np. 2400"></div>
-        </div>
+        <fieldset class="field" data-openings data-validate="openings">
+          <legend>Otwory <span class="hint">opcjonalnie</span></legend>
+          <span class="hint">Dodaj każde okno lub drzwi z przybliżonym wymiarem. Trafiają tu też otwory dodane w kalkulatorach na stronach produktów.</span>
+          <div class="op-rows" data-openings-rows></div>
+          <button type="button" class="btn btn-sm btn-ghost" data-openings-add>Dodaj otwór</button>
+          <input type="hidden" name="openings">
+          <span class="error" role="alert"></span>
+        </fieldset>
         <div class="field"><label for="f-loc">Lokalizacja projektu</label><input id="f-loc" name="location" type="text" required aria-required="true" placeholder="Kod pocztowy lub dzielnica, np. SE22 albo Hackney" data-validate><span class="hint">Sprawdzamy dojazd, strefę konserwatorską i ekspozycję na wiatr.</span><span class="error" role="alert"></span></div>
         <fieldset class="field">
           <legend>Produkty <span class="hint">opcjonalnie</span></legend>

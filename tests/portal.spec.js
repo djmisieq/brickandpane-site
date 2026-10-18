@@ -98,6 +98,35 @@ test('staff see website enquiries sent without an account and triage them', asyn
   await expect(page.locator('details.enq', { hasText: 'BP-261018-3F2A' }).locator('.badge')).toHaveText('Replied');
   await page.locator('#rq-filter').selectOption('closed');
   await expect(page.locator('#app')).toContainText('No enquiries match.');
+  // Turn it into a project: the openings come across, the enquiry links to the project.
+  await page.locator('#rq-filter').selectOption('open');
+  await page.locator('details.enq summary').first().click();
+  await page.locator('[data-req-convert]').click();
+  await expect(page).toHaveURL(/admin\.html#\/p\//);
+  await expect(page.locator('h1')).toHaveText('Jo Bennett, Walthamstow, E17');
+  await page.locator('[data-tab="overview"]').click();
+  await expect(page.locator('#panel-overview')).toContainText('3600');
+  await expect(page.locator('#panel-overview')).toContainText('1200');
+  await page.goto('/admin.html#/enquiries');
+  await page.locator('#rq-filter').selectOption('all');
+  await page.locator('details.enq summary').first().click();
+  await expect(page.locator('details.enq a', { hasText: 'Open the project' })).toBeVisible();
+});
+
+test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('bp-openings-list', JSON.stringify([
+    { ref: 'D01', system: 'bifold', material: 'alu', width_mm: 4200, height_mm: 2400, qty: 1, note: '3 leaves' },
+    { ref: 'W01', system: 'windows', material: 'timber', width_mm: 1200, height_mm: 1400, qty: 2 }])));
+  await page.locator('[data-demo-login="homeowner"]').click();
+  await page.goto('/portal.html#/new');
+  await expect(page.locator('[data-rows] tr')).toHaveCount(2);
+  await expect(page.locator('[data-rows] tr').nth(1).locator('[name="qty"]')).toHaveValue('2');
+  await expect(page.locator('[data-rows] tr').nth(1).locator('[name="material"]')).toHaveValue('timber');
+  await page.fill('#np-name', 'Our kitchen');
+  await page.fill('#np-loc', 'E17');
+  await page.locator('.newp button[type="submit"]').click();
+  await expect(page.locator('.now-card')).toContainText('Request received');
+  expect(await page.evaluate(() => localStorage.getItem('bp-openings-list'))).toBeNull();
 });
 
 test('clients cannot use the staff CRM', async ({ page }) => {

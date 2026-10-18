@@ -120,7 +120,13 @@ async function enquiries() {
           ${row('Start on site', esc(tr(r.start || '')))}
           ${row('Language', r.lang === 'pl' ? 'Polski' : 'English')}
         </tbody></table>
+        ${r.openings?.length ? `<div class="table-scroll"><table class="spec spec-compact"><caption>${tr('Openings')} (${r.openings.reduce((n, o) => n + (o.qty || 1), 0)})</caption><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Product')}</th><th scope="col">${tr('Material')}</th><th scope="col">${tr('Size')}</th><th scope="col">${tr('Qty')}</th><th scope="col">${tr('Note')}</th></tr></thead><tbody>
+          ${r.openings.map((o) => `<tr><th scope="row">${esc(o.ref || '')}</th><td>${esc(tr(SYSTEMS[o.system] || o.system || ''))}</td><td>${esc(tr(REQ_MATERIALS[o.material] || 'Not sure'))}</td><td>${o.width_mm || '?'} × ${o.height_mm || '?'} mm</td><td>${o.qty || 1}</td><td>${esc(o.note || '')}</td></tr>`).join('')}
+        </tbody></table></div>` : ''}
         ${r.message ? `<p class="enq-msg">${esc(r.message)}</p>` : ''}
+        <p class="enq-convert">${r.project_id
+          ? `<a class="btn btn-sm btn-ghost" href="#/p/${esc(r.project_id)}">${tr('Open the project')}</a>`
+          : `<button type="button" class="btn btn-sm" data-req-convert>${tr('Turn into a project')}</button> <span class="note">${tr('Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.')}</span>`}</p>
         ${r.files?.length || r.files_link ? `<p class="enq-files">${(r.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${r.files_link ? ` <a href="${esc(r.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
         <form class="ctl" data-req-form>
           <div class="field"><label for="rq-status-${esc(r.id)}">${tr('Status')}</label><select id="rq-status-${esc(r.id)}" name="status">${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
@@ -157,6 +163,10 @@ async function enquiries() {
   $$('[data-req-form]', app).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
+  }));
+  $$('[data-req-convert]', app).forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { const pid = await store.convertRequest(b.closest('[data-req]').dataset.req); toast(tr('Project created.')); location.hash = `#/p/${pid}`; } catch (err) { b.disabled = false; toast(tr(err.message)); }
   }));
   $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
     try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }

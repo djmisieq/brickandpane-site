@@ -87,6 +87,12 @@ export const store = {
     ok(await sb.from('contact_requests').update({ status, staff_note }).eq('id', id));
     emit();
   },
+  // Staff only: creates the project with the enquiry's openings (migration 0008) and returns its id.
+  async convertRequest(id) {
+    const pid = ok(await sb.rpc('convert_request', { r: id }));
+    emit();
+    return pid;
+  },
   async requestFileUrl(path) {
     const data = ok(await sb.storage.from('enquiries').createSignedUrl(path, 300));
     return data.signedUrl;

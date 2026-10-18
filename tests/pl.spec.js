@@ -60,7 +60,9 @@ test('Polish sizing tool speaks Polish and hands off to the Polish form', async 
   await expect(page.locator('[data-messages]')).not.toContainText('beyond the');
   await page.locator('[data-tool-quote]').click();
   await expect(page).toHaveURL(/\/pl\/contact\.html\?system=lift-slide/);
-  await expect(page.locator('#f-msg')).toHaveValue(/9000 × 2700 mm/);
+  await expect(page.locator('[data-op] [data-k="width_mm"]').first()).toHaveValue('9000');
+  await expect(page.locator('[data-op] [data-k="note"]').first()).toHaveValue(/układ 2A/);
+  await expect(page.locator('[data-op] [data-k="system"] option:checked').first()).toHaveText('Podnoszono-przesuwne');
 });
 
 test('Polish quote form validates in Polish', async ({ page }) => {
