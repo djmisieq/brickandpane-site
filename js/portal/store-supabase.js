@@ -79,6 +79,18 @@ export const store = {
     const { data, error } = await sb.rpc('my_enquiries');
     return error ? [] : data || [];
   },
+  // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
+  async listRequests() {
+    return ok(await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(200));
+  },
+  async updateRequest(id, { status, staff_note }) {
+    ok(await sb.from('contact_requests').update({ status, staff_note }).eq('id', id));
+    emit();
+  },
+  async requestFileUrl(path) {
+    const data = ok(await sb.storage.from('enquiries').createSignedUrl(path, 300));
+    return data.signedUrl;
+  },
   async listProjects() {
     const me = await this.getUser();
     const rows = ok(await sb.from('projects')

@@ -30,7 +30,8 @@ function seed() {
   const ravi = { id: 'u-ravi', email: 'ravi@example-homes.co.uk', full_name: 'Ravi Patel', company: 'Example Homes (demo)', phone: '', role: 'client', account_type: 'developer', notify_email: true, notify_digest: false };
   const sam = { id: 'u-sam', email: 'sam@example.com', full_name: 'Sam Taylor', company: '', phone: '', role: 'client', account_type: 'homeowner', notify_email: true, notify_digest: false };
   const tom = { id: 'u-tom', email: 'tom@brickandpane.co.uk', full_name: 'Tom Reid', company: 'Brick & Pane', phone: '', role: 'staff', notify_email: true, notify_digest: false };
-  const s = { users: [anna, ravi, sam, tom], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {}, changes: [], payments: [], invites: [] };
+  const s = { users: [anna, ravi, sam, tom], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {}, changes: [], payments: [], invites: [], requests: [] };
+  s.requests.push({ id: uid(), ref: 'BP-261018-3F2A', created_at: daysAgo(0, 8), status: 'new', lang: 'en', role: 'homeowner', name: 'Jo Bennett', email: 'jo@example.com', phone: '', company: '', topic: 'quote', systems: ['sliding'], material: ['alu'], location: 'Walthamstow, E17', riba_stage: '', building: '', units: '', start: '3–6 months', opening_width_mm: 3600, opening_height_mm: 2200, message: 'Kitchen extension, would like a 3-panel slider to the garden.', files: [], files_link: null, consent_at: daysAgo(0, 8), project_id: null, staff_note: '' });
 
   const mk = (p, owner, history, extra = {}) => {
     const id = uid();
@@ -162,6 +163,15 @@ export const store = {
     if (u?.account_type !== 'homeowner') return [];
     return [{ id: 'demo-enquiry', ref: 'BP-261013-7A3C', created_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'replied', topic: 'quote', systems: ['lift-slide'], project_id: null }];
   },
+  async listRequests() {
+    const s = load(); needStaff(s);
+    return [...(s.requests || [])].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  },
+  async updateRequest(id, { status, staff_note }) {
+    const s = load(); needStaff(s);
+    Object.assign((s.requests || []).find((r) => r.id === id), { status, staff_note }); save(s);
+  },
+  async requestFileUrl() { return null; }, // demo: files are not stored
   async listProjects() {
     const s = load(); const u = need(s);
     return s.projects.filter((p) => canSee(s, u, p.id))

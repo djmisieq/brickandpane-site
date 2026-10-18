@@ -1,6 +1,6 @@
-// Internal CRM for Brick & Pane staff: pipeline board, list, project control panel.
+// Internal CRM for Brick & Pane staff: pipeline board, list, enquiries from the public form, project control panel.
 import { store } from './store.js';
-import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
+import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 
@@ -10,6 +10,15 @@ let user = null;
 let activeTab = 'messages';
 let lastId = null;
 let query = '';
+let reqFilter = 'open';
+
+// Values the contact form stores in contact_requests (src/pages/contact.html).
+const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project', closed: 'Closed', spam: 'Spam' };
+const REQ_ROLES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner', other: 'Other' };
+const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A budget price for a scheme', 'spec-pack': 'The spec pack (DWG / BIM / clauses)', samples: 'Samples', cpd: 'A CPD session', pqq: 'The pre-qualification pack', founding: 'Founding project', question: 'Just a question' };
+const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
+const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
+const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 
 async function render(fromStore = false) {
   user = await store.getUser();
@@ -21,6 +30,7 @@ async function render(fromStore = false) {
   const r = route();
   try {
     if (r.name === 'p' && r.id) await detail(r.id);
+    else if (r.name === 'enquiries') await enquiries();
     else await board(r.name === 'list');
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
   Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !el.value) el.value = v; });
@@ -29,7 +39,7 @@ async function render(fromStore = false) {
 
 async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
-  const all = await store.listProjects();
+  const [all, requests] = await Promise.all([store.listProjects(), listRequests()]);
   const q = query.toLowerCase();
   const projects = q ? all.filter((p) => [p.ref, p.name, p.location, p.owner?.full_name, p.owner?.company].join(' ').toLowerCase().includes(q)) : all;
   const open = all.filter((p) => !['completed', 'closed'].includes(p.stage));
@@ -55,7 +65,7 @@ async function board(asList) {
         </dl>
       </div>
       <div class="board-tools">
-        <div class="seg" role="group" aria-label="${tr('View')}"><a href="#/" class="${asList ? '' : 'is-on'}">${tr('Board')}</a><a href="#/list" class="${asList ? 'is-on' : ''}">${tr('List')}</a></div>
+        ${viewSwitch(asList ? 'list' : 'board', requests)}
         <label class="visually-hidden" for="crm-q">${tr('Search projects')}</label>
         <input id="crm-q" type="search" placeholder="${tr('Search ref, name, client, location')}" value="${esc(query)}">
       </div>
@@ -70,6 +80,87 @@ async function board(asList) {
     </div>`;
   const qi = $('#crm-q', app);
   qi.addEventListener('input', () => { query = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
+}
+
+function viewSwitch(on, requests) {
+  const fresh = requests.filter((r) => r.status === 'new').length;
+  const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}</div>`;
+}
+
+async function enquiries() {
+  document.title = `${tr('Enquiries')} | CRM`;
+  const all = await listRequests();
+  const q = query.toLowerCase();
+  const shown = all
+    .filter((r) => (reqFilter === 'open' ? isOpenReq(r) : reqFilter === 'all' || r.status === reqFilter))
+    .filter((r) => !q || [r.ref, r.name, r.email, r.company, r.location, r.phone].join(' ').toLowerCase().includes(q));
+  const row = (label, value) => (value ? `<tr><th scope="row">${esc(tr(label))}</th><td>${value}</td></tr>` : '');
+  const list = (arr, map) => (arr || []).map((v) => esc(tr(map[v] || (v === 'unsure' ? 'Not sure' : v)))).join(', ');
+  const item = (r) => `
+    <details class="enq${r.status === 'new' ? ' is-new' : ''}" data-req="${esc(r.id)}">
+      <summary>
+        <span class="enq-ref">${esc(r.ref)}</span>
+        <span class="enq-name">${esc(r.name)}${r.company ? `, ${esc(r.company)}` : ''}</span>
+        <span class="enq-meta">${esc(tr(REQ_ROLES[r.role] || r.role || ''))}${r.topic ? ` · ${esc(tr(REQ_TOPICS[r.topic] || r.topic))}` : ''}</span>
+        <span class="enq-foot"><span class="badge">${esc(tr(REQ_STATUS[r.status] || r.status))}</span> <span>${ago(r.created_at)}</span></span>
+      </summary>
+      <div class="enq-body">
+        <table class="spec spec-compact"><tbody>
+          ${row('Received', esc(fmtDate(r.created_at, true)))}
+          ${row('Email', `<a href="mailto:${esc(r.email)}?subject=${encodeURIComponent(r.ref)}">${esc(r.email)}</a>`)}
+          ${row('Phone', r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : '')}
+          ${row('Location', esc(r.location || ''))}
+          ${row('Products', list(r.systems, SYSTEMS))}
+          ${row('Material', list(r.material, REQ_MATERIALS))}
+          ${row('Opening', r.opening_width_mm && r.opening_height_mm ? `${r.opening_width_mm} × ${r.opening_height_mm} mm` : '')}
+          ${row('RIBA stage', esc(r.riba_stage || ''))}
+          ${row('Building', esc(tr(r.building || '')))}
+          ${row('Units', esc(r.units || ''))}
+          ${row('Start on site', esc(tr(r.start || '')))}
+          ${row('Language', r.lang === 'pl' ? 'Polski' : 'English')}
+        </tbody></table>
+        ${r.message ? `<p class="enq-msg">${esc(r.message)}</p>` : ''}
+        ${r.files?.length || r.files_link ? `<p class="enq-files">${(r.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${r.files_link ? ` <a href="${esc(r.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
+        <form class="ctl" data-req-form>
+          <div class="field"><label for="rq-status-${esc(r.id)}">${tr('Status')}</label><select id="rq-status-${esc(r.id)}" name="status">${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
+          <div class="field"><label for="rq-note-${esc(r.id)}">${tr('Team note')} <span class="tag">${tr('staff only')}</span></label><textarea id="rq-note-${esc(r.id)}" name="staff_note" rows="2">${esc(r.staff_note || '')}</textarea></div>
+          <button class="btn btn-sm" type="submit">${tr('Save')}</button>
+        </form>
+      </div>
+    </details>`;
+  const openIds = new Set($$('details.enq[open]', app).map((d) => d.dataset.req));
+  app.innerHTML = `
+    <div class="container section-tight">
+      <div class="dash-head">
+        <div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Enquiries')}</h1></div>
+        <dl class="stats">
+          <div class="stat ${all.some((r) => r.status === 'new') ? 'is-you' : ''}"><dt>${tr('New')}</dt><dd>${all.filter((r) => r.status === 'new').length}</dd></div>
+          <div class="stat"><dt>${tr('Replied')}</dt><dd>${all.filter((r) => r.status === 'replied').length}</dd></div>
+        </dl>
+      </div>
+      <p class="note mb-m">${tr('Requests sent through the website form, with or without an account.')}</p>
+      <div class="board-tools">
+        ${viewSwitch('enquiries', all)}
+        <label class="visually-hidden" for="rq-filter">${tr('Show')}</label>
+        <select id="rq-filter"><option value="open">${tr('Open (new and replied)')}</option><option value="all">${tr('All')}</option>${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select>
+        <label class="visually-hidden" for="crm-q">${tr('Search enquiries')}</label>
+        <input id="crm-q" type="search" placeholder="${tr('Search ref, name, email, location')}" value="${esc(query)}">
+      </div>
+      ${shown.length ? `<div class="enq-list">${shown.map(item).join('')}</div>` : `<p class="callout">${tr(all.length ? 'No enquiries match.' : 'No enquiries yet.')}</p>`}
+    </div>`;
+  openIds.forEach((id) => { const d = $$('details.enq', app).find((x) => x.dataset.req === id); if (d) d.open = true; });
+  const sel = $('#rq-filter', app); sel.value = reqFilter;
+  sel.addEventListener('change', () => { reqFilter = sel.value; enquiries(); });
+  const qi = $('#crm-q', app);
+  qi.addEventListener('input', () => { query = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => enquiries().then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
+  $$('[data-req-form]', app).forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
+  }));
+  $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
+    try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }
+  }));
 }
 
 async function detail(id) {
