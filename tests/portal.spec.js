@@ -82,6 +82,24 @@ test('architect submits a new project with an openings schedule', async ({ page 
   await expect(page.locator('.spec-compact')).toContainText('Roof lantern / rooflight');
 });
 
+test('staff see website enquiries sent without an account and triage them', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await expect(page.locator('.seg a[href="#/enquiries"] .seg-count')).toHaveText('1');
+  await page.locator('.seg a[href="#/enquiries"]').click();
+  await expect(page.locator('h1')).toHaveText('Enquiries');
+  const enq = page.locator('details.enq', { hasText: 'BP-261018-3F2A' });
+  await enq.locator('summary').click();
+  await expect(enq).toContainText('jo@example.com');
+  await expect(enq).toContainText('3600 × 2200 mm');
+  await enq.locator('select[name="status"]').selectOption('replied');
+  await enq.locator('textarea[name="staff_note"]').fill('Called back, survey next week.');
+  await enq.locator('button[type="submit"]').click();
+  await expect(page.locator('details.enq', { hasText: 'BP-261018-3F2A' }).locator('.badge')).toHaveText('Replied');
+  await page.locator('#rq-filter').selectOption('closed');
+  await expect(page.locator('#app')).toContainText('No enquiries match.');
+});
+
 test('clients cannot use the staff CRM', async ({ page }) => {
   await page.locator('[data-demo-login="client"]').click();
   await page.goto('/admin.html');
