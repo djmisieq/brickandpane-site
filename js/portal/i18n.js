@@ -115,7 +115,7 @@ const PL = {
   'Each file must be under 50 MB.': 'Każdy plik musi mieć mniej niż 50 MB.',
   'Submitting…': 'Wysyłanie…',
   'Sent. We’ll prepare your individual quote.': 'Wysłane. Przygotujemy dla Ciebie indywidualną wycenę.',
-  'Submitted. We’ll confirm within one working day.': 'Wysłane. Potwierdzimy w ciągu jednego dnia roboczego.',
+  'Submitted. We’ll confirm receipt.': 'Wysłane. Potwierdzimy przyjęcie.',
 
   // ---------- settings ----------
   'Settings': 'Ustawienia',
@@ -196,12 +196,12 @@ const PL = {
   'Shop drawings are ready. Approve them or request changes in Documents.': 'Rysunki warsztatowe są gotowe. Zaakceptuj je lub poproś o zmiany w Dokumentach.',
   'Your doors and windows are being made to the signed drawings.': 'Drzwi i okna powstają według podpisanych rysunków.',
   'Delivery date and lifting plan are confirmed.': 'Termin dostawy i plan rozładunku są potwierdzone.',
-  'Our own team is installing on site.': 'Nasz własny zespół montuje na budowie.',
+  'Installation is under way on site.': 'Trwa montaż na budowie.',
   'O&M manual, declarations of performance and the guarantee are in Documents.': 'Instrukcja obsługi, deklaracje właściwości użytkowych i gwarancja są w Dokumentach.',
   'Project complete. We will check in after the first season.': 'Projekt zakończony. Odezwiemy się po pierwszym sezonie.',
   'This project is paused.': 'Ten projekt jest wstrzymany.',
   'This project is closed.': 'Ten projekt jest zamknięty.',
-  'We have your request and will be in touch within one working day.': 'Mamy Twoje zapytanie. Odezwiemy się w ciągu jednego dnia roboczego.',
+  'We have your request and will be in touch.': 'Mamy Twoje zapytanie. Odezwiemy się.',
   "We're checking your sizes and preparing your price.": 'Sprawdzamy wymiary i przygotowujemy cenę.',
   'We need a quick answer before we can finish your price. See Messages.': 'Potrzebujemy krótkiej odpowiedzi, żeby dokończyć wycenę. Zobacz Wiadomości.',
   'Your quote is in Documents. Accept it there or ask us to change something.': 'Oferta jest w Dokumentach. Zaakceptuj ją tam albo poproś o zmianę.',
@@ -509,7 +509,6 @@ const PL = {
   "Upload the O&M manual, declarations of performance and guarantee.": "Wgraj instrukcję obsługi, deklaracje właściwości użytkowych i gwarancję.",
   "Complete. Schedule the first-season check-in.": "Zakończone. Zaplanuj kontakt po pierwszym sezonie.",
   "Reviewing the schedule.": "Sprawdzamy zestawienie.",
-  "Budget price by Thursday.": "Cena budżetowa do czwartku.",
   "Internal: discount headroom c. 5%. Do not offer yet.": "Wewnętrzne: zapas na rabat ok. 5%. Jeszcze nie proponować.",
 
   // ---------- CRM: enquiries from the public form ----------
