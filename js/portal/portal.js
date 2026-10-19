@@ -283,14 +283,13 @@ function settings() {
         <div class="field"><label for="s-ph">${tr('Phone')} <span class="hint">${tr('optional')}</span></label><input id="s-ph" name="phone" type="tel" value="${esc(user.phone || '')}"></div>
         <fieldset class="field"><legend>${tr('Email notifications')}</legend>
           <label class="consent"><input type="checkbox" name="notify_email" ${user.notify_email ? 'checked' : ''}> <span>${tr('Email me when a project changes stage, a document is shared, an approval is needed or someone replies.')}</span></label>
-          <label class="consent"><input type="checkbox" name="notify_digest" ${user.notify_digest ? 'checked' : ''}> <span>${tr('Send a weekly summary of all my projects as well.')}</span></label>
         </fieldset>
         <div><button class="btn" type="submit">${tr('Save')}</button></div>
       </form>
     </div>`;
   $('.settings', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
-    try { await store.updateProfile({ full_name: f.full_name.value.trim(), company: f.company.value.trim(), phone: f.phone.value.trim(), notify_email: f.notify_email.checked, notify_digest: f.notify_digest.checked }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
+    try { await store.updateProfile({ full_name: f.full_name.value.trim(), company: f.company.value.trim(), phone: f.phone.value.trim(), notify_email: f.notify_email.checked }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
   });
 }
 

@@ -1,5 +1,6 @@
 // Checks added after the UX/UI audit of October 2026: the things three reviewers found by eye.
 // Each sets its own viewport, so they run once (desktop project) instead of three times.
+import fs from 'fs';
 import { test, expect } from './fixtures.js';
 
 const PAGES = [
@@ -11,29 +12,45 @@ const URLS = [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.h
 
 test.beforeEach(({}, info) => { test.skip(info.project.name !== 'desktop', 'sets its own viewport, runs once'); });
 
+// Confirmed services: survey of existing windows and measurement. No corner samples, nothing "free",
+// no budget "straight away", no "own team only" claims.
+// No prices at all (18.10.2026): every project is quoted individually, so no amounts, rates, ranges, discounts
+// or deadlines for a budget anywhere on the site. Relative cost (£ / ££ / £££) is a comparison, not a price.
+const PRICES = [/£\s?\d/, /£\/m²/, /±\s?\d/, /discount/i, /rabat/i, /zniżk/i, /promoc/i, /example rates/i, /stawki przykładowe/i,
+  /budget within/i, /budżet w (ciągu )?\d/i, /budżet (wróci|przyślemy) w/i, /(quote|price) (arrives|follows) within/i, /wycena przyjdzie w/i, /price\s+within/i,
+  /fixed (price|quot)/i, /included in (our|the) price/i, /w cenie/i, /stał\w* (cen|wycen)/i, /wiążąc\w* wycen/i];
+const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
+  /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
+  /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\S* osob/i,
+  // Promises the company has not confirmed (19.10): one contact person, samples, extras, dates, terms.
+  /package manager/i, /opiekun\S* pakietu/i, /point of contact/i, /jeden kontakt/i, /samples to your/i, /próbki do pracowni/i,
+  /roughly what it costs/i, /mniej więcej ile/i, /budget (figure|range)/i, /przedział\S* budżetu/i, /nothing hidden/i, /nic ukrytego/i,
+  /stronger terms/i, /lepsze warunki/i, /mock-up/i, /weekly/i, /cotygodniow/i, /motoris/i, /napęd/i, /keyless/i, /bezkluczow/i,
+  /promised date/i, /obiecan\S* termin/i, /from us first/i, /od nas jako pierwszy/i, /sales visit/i, /wizyt handlowc/i,
+  // No reply or turnaround deadlines anywhere (19.10).
+  /working day/i, /dni robocz/i, /dnia robocz/i, /\b\d+-day\b/i, /turnaround/i, /czas realizacji/i,
+  // Portal (19.10): no named technical lead, no budget price, no promised dates, no payment percentages.
+  /technical lead/i, /twój opiekun/i, /opiekun\S* techniczn/i, /budget price/i, /cen\S* budżetow/i, /promised (by|to)/i, /obiecane (do|klientowi)/i, /\(\d+%\)/];
+
 test('content makes no promise the company has not confirmed', async ({ page }) => {
-  // Confirmed services: survey of existing windows and measurement. No corner samples, nothing "free",
-  // no budget "straight away", no "own team only" claims.
-  // No prices at all (18.10.2026): every project is quoted individually, so no amounts, rates, ranges, discounts
-  // or deadlines for a budget anywhere on the site. Relative cost (£ / ££ / £££) is a comparison, not a price.
-  const PRICES = [/£\s?\d/, /£\/m²/, /±\s?\d/, /discount/i, /rabat/i, /zniżk/i, /promoc/i, /example rates/i, /stawki przykładowe/i,
-    /budget within/i, /budżet w (ciągu )?\d/i, /budżet (wróci|przyślemy) w/i, /(quote|price) (arrives|follows) within/i, /wycena przyjdzie w/i, /price\s+within/i,
-    /fixed (price|quot)/i, /included in (our|the) price/i, /w cenie/i, /stał\w* (cen|wycen)/i, /wiążąc\w* wycen/i];
-  const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
-    /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
-    /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\S* osob/i,
-    // Promises the company has not confirmed (19.10): one contact person, samples, extras, dates, terms.
-    /package manager/i, /opiekun\S* pakietu/i, /point of contact/i, /jeden kontakt/i, /samples to your/i, /próbki do pracowni/i,
-    /roughly what it costs/i, /mniej więcej ile/i, /budget (figure|range)/i, /przedział\S* budżetu/i, /nothing hidden/i, /nic ukrytego/i,
-    /stronger terms/i, /lepsze warunki/i, /mock-up/i, /weekly/i, /cotygodniow/i, /motoris/i, /napęd/i, /keyless/i, /bezkluczow/i,
-    /promised date/i, /obiecan\S* termin/i, /from us first/i, /od nas jako pierwszy/i, /sales visit/i, /wizyt handlowc/i,
-    // No reply or turnaround deadlines anywhere (19.10).
-    /working day/i, /dni robocz/i, /dnia robocz/i, /\b\d+-day\b/i, /turnaround/i, /czas realizacji/i];
   for (const url of URLS) {
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
     for (const re of BANNED) expect(text, `${url} contains ${re}`).not.toMatch(re);
   }
+});
+
+test('portal texts make no promise the company has not confirmed', () => {
+  // Every line of the portal and CRM that can carry visible text, in English and Polish (comments skipped).
+  const hits = [];
+  for (const f of ['i18n', 'core', 'ui', 'portal', 'admin', 'store-demo']) {
+    const lines = fs.readFileSync(new URL(`../js/portal/${f}.js`, import.meta.url), 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      if (line.trim().startsWith('//')) return;
+      for (const re of BANNED) if (re.test(line)) hits.push(`js/portal/${f}.js:${i + 1} contains ${re}`);
+    });
+  }
+  expect(hits).toEqual([]);
 });
 
 test('headings never skip a level and each folded section keeps its layout', async ({ page }) => {

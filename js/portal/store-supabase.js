@@ -3,7 +3,6 @@
 // see supabase/migrations/0001_project_portal.sql. This file only reads and writes.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { addWorkingDays, stage } from './core.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BUCKET = 'project-files';
@@ -183,7 +182,7 @@ export const store = {
     const { data: { user } } = await sb.auth.getUser();
     const p = ok(await sb.from('projects').select('stage').eq('id', pid).single());
     ok(await sb.from('stage_events').insert({ project_id: pid, from_stage: p.stage, to_stage: to, note, visible_to_client: visible, actor_id: user.id }));
-    const patch = { due_at: due_at !== undefined ? due_at : (stage(to).sla ? addWorkingDays(new Date(), stage(to).sla) : null) };
+    const patch = { due_at: due_at !== undefined ? due_at : null };
     if (next_step !== undefined) patch.next_step = next_step;
     ok(await sb.from('projects').update(patch).eq('id', pid));
   },

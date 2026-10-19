@@ -1,6 +1,6 @@
 // Internal CRM for Brick & Pane staff: pipeline board, list, enquiries from the public form, project control panel.
 import { store } from './store.js';
-import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, addWorkingDays, $, $$, toast } from './core.js';
+import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 
@@ -15,7 +15,7 @@ let reqFilter = 'open';
 // Values the contact form stores in contact_requests (src/pages/contact.html).
 const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project', closed: 'Closed', spam: 'Spam' };
 const REQ_ROLES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner', other: 'Other' };
-const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A budget price for a scheme', 'spec-pack': 'The spec pack (DWG / BIM / clauses)', samples: 'Samples', cpd: 'A CPD session', pqq: 'The pre-qualification pack', founding: 'Founding project', question: 'Just a question' };
+const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A quotation for a scheme', 'spec-pack': 'The spec pack (DWG / BIM / clauses)', samples: 'Samples', cpd: 'A CPD session', pqq: 'The pre-qualification pack', founding: 'Founding project', question: 'Just a question' };
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
@@ -201,7 +201,7 @@ async function detail(id) {
             <div class="field"><label for="ctl-stage">${tr('New stage')}</label><select id="ctl-stage" name="stage" required><option value="">${tr('Choose the new stage…')}</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(tr(s.staffLabel || s.label))}${s.id === suggested ? ` ${tr('(next)')}` : ''}</option>`).join('')}</select><span class="hint">${tr('Current:')} ${esc(tr(stage(p.stage).staffLabel || stage(p.stage).label))}</span></div>
             <div class="field"><label for="ctl-note">${tr('Note to client')}</label><textarea id="ctl-note" name="note" rows="2" placeholder="${tr('e.g. Quotation Q1 is in Documents.')}"></textarea></div>
             <div class="field"><label for="ctl-next">${tr('Next step (shown to client)')}</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
-            <div class="field"><label for="ctl-due">${tr('Promised by')}</label><input id="ctl-due" name="due" type="date"><span class="hint">${tr('Blank = automatic from the stage SLA.')}</span></div>
+            <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date"><span class="hint">${tr('Blank = no date.')}</span></div>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client and notify them')}</span></label>
             <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
           </form>
@@ -217,7 +217,7 @@ async function detail(id) {
 
           <form class="ctl" data-payment>
             <h2 class="panel-h">${tr('Payment schedule')}</h2>
-            <div class="field"><label for="pay-label">${tr('Stage')}</label><input id="pay-label" name="label" placeholder="${tr('e.g. Deposit (30%)')}" required></div>
+            <div class="field"><label for="pay-label">${tr('Stage')}</label><input id="pay-label" name="label" placeholder="${tr('e.g. Deposit')}" required></div>
             <div class="field-row">
               <div class="field"><label for="pay-amt">${tr('Amount (£)')}</label><input id="pay-amt" name="amount" type="number" min="0" step="1" required></div>
               <div class="field"><label for="pay-due">${tr('Due')}</label><input id="pay-due" name="due" type="date"></div>
@@ -262,7 +262,7 @@ async function detail(id) {
   $('[data-stage]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     if (!f.stage.value) { f.stage.focus(); toast(tr('Choose the new stage first.')); return; }
-    const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : (stage(f.stage.value).sla ? addWorkingDays(new Date(), stage(f.stage.value).sla) : null);
+    const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : null;
     try { await store.setStage(id, f.stage.value, { note: f.note.value.trim(), visible: f.visible.checked, next_step: f.next_step.value.trim(), due_at: due }); toast(tr(f.visible.checked ? 'Stage updated. Client notified.' : 'Stage updated (hidden from client).')); } catch (err) { toast(tr(err.message)); }
   });
   $('[data-assign]', app).addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { assignee_id: e.currentTarget.assignee_id.value || null }); toast(tr('Owner saved.')); } catch (err) { toast(tr(err.message)); } });
