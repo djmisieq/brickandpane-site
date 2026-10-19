@@ -42,13 +42,15 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
 
 test('portal texts make no promise the company has not confirmed', () => {
   // Every line of the portal and CRM that can carry visible text, in English and Polish (comments skipped).
+  const hits = [];
   for (const f of ['i18n', 'core', 'ui', 'portal', 'admin', 'store-demo']) {
     const lines = fs.readFileSync(new URL(`../js/portal/${f}.js`, import.meta.url), 'utf8').split('\n');
     lines.forEach((line, i) => {
       if (line.trim().startsWith('//')) return;
-      for (const re of BANNED) expect(line, `js/portal/${f}.js:${i + 1} contains ${re}`).not.toMatch(re);
+      for (const re of BANNED) if (re.test(line)) hits.push(`js/portal/${f}.js:${i + 1} contains ${re}`);
     });
   }
+  expect(hits).toEqual([]);
 });
 
 test('headings never skip a level and each folded section keeps its layout', async ({ page }) => {
