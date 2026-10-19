@@ -1,7 +1,7 @@
 // Demo store: same API as the Supabase store, kept in localStorage.
 // Mirrors the database triggers (timeline, notifications) so the demo behaves like production.
 // Open the client portal and the staff CRM in two tabs: changes appear live in both.
-import { addWorkingDays, stage, decisionRights, MEMBER_ROLES } from './core.js';
+import { stage, decisionRights, MEMBER_ROLES } from './core.js';
 
 const KEY = 'bp-portal-demo-v4';
 const SESSION = 'bp-portal-demo-session';
@@ -47,7 +47,7 @@ function seed() {
 
   const p1 = mk({ name: 'Hartley Road rear extension', location: 'Hackney, E5', riba_stage: '4 Technical design', building_type: 'Extension to an existing house', start_window: '3–6 months', brief: 'Full-width lift & slide to the garden, flush threshold, triple glazing.', next_step: 'Review the quotation and accept it, or ask for changes.' }, anna, [
     ['submitted', daysAgo(9), 'Project received.'],
-    ['in_review', daysAgo(9, 14), 'Tom Reid is your technical lead.'],
+    ['in_review', daysAgo(9, 14), 'Review started.'],
     ['clarification', daysAgo(8), 'Two questions on the threshold and the steel beam. See Messages.'],
     ['in_review', daysAgo(6), 'Thanks for the answers. Pricing now.'],
     ['quote_issued', daysAgo(4), 'Quotation Q1 is in Documents.'],
@@ -64,7 +64,6 @@ function seed() {
     { id: uid(), project_id: p1, author_id: tom.id, body: 'Hi Anna, two questions before we price.\n1) Is the slab recess for a flush threshold possible, or should we allow a 15 mm upstand?\n2) Can your engineer design the beam to a 3 mm live-load deflection at the head?', internal: false, created_at: daysAgo(8) },
     { id: uid(), project_id: p1, author_id: anna.id, body: '1) Flush, the slab is being recast anyway. 2) Yes, engineer confirms 3 mm is achievable with a 254 UC.', internal: false, created_at: daysAgo(7) },
     { id: uid(), project_id: p1, author_id: tom.id, body: 'Perfect, thank you. Quotation to follow.', internal: false, created_at: daysAgo(6) },
-    { id: uid(), project_id: p1, author_id: tom.id, body: 'Internal: discount headroom c. 5%. Do not offer yet.', internal: true, created_at: daysAgo(4) },
   );
 
   const p2 = mk({ name: 'Mews house, corner glazing', location: 'Belsize Park, NW3', riba_stage: '5 Manufacturing & construction', building_type: 'New-build house', start_window: 'Within 3 months', brief: 'Post-free corner lift & slide, pocket on one side.', next_step: 'Approve shop drawings Rev A, or request changes.' }, anna, [
@@ -78,7 +77,7 @@ function seed() {
     { id: uid(), project_id: p2, kind: 'drawing', title: 'Shop drawings — corner slider', version: 'Rev A', size_bytes: 5200000, visible_to_client: true, approval: 'pending', uploaded_by: tom.id, created_at: daysAgo(2) },
   );
 
-  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(now(), 1) }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
+  const p3 = mk({ name: 'Garden room, Dulwich', location: 'SE21', riba_stage: '2 Concept', building_type: 'Extension to an existing house', start_window: '6–12 months', brief: 'Budget check for a 3-panel slider.', next_step: 'We’ll confirm receipt.' }, anna, [['submitted', daysAgo(0, 9), 'Project received.']], {});
   s.openings.push({ id: uid(), project_id: p3, ref: 'D01', system: 'lift-slide', width_mm: 4000, height_mm: 2400, config: '3T', glazing: 'd', qty: 1, notes: '' });
 
   const p4 = mk({ name: 'Northfield Terrace — 8 houses', location: 'Ealing, W13', riba_stage: '', building_type: 'New-build houses (8)', start_window: '6–12 months', brief: 'Rear sliders and windows for 8 houses. Budget needed for appraisal.', next_step: 'Quotation to follow.', due_at: daysAgo(1, 17) }, ravi, [['submitted', daysAgo(4)], ['in_review', daysAgo(3), 'Reviewing the schedule.']], { value: 86000, prob: 30 });
@@ -96,13 +95,13 @@ function seed() {
   );
   s.changes.push(
     { id: uid(), project_id: p2, title: 'Handle finish: satin anodised → matt black', description: 'Client prefers black handles to match the kitchen. Same hardware range, finish only.', impact: 'No change to U-value, security (PAS 24) or weather classes. Cost: no change. Programme: no change.', status: 'proposed', raised_by: tom.id, created_at: daysAgo(1), decided_by: null, decided_at: null, comment: '' },
-    { id: uid(), project_id: p5, title: 'Glass: add laminated inner pane', description: 'Homeowner asked for extra security on the garden side.', impact: 'U-value unchanged. Security improved. Cost +£420 + VAT. Programme: no change.', status: 'approved', raised_by: sam.id, created_at: daysAgo(35), decided_by: sam.id, decided_at: daysAgo(34), comment: 'Yes please.' },
+    { id: uid(), project_id: p5, title: 'Glass: add laminated inner pane', description: 'Homeowner asked for extra security on the garden side.', impact: 'U-value unchanged. Security improved. Cost in the revised quotation. Programme: no change.', status: 'approved', raised_by: sam.id, created_at: daysAgo(35), decided_by: sam.id, decided_at: daysAgo(34), comment: 'Yes please.' },
   );
   const pp = s.projects.find((x) => x.id === p5); pp.delivery_at = daysAhead(12); pp.install_at = daysAhead(13);
   s.payments.push(
-    { id: uid(), project_id: p5, label: 'Deposit (30%)', amount: 6984, due_date: daysAgo(38), paid_at: daysAgo(37) },
-    { id: uid(), project_id: p5, label: 'On delivery (60%)', amount: 13968, due_date: daysAhead(12), paid_at: null },
-    { id: uid(), project_id: p5, label: 'On completion (10%)', amount: 2328, due_date: daysAhead(14), paid_at: null },
+    { id: uid(), project_id: p5, label: 'Deposit', amount: 6984, due_date: daysAgo(38), paid_at: daysAgo(37) },
+    { id: uid(), project_id: p5, label: 'On delivery', amount: 13968, due_date: daysAhead(12), paid_at: null },
+    { id: uid(), project_id: p5, label: 'On completion', amount: 2328, due_date: daysAhead(14), paid_at: null },
   );
   const n = (u, p, type, title, body, at, read = false) => s.notifications.push({ id: uid(), user_id: u, project_id: p, type, title, body, created_at: at, read_at: read ? at : null });
   n(anna.id, p2, 'approval_request', 'Approval needed: Shop drawings — corner slider', 'Mews house, corner glazing', daysAgo(2));
@@ -180,7 +179,7 @@ export const store = {
     if (r.project_id) return r.project_id;
     const client = s.users.find((u) => u.email.toLowerCase() === r.email.toLowerCase() && u.role !== 'staff');
     const pid = uid(); const t = now();
-    s.projects.push({ id: pid, ref: `BP-2026-${String(s.projects.length + 1).padStart(4, '0')}`, name: `${r.company || r.name}${r.location ? `, ${r.location}` : ''}`, owner_id: client?.id || staff.id, assignee_id: staff.id, stage: 'submitted', stage_changed_at: t, created_at: t, updated_at: t, next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(t, 1), location: r.location || '', riba_stage: r.riba_stage || '', building_type: r.building || '', systems: (r.systems || []).filter((x) => x !== 'unsure'), start_window: r.start || '', brief: r.message || '' });
+    s.projects.push({ id: pid, ref: `BP-2026-${String(s.projects.length + 1).padStart(4, '0')}`, name: `${r.company || r.name}${r.location ? `, ${r.location}` : ''}`, owner_id: client?.id || staff.id, assignee_id: staff.id, stage: 'submitted', stage_changed_at: t, created_at: t, updated_at: t, next_step: 'We’ll confirm receipt.', location: r.location || '', riba_stage: r.riba_stage || '', building_type: r.building || '', systems: (r.systems || []).filter((x) => x !== 'unsure'), start_window: r.start || '', brief: r.message || '' });
     if (client) s.members.push({ project_id: pid, user_id: client.id, role: 'owner' });
     else s.invites.push({ id: uid(), project_id: pid, email: r.email.toLowerCase(), role: 'owner', invited_by: staff.id, created_at: t });
     s.internal[pid] = { value_gbp: null, probability: null, notes: r.staff_note || '' };
@@ -281,7 +280,7 @@ export const store = {
   async createProject(data, openings, files) {
     const s = load(); const u = need(s);
     const id = uid(); const t = now();
-    const p = { id, ref: `BP-2026-${String(s.projects.length + 1).padStart(4, '0')}`, owner_id: u.id, assignee_id: null, stage: 'submitted', stage_changed_at: t, created_at: t, updated_at: t, next_step: 'We’ll confirm receipt and assign a technical lead.', due_at: addWorkingDays(t, 1), ...data };
+    const p = { id, ref: `BP-2026-${String(s.projects.length + 1).padStart(4, '0')}`, owner_id: u.id, assignee_id: null, stage: 'submitted', stage_changed_at: t, created_at: t, updated_at: t, next_step: 'We’ll confirm receipt.', ...data };
     s.projects.push(p);
     s.members.push({ project_id: id, user_id: u.id, role: 'owner' });
     s.internal[id] = { value_gbp: null, probability: null, notes: '' };
@@ -339,7 +338,7 @@ export const store = {
     s.events.push({ id: uid(), project_id: pid, from_stage: p.stage, to_stage: to, note, visible_to_client: visible, actor_id: u.id, created_at: t });
     Object.assign(p, { stage: to, stage_changed_at: t, updated_at: t });
     if (next_step !== undefined) p.next_step = next_step;
-    p.due_at = due_at !== undefined ? due_at : (stage(to).sla ? addWorkingDays(t, stage(to).sla) : null);
+    p.due_at = due_at !== undefined ? due_at : null;
     if (visible) notifyMembers(s, pid, 'stage', `${p.name}: ${stage(to).label}`, note);
     save(s);
   },

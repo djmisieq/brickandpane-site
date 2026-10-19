@@ -89,7 +89,7 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
   const s = stage(project.stage);
   const court = courtLabel(project.stage, viewer);
   const due = project.due_at && s.court === 'us'
-    ? `<li><span>${tr(viewer === 'client' ? 'Next update by' : 'Promised to client by')}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
+    ? `<li><span>${tr('Next update by')}</span><span>${fmtDay(project.due_at)}</span></li>` : '';
   const dates = [
     project.delivery_at ? `<li><span>${tr('Delivery')}</span><span>${fmtDay(project.delivery_at)}</span></li>` : '',
     project.install_at ? `<li><span>${tr('Fitting')}</span><span>${fmtDay(project.install_at)}</span></li>` : '',
@@ -102,7 +102,7 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
       ${project.next_step ? `<p class="now-next"><strong>${tr(viewer === 'client' ? 'Next step' : 'Next step shown to client')}:</strong> ${esc(tr(project.next_step))}</p>` : ''}
       <ul class="proof-list">
         ${dates}${due}
-        <li><span>${tr(viewer === 'client' ? 'Your contact' : 'Owner')}</span><span>${esc(project.assignee?.full_name || tr('Being assigned'))}</span></li>
+        ${viewer !== 'client' || project.assignee ? `<li><span>${tr(viewer === 'client' ? 'Contact' : 'Owner')}</span><span>${esc(project.assignee?.full_name || tr('Unassigned'))}</span></li>` : ''}
         <li><span>${tr('In this stage since')}</span><span>${fmtDate(project.stage_changed_at)}</span></li>
       </ul>
     </section>`;
@@ -267,7 +267,7 @@ export function messagesPanel(d, user) {
       </div>` : ''}
       <label for="msg-body" class="visually-hidden">${tr('Message')}</label>
       <textarea id="msg-body" name="body" rows="3" required placeholder="${tr(staff ? 'Write to the client…' : 'Write a message…')}"></textarea>
-      <div class="btn-row"><span class="note composer-hint">${tr(staff ? 'The client will see this and get an email.' : 'Your Brick & Pane contact gets an email.')}</span><button class="btn btn-sm" type="submit">${tr(staff ? 'Send to client' : 'Send')}</button></div>
+      <div class="btn-row"><span class="note composer-hint">${tr(staff ? 'The client will see this and get an email.' : 'Brick & Pane gets an email.')}</span><button class="btn btn-sm" type="submit">${tr(staff ? 'Send to client' : 'Send')}</button></div>
     </form>`;
 }
 
@@ -321,7 +321,7 @@ export function bindDetail(root, d, refresh) {
     const radio = $(`input[name="mode"][value="${internal ? 'internal' : 'client'}"]`, composer);
     if (radio) radio.checked = true;
     $('button[type=submit]', composer).textContent = tr(internal ? 'Save internal note' : (radio ? 'Send to client' : 'Send'));
-    $('.composer-hint', composer).textContent = tr(internal ? 'Only Brick & Pane staff can see internal notes.' : (radio ? 'The client will see this and get an email.' : 'Your Brick & Pane contact gets an email.'));
+    $('.composer-hint', composer).textContent = tr(internal ? 'Only Brick & Pane staff can see internal notes.' : (radio ? 'The client will see this and get an email.' : 'Brick & Pane gets an email.'));
     composer.body.placeholder = tr(internal ? 'Internal note — staff only…' : (radio ? 'Write to the client…' : 'Write a message…'));
   };
   if (composer) {
@@ -342,7 +342,7 @@ export function bindDetail(root, d, refresh) {
   });
   $('[data-client-upload]', root)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const files = [...e.currentTarget.files.files]; if (!files.length) return;
-    try { await store.uploadFiles(d.project.id, files); toast(tr('Uploaded. Your technical lead has been notified.')); } catch (err) { toast(tr(err.message)); }
+    try { await store.uploadFiles(d.project.id, files); toast(tr('Uploaded. We’ve been notified.')); } catch (err) { toast(tr(err.message)); }
   });
 }
 
