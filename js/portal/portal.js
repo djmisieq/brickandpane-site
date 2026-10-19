@@ -264,7 +264,7 @@ function newProject() {
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
-    try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. We’ll prepare your individual quote.' : 'Submitted. We’ll confirm within one working day.')); location.hash = `#/p/${id}`; }
+    try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. We’ll prepare your individual quote.' : 'Submitted. We’ll confirm receipt.')); location.hash = `#/p/${id}`; }
     catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }
   });
 }

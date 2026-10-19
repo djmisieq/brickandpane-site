@@ -26,7 +26,9 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
     /package manager/i, /opiekun\S* pakietu/i, /point of contact/i, /jeden kontakt/i, /samples to your/i, /próbki do pracowni/i,
     /roughly what it costs/i, /mniej więcej ile/i, /budget (figure|range)/i, /przedział\S* budżetu/i, /nothing hidden/i, /nic ukrytego/i,
     /stronger terms/i, /lepsze warunki/i, /mock-up/i, /weekly/i, /cotygodniow/i, /motoris/i, /napęd/i, /keyless/i, /bezkluczow/i,
-    /promised date/i, /obiecan\S* termin/i, /from us first/i, /od nas jako pierwszy/i, /sales visit/i, /wizyt handlowc/i];
+    /promised date/i, /obiecan\S* termin/i, /from us first/i, /od nas jako pierwszy/i, /sales visit/i, /wizyt handlowc/i,
+    // No reply or turnaround deadlines anywhere (19.10).
+    /working day/i, /dni robocz/i, /dnia robocz/i, /\b\d+-day\b/i, /turnaround/i, /czas realizacji/i];
   for (const url of URLS) {
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
