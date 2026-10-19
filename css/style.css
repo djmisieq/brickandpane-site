@@ -764,24 +764,23 @@ body.app .site-header{position:static}
 .yes{display:inline-block;width:.75rem;height:.75rem;border-radius:50%;background:var(--ink)}
 .no{color:var(--muted)}
 .matrix-key{display:none}
-/* phones: a product is its name and a line of material chips, not a grid of unlabelled dots */
+/* phones: one line per product — its name, then the materials it comes in */
 @media (max-width:767px){
   table.matrix thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   table.matrix,table.matrix tbody{display:block;width:100%}
   table.matrix caption{display:block;width:100%}
-  table.matrix tr{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;border-bottom:1px solid var(--line);padding-block:.6rem}
-  table.matrix tbody th{flex:1 0 100%;display:block;width:auto;border:0;padding:0 0 .45rem}
+  table.matrix tr{display:block;border-bottom:1px solid var(--line);padding-block:.45rem;line-height:1.5}
+  table.matrix tbody th{display:inline;width:auto;border:0;padding:0;font-weight:500;color:var(--ink)}
   table.matrix tbody th::before{content:none}
-  table.matrix tbody th a{font-weight:600}
-  table.matrix tbody td{width:auto;padding:3px 9px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);font-size:var(--step--2);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--ink-2)}
-  table.matrix tbody td::before{content:attr(data-label)}
-  /* the dot and the dash carry the screen-reader wording, so hide them without leaving the page */
-  table.matrix tbody td .yes,table.matrix tbody td .no{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-  table.matrix tbody td:has(.no){border-style:dashed;border-color:var(--line);color:var(--muted);text-decoration:line-through}
-  table.matrix tbody td:has(.variant)::before{content:none}
+  table.matrix tbody td{display:inline;width:auto;border:0;padding:0;font-family:var(--font);font-size:var(--step--1);color:var(--ink-2)}
+  table.matrix tbody td::before{content:" · " attr(data-label)}
+  table.matrix tbody td:has(.variant)::before{content:" · "}
+  /* the dot keeps the screen-reader wording; a material we do not offer is left off the line */
+  table.matrix tbody td .yes{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.matrix tbody td:has(.no){position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   table.matrix tr.grp{display:block}
   table.matrix .grp th{padding-top:var(--s-m)}
-  .matrix-key{display:block;font-family:var(--mono);font-size:var(--step--2);color:var(--muted);margin-top:var(--s-s)}
+  .matrix-key{display:block;font-size:var(--step--1);color:var(--muted);margin-top:var(--s-s)}
 }
 
 /* ---------- material advisor ---------- */

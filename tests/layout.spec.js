@@ -152,11 +152,20 @@ test.describe('phone layout keeps the desktop structure', () => {
     }
   });
 
-  test('product matrix shows three material columns per row', async ({ page }) => {
+  test('product matrix keeps every material on the product line', async ({ page }) => {
     await open(page, '/products.html');
     const row = page.locator('.matrix tbody tr:not(.grp)').first();
     const cells = await row.locator('td').evaluateAll((tds) => tds.map((td) => Math.round(td.getBoundingClientRect().top)));
     expect(new Set(cells).size).toBe(1);
+    // The dots go: each product names the materials it comes in, and leaves out the rest.
+    const sash = page.locator('.matrix tr', { has: page.locator('a[href="windows.html#sash"]') });
+    const read = await sash.locator('td').evaluateAll((tds) => tds.map((td) => ({ label: getComputedStyle(td, '::before').content, w: td.getBoundingClientRect().width })));
+    expect(read[0].w).toBeLessThanOrEqual(1);          // aluminium: not offered, so not on the line
+    expect(read[1].label).toContain('Timber');
+    expect(read[2].label).toContain('PVC');
+    // The whole range stays within about two screens instead of scrolling for ever.
+    const tall = await page.locator('.matrix').evaluate((t) => t.getBoundingClientRect().height);
+    expect(tall).toBeLessThanOrEqual(page.viewportSize().height * 2);
   });
 
   test('comparison tables stack into full-width cards', async ({ page }) => {
