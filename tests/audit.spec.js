@@ -21,7 +21,12 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
     /fixed (price|quot)/i, /included in (our|the) price/i, /w cenie/i, /stał\w* (cen|wycen)/i, /wiążąc\w* wycen/i];
   const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
     /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
-    /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\w* osob/i];
+    /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\S* osob/i,
+    // Promises the company has not confirmed (19.10): one contact person, samples, extras, dates, terms.
+    /package manager/i, /opiekun\S* pakietu/i, /point of contact/i, /jeden kontakt/i, /samples to your/i, /próbki do pracowni/i,
+    /roughly what it costs/i, /mniej więcej ile/i, /budget (figure|range)/i, /przedział\S* budżetu/i, /nothing hidden/i, /nic ukrytego/i,
+    /stronger terms/i, /lepsze warunki/i, /mock-up/i, /weekly/i, /cotygodniow/i, /motoris/i, /napęd/i, /keyless/i, /bezkluczow/i,
+    /promised date/i, /obiecan\S* termin/i, /from us first/i, /od nas jako pierwszy/i, /sales visit/i, /wizyt handlowc/i];
   for (const url of URLS) {
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
@@ -129,8 +134,8 @@ test('aria-current="page" only marks the page you are on', async ({ page }) => {
 });
 
 test('language switch keeps the query, and portal pages keep the switch', async ({ page }) => {
-  await page.goto('/contact.html?role=architect&topic=samples');
-  await expect(page.locator('.lang-switch a[hreflang="pl"]')).toHaveAttribute('href', /pl\/contact\.html\?role=architect&topic=samples$/);
+  await page.goto('/contact.html?role=architect&topic=cpd');
+  await expect(page.locator('.lang-switch a[hreflang="pl"]')).toHaveAttribute('href', /pl\/contact\.html\?role=architect&topic=cpd$/);
   await page.goto('/login.html');
   await page.locator('[data-demo-login="homeowner"]').click();
   await expect(page.locator('.lang-switch')).toBeVisible();
