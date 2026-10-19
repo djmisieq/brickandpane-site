@@ -68,7 +68,8 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       const heads = $$('thead th', t).map((th) => th.textContent.trim());
       if (!heads.length) return;
       $$('tbody tr', t).forEach((tr) => [...tr.children].forEach((cell, i) => { if (!cell.dataset.label && heads[i] && cell.colSpan === 1) cell.dataset.label = heads[i]; }));
-      t.classList.add('has-labels');
+      // The product matrix stacks its own way on phones; the generic card layout would repeat its row heading.
+      if (!t.classList.contains('matrix')) t.classList.add('has-labels');
     });
   };
   labelTables();

@@ -763,17 +763,25 @@ body.app .site-header{position:static}
 .matrix .grp th{font-family:var(--mono);font-size:var(--step--2);font-weight:500;text-transform:uppercase;letter-spacing:var(--label-track);color:var(--muted);padding-top:var(--s-l);border-bottom-color:var(--ink)}
 .yes{display:inline-block;width:.75rem;height:.75rem;border-radius:50%;background:var(--ink)}
 .no{color:var(--muted)}
-/* phones: three material columns per product, not one long list */
+.matrix-key{display:none}
+/* phones: a product is its name and a line of material chips, not a grid of unlabelled dots */
 @media (max-width:767px){
   table.matrix thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   table.matrix,table.matrix tbody{display:block;width:100%}
-  table.matrix tr{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line);padding-block:.6rem}
-  table.matrix tbody th{grid-column:1 / -1;display:block;width:auto;border:0;padding:0 0 .4rem}
+  table.matrix caption{display:block;width:100%}
+  table.matrix tr{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;border-bottom:1px solid var(--line);padding-block:.6rem}
+  table.matrix tbody th{flex:1 0 100%;display:block;width:auto;border:0;padding:0 0 .45rem}
   table.matrix tbody th::before{content:none}
-  table.matrix tbody td{width:auto;border:0;padding:.2rem 0;display:flex;flex-direction:column;align-items:center;gap:.25rem;font-size:var(--step--1)}
-  table.matrix tbody td::before{content:attr(data-label);font-family:var(--mono);font-size:var(--step--2);color:var(--muted)}
+  table.matrix tbody th a{font-weight:600}
+  table.matrix tbody td{width:auto;padding:3px 9px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);font-size:var(--step--2);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--ink-2)}
+  table.matrix tbody td::before{content:attr(data-label)}
+  /* the dot and the dash carry the screen-reader wording, so hide them without leaving the page */
+  table.matrix tbody td .yes,table.matrix tbody td .no{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.matrix tbody td:has(.no){border-style:dashed;border-color:var(--line);color:var(--muted);text-decoration:line-through}
+  table.matrix tbody td:has(.variant)::before{content:none}
   table.matrix tr.grp{display:block}
   table.matrix .grp th{padding-top:var(--s-m)}
+  .matrix-key{display:block;font-family:var(--mono);font-size:var(--step--2);color:var(--muted);margin-top:var(--s-s)}
 }
 
 /* ---------- material advisor ---------- */
