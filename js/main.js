@@ -448,7 +448,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       name: (v) => v.trim().length > 1 || t('Enter your name.', 'Wpisz imię i nazwisko.'),
       email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) || t('Enter an email like name@practice.co.uk.', 'Wpisz e-mail, np. imie@firma.co.uk.'),
       files_link: (v) => !v.trim() || /^https?:\/\/\S+\.\S+$/i.test(v.trim()) || t('Paste the full link, starting with https://', 'Wklej pełny link, zaczynający się od https://'),
-      location: (v) => v.trim().length > 1 || t('Enter a postcode or borough so we can check access and planning context.', 'Wpisz kod pocztowy lub dzielnicę, żebyśmy mogli sprawdzić dojazd i uwarunkowania planistyczne.'),
+      location: (v) => v.trim().length > 1 || t('Enter a postcode or borough.', 'Wpisz kod pocztowy lub dzielnicę.'),
     };
     let errId = 0;
     const fieldError = (field, msg) => {
