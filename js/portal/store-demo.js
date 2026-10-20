@@ -347,7 +347,7 @@ export const store = {
     const s = load(); needStaff(s);
     const p = s.projects.find((x) => x.id === pid);
     ['assignee_id', 'next_step', 'due_at', 'delivery_at', 'install_at'].forEach((k) => { if (k in patch) p[k] = patch[k]; });
-    if ('delivery_at' in patch || 'install_at' in patch) notifyMembers(s, pid, 'dates', `${p.name}: dates confirmed`, [p.delivery_at && `Delivery ${new Date(p.delivery_at).toDateString()}`, p.install_at && `Fitting ${new Date(p.install_at).toDateString()}`].filter(Boolean).join(' · '));
+    if ('delivery_at' in patch || 'install_at' in patch) notifyMembers(s, pid, 'dates', `${p.name}: dates updated`, [p.delivery_at && `Delivery ${new Date(p.delivery_at).toDateString()}`, p.install_at && `Fitting ${new Date(p.install_at).toDateString()}`].filter(Boolean).join(' · '));
     p.updated_at = now(); save(s);
   },
   async updateInternal(pid, patch) { const s = load(); needStaff(s); Object.assign(s.internal[pid], patch); save(s); },
