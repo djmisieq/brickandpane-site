@@ -32,7 +32,9 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   // Portal (19.10): no named technical lead, no budget price, no promised dates, no payment percentages.
   /technical lead/i, /twój opiekun/i, /opiekun\S* techniczn/i, /budget price/i, /cen\S* budżetow/i, /promised (by|to)/i, /obiecane (do|klientowi)/i, /\(\d+%\)/,
   // Contact form (20.10): no site checks from the postcode, no promised call.
-  /we check access/i, /sprawdzamy dojazd/i, /planning context/i, /uwarunkowania planistyczne/i, /like a call/i, /żebyśmy zadzwonili/i];
+  /we check access/i, /sprawdzamy dojazd/i, /planning context/i, /uwarunkowania planistyczne/i, /like a call/i, /żebyśmy zadzwonili/i,
+  // Guides (21.10): no clients we do not have yet, PAS 24 only as available to order, no promised mark-ups.
+  /we specify/i, /specyfikujemy/i, /PAS 24 tested/i, /certyfikat\S* PAS/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
   test.setTimeout(120_000); // every page in both languages
