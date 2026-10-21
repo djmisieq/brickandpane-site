@@ -33,7 +33,7 @@ const LOCALES = {
     actionHref: 'portal.html', actionLabel: 'Panel klienta',
     org: 'Okna, drzwi, drzwi przesuwne i przeszklone fasady z aluminium, drewna i PVC, na zamówienie, z montażem w Londynie.',
     ogImageAlt: 'Smukłe aluminiowe drzwi przesuwne otwarte na ogród otoczony murem',
-    home: 'Strona główna', products: 'Produkty',
+    home: 'Start', products: 'Produkty',
     updated: (d) => `Aktualizacja: ${d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
 };

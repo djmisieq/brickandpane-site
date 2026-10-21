@@ -6,7 +6,7 @@ import { test, expect } from './fixtures.js';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404', 'thank-you',
-  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows',
+  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows', 'guide-steel-windows-conservation-areas', 'guide-roof-lantern-or-rooflight', 'guide-pas-24-secure-doors',
 ];
 const URLS = [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)];
 
@@ -35,6 +35,7 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   /we check access/i, /sprawdzamy dojazd/i, /planning context/i, /uwarunkowania planistyczne/i, /like a call/i, /żebyśmy zadzwonili/i];
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
+  test.setTimeout(120_000); // every page in both languages
   for (const url of URLS) {
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
