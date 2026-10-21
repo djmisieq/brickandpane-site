@@ -4,23 +4,47 @@
 // Pages share slugs across languages, so each page links to its counterpart (hreflang + EN|PL switch).
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 
+// Search and AI output, also generated here: JSON-LD graph per page, sitemap.xml and llms.txt.
+//   Front matter: "private": true (portal, admin, login, thank-you, 404) = always noindex, no canonical, schema,
+//   sitemap or llms.txt entry. "crumb": short page name for breadcrumbs. "service": product pages. "updated":
+//   YYYY-MM-DD of the last content change (sitemap lastmod; on guides also shown in place of {{updated}}).
+//   "article": true for guides (Article schema, og:type article).
+
 const SITE = 'https://brickandpane.co.uk';
+// Pre-launch: false keeps every page noindex. At launch set true (docs: WDROZENIE.md §8).
+const INDEXABLE = false;
 const url = (p) => new URL(p, import.meta.url);
 const read = (p) => readFileSync(url(p), 'utf8');
 const layout = read('./src/partials/layout.html');
 
 const LOCALES = {
   en: {
-    dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB',
+    dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB', ogAlt: 'pl_PL',
     skip: 'Skip to content',
     actionHref: 'portal.html', actionLabel: 'Client portal',
+    org: 'Windows, doors, sliding doors and glazed facades in aluminium, timber and PVC, made to order and installed in London.',
+    ogImageAlt: 'Slim aluminium sliding doors opening onto a walled garden',
+    home: 'Home', products: 'Products',
+    updated: (d) => `Updated ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
   pl: {
-    dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL',
+    dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL', ogAlt: 'en_GB',
     skip: 'Przejdź do treści',
     actionHref: 'portal.html', actionLabel: 'Panel klienta',
+    org: 'Okna, drzwi, drzwi przesuwne i przeszklone fasady z aluminium, drewna i PVC, na zamówienie, z montażem w Londynie.',
+    ogImageAlt: 'Smukłe aluminiowe drzwi przesuwne otwarte na ogród otoczony murem',
+    home: 'Strona główna', products: 'Produkty',
+    updated: (d) => `Aktualizacja: ${d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
 };
+// Product pages sit under "Products" in the breadcrumb trail.
+const PRODUCT_NAV = ['lift-slide', 'sliding', 'bifold', 'windows', 'doors', 'facades', 'heritage'];
+const ORG = `${SITE}/#org`;
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+// Visible text of a fragment: tags out, entities decoded, whitespace collapsed (for FAQ answers in JSON-LD).
+const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+  .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').replace(/\s([.,;:!?)])/g, '$1').trim();
+const pages = { en: [], pl: [] };
 const pagesOf = (loc) => (existsSync(url(LOCALES[loc].dir)) ? readdirSync(url(LOCALES[loc].dir)).filter((f) => f.endsWith('.html')) : []);
 const EN = new Set(pagesOf('en'));
 const PL = new Set(pagesOf('pl'));
@@ -42,7 +66,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
     // Language switch: counterpart page if it exists, otherwise the same page with ?lang= (portal pages translate in JS).
     const enHref = loc === 'en' ? file : (hasEn ? `../${file}` : '../index.html');
     const plHref = loc === 'pl' ? file : (hasPl ? `pl/${file === 'index.html' ? '' : file}` : `${file}?lang=pl`);
-    const alternates = hasEn && hasPl
+    const alternates = hasEn && hasPl && !meta.private
       ? [`<link rel="alternate" hreflang="en-GB" href="${pageUrl('en', file)}">`, `<link rel="alternate" hreflang="pl" href="${pageUrl('pl', file)}">`, `<link rel="alternate" hreflang="x-default" href="${pageUrl('en', file)}">`].join('\n')
       : '';
 
@@ -73,10 +97,57 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       return `<section${attrs} data-tech><div class="container"><details class="tech"><summary><span class="tech-label">${label}</span>${h2}</summary>${rest}</details></div></section>`;
     });
 
+    const updated = meta.updated ? new Date(`${meta.updated}T00:00:00Z`) : null;
+    if (content.includes('{{updated}}')) {
+      if (!updated) throw new Error(`${loc}/${file}: {{updated}} needs "updated" in front matter`);
+      content = content.replaceAll('{{updated}}', `<time datetime="${meta.updated}">${L.updated(updated)}</time>`);
+    }
+
+    // JSON-LD: one graph per page. The business node is shared by @id; FAQPage is read from the visible
+    // <details><summary> FAQ markup, so schema and page text cannot drift apart. No offers, prices or ratings.
+    let jsonld = '';
+    const canonical = pageUrl(loc, file);
+    if (!meta.private) {
+      if (!meta.crumb) throw new Error(`${loc}/${file}: missing "crumb"`);
+      const name = meta.title.split(' | ')[0];
+      const crumbs = [[L.home, pageUrl(loc, 'index.html')]];
+      if (PRODUCT_NAV.includes(meta.nav)) crumbs.push([L.products, pageUrl(loc, 'products.html')]);
+      if (file !== 'index.html') crumbs.push([meta.crumb, canonical]);
+      const graph = [
+        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'daniel@brickandpane.co.uk',
+          logo: `${SITE}/img/logo.svg`, image: `${SITE}/img/photos/og-image.jpg`, description: L.org,
+          areaServed: { '@type': 'City', name: 'London' } },
+        { '@type': 'WebSite', '@id': `${SITE}/#website`, url: `${SITE}/`, name: 'Brick & Pane', publisher: { '@id': ORG }, inLanguage: ['en-GB', 'pl'] },
+        { '@type': 'WebPage', '@id': `${canonical}#webpage`, url: canonical, name,
+          description: meta.description, inLanguage: L.lang, isPartOf: { '@id': `${SITE}/#website` }, about: { '@id': ORG },
+          breadcrumb: { '@id': `${canonical}#breadcrumb` }, ...(updated ? { dateModified: meta.updated } : {}) },
+        { '@type': 'BreadcrumbList', '@id': `${canonical}#breadcrumb`,
+          itemListElement: crumbs.map(([n, u], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: u })) },
+      ];
+      if (meta.service) graph.push({ '@type': 'Service', '@id': `${canonical}#service`, name: meta.crumb, serviceType: meta.service,
+        provider: { '@id': ORG }, areaServed: { '@type': 'City', name: 'London' }, url: canonical });
+      const h1 = content.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
+      if (meta.article) graph.push({ '@type': 'Article', '@id': `${canonical}#article`, headline: h1 ? text(h1[1]) : name,
+        description: meta.description, inLanguage: L.lang, mainEntityOfPage: { '@id': `${canonical}#webpage` }, url: canonical,
+        image: `${SITE}/img/photos/og-image.jpg`, author: { '@id': ORG }, publisher: { '@id': ORG },
+        ...(meta.published ? { datePublished: meta.published } : {}), ...(updated ? { dateModified: meta.updated } : {}) });
+      const faq = [...content.matchAll(/<details><summary>([\s\S]*?)<\/summary><div class="answer">([\s\S]*?)<\/div><\/details>/g)];
+      if (faq.length) graph.push({ '@type': 'FAQPage', '@id': `${canonical}#faq`, inLanguage: L.lang, isPartOf: { '@id': `${canonical}#webpage` },
+        mainEntity: faq.map(([, q, a]) => ({ '@type': 'Question', name: text(q), acceptedAnswer: { '@type': 'Answer', text: text(a) } })) });
+      jsonld = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>\n`;
+      pages[loc].push({ file, title: meta.title, description: meta.description, updated: meta.updated, alt: hasEn && hasPl });
+    }
+
     const out = layout
       .replaceAll('{{title}}', meta.title)
       .replaceAll('{{description}}', meta.description)
-      .replaceAll('{{canonical}}', pageUrl(loc, file))
+      .replace('{{robots}}', INDEXABLE && !meta.private ? 'index,follow' : 'noindex,nofollow')
+      .replace('{{canonicalTag}}', meta.private ? '' : `<link rel="canonical" href="${canonical}">\n`)
+      .replace('{{ogType}}', meta.article ? 'article' : 'website')
+      .replace('{{ogLocaleAlt}}', L.ogAlt)
+      .replace('{{ogImageAlt}}', esc(L.ogImageAlt))
+      .replace('{{jsonld}}', () => jsonld)
+      .replaceAll('{{canonical}}', canonical)
       .replaceAll('{{bodyClass}}', meta.bodyClass || '')
       .replaceAll('{{root}}', L.root)
       .replace('{{lang}}', L.lang)
@@ -96,3 +167,29 @@ for (const [loc, L] of Object.entries(LOCALES)) {
     console.log('built', `${loc}/${file}`);
   }
 }
+
+// sitemap.xml: every public page in both languages, with hreflang alternates and lastmod from "updated".
+const sitemapUrls = Object.entries(pages).flatMap(([loc, list]) => list.map((p) => {
+  const alt = p.alt ? ['en', 'pl'].map((l) => `\n    <xhtml:link rel="alternate" hreflang="${l === 'en' ? 'en-GB' : 'pl'}" href="${pageUrl(l, p.file)}"/>`).join('')
+    + `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl('en', p.file)}"/>` : '';
+  return `  <url>\n    <loc>${pageUrl(loc, p.file)}</loc>${p.updated ? `\n    <lastmod>${p.updated}</lastmod>` : ''}${alt}\n  </url>`;
+}));
+writeFileSync(url('./sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${sitemapUrls.join('\n')}\n</urlset>\n`);
+
+// llms.txt: a plain index of the public pages for AI assistants (llmstxt.org format).
+const llmsList = (list, loc) => list.map((p) => `- [${p.title.split(' | ')[0]}](${pageUrl(loc, p.file)}): ${p.description}`).join('\n');
+writeFileSync(url('./llms.txt'), `# Brick & Pane
+
+> ${LOCALES.en.org} Every project is quoted individually; the site publishes system data, Building Regulations guidance and how we work.
+
+Contact: daniel@brickandpane.co.uk
+
+## Pages (English)
+
+${llmsList(pages.en, 'en')}
+
+## Strony (polski)
+
+${llmsList(pages.pl, 'pl')}
+`);
+console.log('built sitemap.xml, llms.txt');

@@ -42,6 +42,35 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
   }
 });
 
+test('search and AI output: private pages stay noindex, schema has no prices, titles fit', () => {
+  // Built files, read from disk: robots, canonical and JSON-LD come from build.mjs.
+  const read = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  const PRIVATE = ['404', 'admin', 'login', 'portal', 'thank-you'];
+  const hits = [];
+  for (const dir of ['', 'pl/']) {
+    for (const p of PRIVATE) {
+      const html = read(`${dir}${p}.html`);
+      if (!/<meta name="robots" content="noindex,nofollow">/.test(html)) hits.push(`${dir}${p}: not noindex`);
+      if (/rel="canonical"|application\/ld\+json/.test(html)) hits.push(`${dir}${p}: canonical or schema on a private page`);
+    }
+    for (const p of PAGES.filter((x) => !PRIVATE.includes(x))) {
+      const html = read(`${dir}${p}.html`);
+      const title = html.match(/<title>([^<]*)<\/title>/)[1].replace(/&amp;/g, '&');
+      const desc = html.match(/<meta name="description" content="([^"]*)">/)[1];
+      if (title.length > 60) hits.push(`${dir}${p}: title ${title.length} chars`);
+      if (desc.length > 160) hits.push(`${dir}${p}: description ${desc.length} chars`);
+      const ld = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      if (!ld) { hits.push(`${dir}${p}: no JSON-LD`); continue; }
+      if (/"(offers|price\w*|aggregateRating|review)"/.test(ld[1])) hits.push(`${dir}${p}: price or rating in schema`);
+      for (const re of BANNED) if (re.test(ld[1])) hits.push(`${dir}${p}: schema contains ${re}`);
+    }
+  }
+  const llms = read('llms.txt');
+  for (const re of BANNED) if (re.test(llms)) hits.push(`llms.txt contains ${re}`);
+  for (const p of PRIVATE) if (llms.includes(`/${p}.html`) || read('sitemap.xml').includes(`/${p}.html`)) hits.push(`${p} listed in llms.txt or sitemap`);
+  expect(hits).toEqual([]);
+});
+
 test('portal texts make no promise the company has not confirmed', () => {
   // Every line of the portal and CRM that can carry visible text, in English and Polish (comments skipped).
   const hits = [];

@@ -1,43 +1,283 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://brickandpane.co.uk/</loc></url>
-  <url><loc>https://brickandpane.co.uk/lift-and-slide-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/sliding-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/bifold-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/products.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/homeowners.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/architects.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/developers.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/guide-large-sliding-doors-london.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/projects.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/about.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/contact.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/privacy.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/lift-and-slide-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/sliding-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/bifold-doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/products.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/homeowners.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/architects.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/developers.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/guide-large-sliding-doors-london.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/projects.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/about.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/contact.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/privacy.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/windows.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/windows.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/doors.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/facades.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/facades.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/materials.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/materials.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/heritage-conservation.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/heritage-conservation.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/guide-bifold-or-sliding.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/guide-bifold-or-sliding.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/guide-replacing-windows.html</loc></url>
-  <url><loc>https://brickandpane.co.uk/pl/guide-replacing-windows.html</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://brickandpane.co.uk/about.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/about.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/architects.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/architects.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/architects.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/architects.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/bifold-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/bifold-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/bifold-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/bifold-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/contact.html</loc>
+    <lastmod>2026-10-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/contact.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/developers.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/developers.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/developers.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/developers.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/facades.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/facades.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/facades.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/facades.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/guide-bifold-or-sliding.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-bifold-or-sliding.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-bifold-or-sliding.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-bifold-or-sliding.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/guide-large-sliding-doors-london.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-large-sliding-doors-london.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-large-sliding-doors-london.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-large-sliding-doors-london.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/guide-replacing-windows.html</loc>
+    <lastmod>2026-10-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-replacing-windows.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-replacing-windows.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-replacing-windows.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/heritage-conservation.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/heritage-conservation.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/heritage-conservation.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/heritage-conservation.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/homeowners.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/homeowners.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/homeowners.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/homeowners.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/lift-and-slide-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/lift-and-slide-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/lift-and-slide-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/lift-and-slide-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/materials.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/materials.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/materials.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/materials.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/privacy.html</loc>
+    <lastmod>2026-10-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/products.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/products.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/products.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/products.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/projects.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/projects.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/projects.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/projects.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/sliding-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/sliding-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/sliding-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/sliding-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/windows.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/windows.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/windows.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/windows.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/about.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/about.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/architects.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/architects.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/architects.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/architects.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/bifold-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/bifold-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/bifold-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/bifold-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/contact.html</loc>
+    <lastmod>2026-10-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/contact.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/developers.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/developers.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/developers.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/developers.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/facades.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/facades.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/facades.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/facades.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/guide-bifold-or-sliding.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-bifold-or-sliding.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-bifold-or-sliding.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-bifold-or-sliding.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/guide-large-sliding-doors-london.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-large-sliding-doors-london.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-large-sliding-doors-london.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-large-sliding-doors-london.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/guide-replacing-windows.html</loc>
+    <lastmod>2026-10-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/guide-replacing-windows.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/guide-replacing-windows.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/guide-replacing-windows.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/heritage-conservation.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/heritage-conservation.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/heritage-conservation.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/heritage-conservation.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/homeowners.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/homeowners.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/homeowners.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/homeowners.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/lift-and-slide-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/lift-and-slide-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/lift-and-slide-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/lift-and-slide-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/materials.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/materials.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/materials.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/materials.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/privacy.html</loc>
+    <lastmod>2026-10-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/products.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/products.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/products.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/products.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/projects.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/projects.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/projects.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/projects.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/sliding-doors.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/sliding-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/sliding-doors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/sliding-doors.html"/>
+  </url>
+  <url>
+    <loc>https://brickandpane.co.uk/pl/windows.html</loc>
+    <lastmod>2026-10-21</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://brickandpane.co.uk/windows.html"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://brickandpane.co.uk/pl/windows.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://brickandpane.co.uk/windows.html"/>
+  </url>
 </urlset>
