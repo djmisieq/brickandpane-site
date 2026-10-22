@@ -37,6 +37,39 @@ const LOCALES = {
     updated: (d) => `Aktualizacja: ${d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
 };
+// Page hero photographs, written into the HTML so the browser finds them early and their box is reserved
+// (other photos are placed by js/photos.js). [image, portrait image for phones, alt EN, alt PL]; alt '' = decorative.
+// Files: img/photos/<image>-{1000,2000}.jpg plus AVIF/WebP from `npm run images`.
+const HEROES = {
+  'index.html': ['hero-index', 'hero-index-mobile', 'Floor-to-ceiling sliding doors looking onto a walled garden', 'Drzwi przesuwne od podłogi do sufitu z widokiem na ogród otoczony murem'],
+  'products.html': ['hero-products', '', 'Back of a brick house with sliding doors and a roof lantern on the extension', 'Tył ceglanego domu z drzwiami przesuwnymi i latarnią dachową na dobudówce'],
+  'windows.html': ['hero-windows', '', 'Terrace of brick houses with white sash windows', 'Szereg ceglanych domów z białymi oknami przesuwnymi pionowo'],
+  'doors.html': ['hero-doors', '', 'Black panelled front door under a fanlight, between two sash windows', 'Czarne drzwi frontowe z płycinami i naświetlem, między dwoma oknami przesuwnymi'],
+  'facades.html': ['hero-facades', '', 'Brick building with large dark-framed glazing on two floors', 'Ceglany budynek z dużymi przeszkleniami w ciemnych ramach na dwóch kondygnacjach'],
+  'lift-and-slide-doors.html': ['hero-lift-slide', '', 'Large lift and slide door part open from a room to the garden', 'Duże drzwi podnoszono-przesuwne częściowo otwarte z pokoju do ogrodu'],
+  'sliding-doors.html': ['hero-sliding', '', 'Three-panel sliding door looking onto a walled garden', 'Trzyczęściowe drzwi przesuwne z widokiem na ogród otoczony murem'],
+  'bifold-doors.html': ['hero-bifold', '', 'Bi-fold doors folded open from a kitchen to a courtyard garden', 'Drzwi harmonijkowe złożone na bok, otwierające kuchnię na ogród'],
+  'materials.html': ['hero-materials', '', 'Frame corners in timber, aluminium and white side by side', 'Narożniki ram z drewna, aluminium i białej ramy obok siebie'],
+  'homeowners.html': ['hero-homeowners', '', 'Kitchen with sliding doors open wide to the garden', 'Kuchnia z drzwiami przesuwnymi szeroko otwartymi do ogrodu'],
+  'architects.html': ['hero-architects', '', 'Window drawings and a ruler on a desk by a window', 'Rysunki okien i linijka na biurku przy oknie'],
+  'developers.html': ['hero-developers', '', 'Four-storey brick block of flats', 'Czterokondygnacyjny ceglany budynek mieszkalny'],
+  'heritage-conservation.html': ['hero-heritage', '', 'Georgian brick terrace with white sash windows behind railings', 'Georgiańska ceglana kamienica z białymi oknami przesuwnymi za ogrodzeniem'],
+  'contact.html': ['hero-contact', '', 'Sketch of a floor plan on a desk by a window', 'Szkic rzutu na biurku przy oknie'],
+  'guide-large-sliding-doors-london.html': ['hero-guide-large-sliding', '', 'Brick extension with wide sliding glass doors onto a lawn', 'Ceglana dobudówka z szerokimi przeszklonymi drzwiami przesuwnymi na trawnik'],
+  'guide-bifold-or-sliding.html': ['hero-guide-bifold-sliding', '', 'Rear extension with bi-fold doors on the left and sliding doors on the right', 'Dobudówka z drzwiami harmonijkowymi po lewej i przesuwnymi po prawej'],
+  'guide-replacing-windows.html': ['hero-guide-replacing', '', 'Old window taken out and leaning against the wall beside the opening', 'Wyjęte stare okno oparte o ścianę obok otworu'],
+  '404.html': ['hero-404', '', '', ''],
+  'thank-you.html': ['hero-thank-you', '', 'Timber sliding door looking onto a garden', 'Drewniane drzwi przesuwne z widokiem na ogród'],
+};
+const SIZES = '(min-width:1440px) 1296px, 92vw';
+const heroFigure = ([id, mobile, en, pl], loc) => {
+  const p = `${LOCALES[loc].root}img/photos/`;
+  const set = (ext) => [800, 1200, 1600, 2000].map((w) => `${p}${id}-${w}.${ext} ${w}w`).join(', ');
+  const phone = mobile ? ['avif', 'webp'].map((ext) => `<source media="(max-width:767px)" type="image/${ext}" srcset="${p}${mobile}-600.${ext} 600w, ${p}${mobile}-900.${ext} 900w" sizes="92vw">`).join('')
+    + `<source media="(max-width:767px)" srcset="${p}${mobile}.jpg">` : '';
+  return `<figure class="photo photo-hero"><picture>${phone}<source type="image/avif" srcset="${set('avif')}" sizes="${SIZES}"><source type="image/webp" srcset="${set('webp')}" sizes="${SIZES}">`
+    + `<img src="${p}${id}-2000.jpg" srcset="${p}${id}-1000.jpg 1000w, ${p}${id}-2000.jpg 2000w" sizes="${SIZES}" width="2000" height="1125" alt="${esc(loc === 'pl' ? pl : en)}" fetchpriority="high"></picture></figure>\n`;
+};
 // Product pages sit under "Products" in the breadcrumb trail.
 const PRODUCT_NAV = ['lift-slide', 'sliding', 'bifold', 'windows', 'doors', 'facades', 'heritage'];
 const ORG = `${SITE}/#org`;
@@ -89,13 +122,23 @@ for (const [loc, L] of Object.entries(LOCALES)) {
     }
 
     // Technical sections (data-tech): keep the heading, fold the detail behind "Technical data for architects".
+    // The h2 stays outside <summary>: a heading inside the toggle button loses its role in screen readers.
     content = content.replace(/<section([^>]*) data-tech>([\s\S]*?)<\/section>/g, (m, attrs, inner) => {
-      const h2 = inner.match(/<h2[^>]*>[\s\S]*?<\/h2>/)[0];
+      const h2 = inner.match(/<h2[^>]*>([\s\S]*?)<\/h2>/);
       const label = loc === 'pl' ? 'Dane techniczne dla architektów' : 'Technical data for architects';
       // Moving the h2 out can leave its wrapper empty, which would hold an empty grid column: drop it.
-      const rest = inner.replace(h2, '').replace(/<div>\s*<\/div>/, '');
-      return `<section${attrs} data-tech><div class="container"><details class="tech"><summary><span class="tech-label">${label}</span>${h2}</summary>${rest}</details></div></section>`;
+      const rest = inner.replace(h2[0], '').replace(/<div>\s*<\/div>/, '');
+      const name = h2[1].replace(/<[^>]+>/g, '');
+      return `<section${attrs} data-tech><div class="container">${h2[0].replace('<h2', '<h2 class="tech-h"')}<details class="tech"><summary><span>${label}<span class="visually-hidden">: ${name}</span></span></summary>${rest}</details></div></section>`;
     });
+
+    // Hero photograph: under the hero copy, above the technical drawing if the hero has one.
+    if (HEROES[file]) {
+      const first = content.slice(0, content.indexOf('</section>'));
+      const fig = first.indexOf('<figure class="hero-figure');
+      const at = fig >= 0 ? fig : first.lastIndexOf('</div>');
+      content = `${content.slice(0, at)}${heroFigure(HEROES[file], loc)}${content.slice(at)}`;
+    }
 
     const updated = meta.updated ? new Date(`${meta.updated}T00:00:00Z`) : null;
     if (content.includes('{{updated}}')) {
