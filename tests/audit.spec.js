@@ -15,7 +15,7 @@ test.beforeEach(({}, info) => { test.skip(info.project.name !== 'desktop', 'sets
 // Confirmed services: survey of existing windows and measurement. No corner samples, nothing "free",
 // no budget "straight away", no "own team only" claims.
 // No prices at all (18.10.2026): every project is quoted individually, so no amounts, rates, ranges, discounts
-// or deadlines for a budget anywhere on the site. Relative cost (£ / ££ / £££) is a comparison, not a price.
+// or deadlines for a budget anywhere on the site. No pound sign at all (22.10.2026): not even relative cost (£ / ££ / £££).
 const PRICES = [/£\s?\d/, /£\/m²/, /±\s?\d/, /discount/i, /rabat/i, /zniżk/i, /promoc/i, /example rates/i, /stawki przykładowe/i,
   /budget within/i, /budżet w (ciągu )?\d/i, /budżet (wróci|przyślemy) w/i, /(quote|price) (arrives|follows) within/i, /wycena przyjdzie w/i, /price\s+within/i,
   /fixed (price|quot)/i, /included in (our|the) price/i, /w cenie/i, /stał\w* (cen|wycen)/i, /wiążąc\w* wycen/i];
@@ -42,6 +42,8 @@ test('content makes no promise the company has not confirmed', async ({ page }) 
     await page.goto(url);
     const text = await page.evaluate(() => `${document.title} ${document.querySelector('meta[name=description]')?.content || ''} ${document.body.innerText}`);
     for (const re of BANNED) expect(text, `${url} contains ${re}`).not.toMatch(re);
+    // Public pages show no pound sign at all; the portal keeps £ for amounts the team enters.
+    expect(text, `${url} shows a pound sign`).not.toContain('£');
   }
 });
 
