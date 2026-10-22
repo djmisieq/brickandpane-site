@@ -194,7 +194,7 @@ function newProject() {
   csv?.addEventListener('change', async () => {
     const file = csv.files[0]; if (!file) return;
     const lines = (await file.text()).split(/\r?\n/).map((l) => l.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))).filter((c) => c.length > 2 && c.some(Boolean));
-    const head = lines[0].map((h) => h.toLowerCase());
+    const head = (lines[0] || []).map((h) => h.toLowerCase());
     const body = head.includes('width_mm') ? lines.slice(1) : lines;
     const col = (row, name, idx) => row[head.includes(name) ? head.indexOf(name) : idx] ?? '';
     const valid = body.filter((row) => +col(row, 'width_mm', 2) > 0 && +col(row, 'height_mm', 3) > 0);
@@ -258,14 +258,29 @@ function newProject() {
     if (bad) { bad.focus(); return; }
     const files = [...f.files.files];
     if (files.some((x) => x.size > 50e6)) { toast(tr('Each file must be under 50 MB.')); return; }
+    // Sizes the database accepts (0001: width 300–30000, height 300–6000 mm). A size may be left empty (we measure),
+    // but one outside the range is pointed out rather than rejected by the database after the project exists.
+    const LIMITS = { width_mm: [300, 30000], height_mm: [300, 6000] };
+    let badSize = null;
+    $$('tr', rows).forEach((row) => Object.keys(LIMITS).forEach((k) => {
+      const el = row.querySelector(`[name="${k}"]`); const [min, max] = LIMITS[k]; const v = +el.value;
+      const wrong = el.value.trim() !== '' && !(Number.isInteger(v) && v >= min && v <= max);
+      el.setAttribute('aria-invalid', wrong ? 'true' : 'false');
+      if (wrong && !badSize) badSize = el;
+    }));
+    if (badSize) { badSize.focus(); toast(tr('Check the sizes: width 300–30,000 mm, height 300–6,000 mm.')); return; }
     const openings = $$('tr', rows).map((row) => ({ ...Object.fromEntries($$('input,select', row).map((el) => [el.name, el.value])), notes: row.dataset.note || '' }))
-      .filter((o) => o.width_mm && o.height_mm)
-      .map((o) => ({ ...o, width_mm: +o.width_mm, height_mm: +o.height_mm, qty: +o.qty || 1 }));
+      .filter((o) => o.width_mm || o.height_mm || o.notes)
+      .map((o) => ({ ...o, width_mm: o.width_mm ? +o.width_mm : null, height_mm: o.height_mm ? +o.height_mm : null, qty: +o.qty || 1 }));
     const data = Object.fromEntries(['name', 'location', 'riba_stage', 'building_type', 'start_window', 'brief'].map((k) => [k, f[k].value.trim()]));
     data.systems = [...new Set(openings.map((o) => o.system))];
     const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = tr('Submitting…');
     try { const id = await store.createProject(data, openings, files); clearList(); toast(tr(home ? 'Sent. We’ll prepare your individual quote.' : 'Submitted. We’ll confirm receipt.')); location.hash = `#/p/${id}`; }
-    catch (err) { toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review'); }
+    catch (err) {
+      // The project is saved; only files failed. Go to it rather than let a retry create a second one.
+      if (err.projectId) { clearList(); toast(tr('Your project is saved, but some files did not upload. Add them under Documents.')); location.hash = `#/p/${err.projectId}`; return; }
+      toast(tr(err.message)); btn.disabled = false; btn.textContent = tr('Submit for review');
+    }
   });
 }
 
@@ -286,10 +301,35 @@ function settings() {
         </fieldset>
         <div><button class="btn" type="submit">${tr('Save')}</button></div>
       </form>
+      <form class="password mt-l" style="max-width:640px;display:grid;gap:1.2rem" novalidate>
+        <h2 class="panel-h">${tr('Password')}</h2>
+        <p class="note">${tr('Signed in with an email link, Google or Microsoft? Set a password here to sign in with it too.')}</p>
+        <input type="email" name="username" autocomplete="username" value="${esc(user.email || '')}" hidden>
+        <div class="field-row">
+          <div class="field"><label for="s-pw">${tr('New password')} <span class="hint">${tr('at least 10 characters')}</span></label><input id="s-pw" name="password" type="password" autocomplete="new-password" minlength="10"><p class="error" aria-live="polite"></p></div>
+          <div class="field"><label for="s-pw2">${tr('Repeat password')}</label><input id="s-pw2" name="password2" type="password" autocomplete="new-password"><p class="error" aria-live="polite"></p></div>
+        </div>
+        <div><button class="btn" type="submit">${tr('Set password')}</button></div>
+      </form>
+      <section class="mt-l" style="max-width:640px">
+        <h2 class="panel-h">${tr('Your data')}</h2>
+        <p class="note">${tr('To delete your account and personal data, email {email} from the address you sign in with.', { email: '<a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>' })} <a href="privacy.html">${tr('Privacy notice')}</a></p>
+      </section>
     </div>`;
   $('.settings', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     try { await store.updateProfile({ full_name: f.full_name.value.trim(), company: f.company.value.trim(), phone: f.phone.value.trim(), notify_email: f.notify_email.checked }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
+  });
+  $('.password', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget; const btn = $('button[type=submit]', f);
+    const short = f.password.value.length < 10, differ = f.password.value !== f.password2.value;
+    [[f.password, short && tr('Use at least 10 characters.')], [f.password2, !short && differ && tr('The passwords don’t match.')]].forEach(([el, msg]) => {
+      el.closest('.field').classList.toggle('has-error', !!msg); $('.error', el.closest('.field')).textContent = msg || '';
+    });
+    if (short || differ || btn.disabled) return;
+    btn.disabled = true;
+    try { await store.setPassword(f.password.value); f.reset(); toast(tr('Password set.')); } catch (err) { toast(tr(err.message)); }
+    finally { btn.disabled = false; }
   });
 }
 

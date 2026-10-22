@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -15,16 +15,20 @@ const O = '55555555-5555-5555-5555-555555555555'; // unrelated client
 async function setup() {
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now());
+    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now(), created_at timestamptz default now());
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;
     create publication supabase_realtime; create schema storage;
-    create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint);
+    create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
     create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+    alter table storage.objects enable row level security;
     create function storage.foldername(name text) returns text[] language sql as $$ select string_to_array(name, '/') $$;`);
+  await db.exec(`grant usage on schema public to anon, authenticated; grant usage on schema storage to anon, authenticated;
+    alter default privileges in schema public grant all on tables to anon, authenticated;
+    alter default privileges in schema public grant all on sequences to anon, authenticated;
+    alter default privileges in schema public grant execute on functions to anon, authenticated;
+    grant all on all tables in schema storage to anon, authenticated; grant execute on function storage.foldername(text) to anon, authenticated;`);
   for (const m of MIGRATIONS) await db.exec(m);
-  await db.exec(`grant usage on schema public to authenticated; grant all on all tables in schema public to authenticated;
-    grant all on all sequences in schema public to authenticated; grant execute on all functions in schema public to authenticated;`);
   await db.query(`insert into auth.users values ($1,'arch@x.com','{"full_name":"Anna","account_type":"architect"}'),
     ($2,'client@x.com','{"full_name":"Jo","account_type":"homeowner"}'), ($3,'s@bp.com','{"full_name":"Tom"}'), ($4,'other@x.com','{"full_name":"Oz"}')`, [A, C, S, O]);
   await db.query(`update public.profiles set role = 'staff' where id = $1`, [S]);
@@ -163,4 +167,69 @@ test('staff turn an enquiry into a project with its openings; a new account take
   const mine = (await db.query('select id, owner_id from public.projects')).rows;
   assert.deepEqual(mine, [{ id: P, owner_id: K }]);
   assert.equal((await db.query('select role from public.project_members where project_id = $1 and user_id = $2', [P, K])).rows[0].role, 'owner');
+});
+
+test('hardening: internal functions, account type, project fields, invitations, file paths', async () => {
+  const { db, as, fails } = await setup();
+  // Nobody outside the database calls the notification helpers (they send email).
+  await db.exec('set role anon');
+  await fails(`select public.notify_staff(null, 'x', 'Pay now', 'https://evil')`);
+  assert.equal((await db.query('select * from public.profiles')).rows.length, 0); // the public key sees no names
+  await as(A);
+  await fails(`select public.notify_members(null, 'x', 'Pay now', 'https://evil')`);
+  await fails(`select public.claim_invites($1, 'client@x.com')`, [A]);
+
+  // Account type: free in the first minutes after sign-up, then staff only.
+  await db.query(`update public.profiles set account_type = 'architect' where id = $1`, [A]);
+  await db.exec('reset role');
+  await db.query(`update auth.users set created_at = now() - interval '1 day'`);
+  await as(A);
+  await fails(`update public.profiles set account_type = 'homeowner' where id = $1`, [A]);
+  await db.query(`update public.profiles set full_name = 'Anna C' where id = $1`, [A]);
+
+  // A client's new project starts clean, whatever the request says.
+  const p = (await db.query(`insert into public.projects (name, owner_id, assignee_id, ref, estimate_low, due_at) values ('X', $1, $2, 'BP-FAKE', 1, now()) returning *`, [A, O])).rows[0];
+  assert.equal(p.assignee_id, null);
+  assert.equal(p.estimate_low, null);
+  assert.equal(p.due_at, null);
+  assert.match(p.ref, /^BP-\d{4}-\d{4}$/);
+  await fails(`update public.projects set ref = 'BP-MINE' where id = $1`, [p.id]);
+  await as(O);
+  assert.equal((await db.query('select * from public.notifications')).rows.length, 0); // no "new project" mail to a stranger
+
+  // A document only points at a file in its own project's folder.
+  await as(O);
+  const q = (await db.query(`insert into public.projects (name, owner_id) values ('Y', $1) returning id`, [O])).rows[0].id;
+  await fails(`insert into public.documents (project_id, kind, title, storage_path, uploaded_by) values ($1, 'client_upload', 'steal', $2, $3)`, [q, `${p.id}/abc-plan.pdf`, O]);
+  await db.query(`insert into public.documents (project_id, kind, title, storage_path, uploaded_by) values ($1, 'client_upload', 'ok', $2, $3)`, [q, `${q}/abc-plan.pdf`, O]);
+  await db.exec('reset role');
+  await db.query(`insert into storage.objects (bucket_id, name) values ('project-files', $1), ('project-files', $2)`, [`${p.id}/abc-plan.pdf`, `${q}/abc-plan.pdf`]);
+  await as(O);
+  assert.deepEqual((await db.query('select name from storage.objects')).rows, [{ name: `${q}/abc-plan.pdf` }]);
+  await db.exec('reset role');
+  assert.ok((await db.query(`select allowed_mime_types from storage.buckets where id = 'project-files'`)).rows[0].allowed_mime_types.includes('application/pdf'));
+
+  // An invitation waits until the new account confirms its email.
+  await as(A);
+  assert.equal((await db.query(`select public.invite_member($1, 'late@x.com', 'client') r`, [p.id])).rows[0].r, 'invited');
+  await db.exec('reset role');
+  const L = '77777777-7777-7777-7777-777777777777';
+  await db.query(`insert into auth.users (id, email, email_confirmed_at) values ($1, 'late@x.com', null)`, [L]);
+  assert.equal((await db.query('select * from public.project_members where user_id = $1', [L])).rows.length, 0);
+  await db.query('update auth.users set email_confirmed_at = now() where id = $1', [L]);
+  assert.equal((await db.query('select role from public.project_members where user_id = $1', [L])).rows[0].role, 'client');
+});
+
+test('deleting an account keeps the project and drops the person', async () => {
+  const { db, as } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.query(`insert into public.messages (project_id, author_id, body) values ($1, $2, 'Hello')`, [P, A]);
+  await db.query(`insert into public.changes (project_id, title, raised_by) values ($1, 'Add a panel', $2)`, [P, A]);
+  await db.exec('reset role');
+  await db.query(`select set_config('request.jwt.claim.sub', '', false)`); // the dashboard deletes with no signed-in user
+  await db.query('delete from auth.users where id = $1', [A]);
+  assert.equal((await db.query('select count(*)::int n from public.profiles where id = $1', [A])).rows[0].n, 0);
+  assert.equal((await db.query('select owner_id from public.projects where id = $1', [P])).rows[0].owner_id, null);
+  assert.equal((await db.query('select author_id from public.messages where project_id = $1', [P])).rows[0].author_id, null);
 });

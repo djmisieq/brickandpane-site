@@ -36,13 +36,19 @@ Deno.serve(async (req) => {
       <p style="font-size:12px;color:#6f6a62;margin-top:24px">You can change email notifications in Settings in the portal.</p>
     </div>`;
 
+  // Claim the notification before sending: of two calls racing for the same id, only one gets the row back.
+  const { data: claimed } = await supabase.from('notifications').update({ emailed_at: new Date().toISOString() })
+    .eq('id', n.id).is('emailed_at', null).select('id');
+  if (!claimed?.length) return new Response('skipped', { status: 200 });
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: Deno.env.get('MAIL_FROM'), to, subject: n.title, html }),
   });
-  if (!res.ok) return new Response(`mail failed: ${await res.text()}`, { status: 502 });
-
-  await supabase.from('notifications').update({ emailed_at: new Date().toISOString() }).eq('id', n.id);
+  if (!res.ok) {
+    await supabase.from('notifications').update({ emailed_at: null }).eq('id', n.id); // a retry may send it
+    return new Response(`mail failed: ${await res.text()}`, { status: 502 });
+  }
   return new Response('sent', { status: 200 });
 });

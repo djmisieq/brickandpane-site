@@ -438,8 +438,8 @@ fieldset{border:0;padding:0;min-width:0}
 .usermenu{position:relative}
 .usermenu summary{list-style:none;cursor:pointer;font-size:var(--step--1);font-weight:500;padding:.6rem .8rem;border:1px solid var(--line);min-height:44px;display:flex;align-items:center}
 .usermenu summary::-webkit-details-marker{display:none}
-.usermenu-panel{position:absolute;right:0;top:calc(100% + 8px);background:var(--surface);border:1px solid var(--line);padding:1rem;display:grid;gap:.7rem;min-width:220px;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.12)}
-.usermenu-panel a{font-size:var(--step--1)}
+.usermenu-panel{position:absolute;right:0;top:calc(100% + 8px);background:var(--surface);border:1px solid var(--line);padding:1rem;display:grid;gap:.1rem;min-width:220px;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.12)}
+.usermenu-panel a,.usermenu-panel .linkish{font-size:var(--step--1);min-height:44px;display:flex;align-items:center}
 @media (max-width:600px){.appbar-title{display:none}.usermenu summary{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}}
 
 .badge{display:inline-flex;align-items:center;gap:.4em;font-size:var(--step--2);font-weight:500;padding:3px 8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);white-space:nowrap}

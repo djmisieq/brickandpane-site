@@ -149,6 +149,7 @@ export const store = {
   async authProviders() { return []; },
   async sendMagicLink() { throw new Error('Magic links are not available in demo mode.'); },
   async signOut() { setSession(null); },
+  async setPassword() { need(load()); },
   async resetDemo() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } mem = null; load(); emit(); },
 
   async updateProfile(patch) {

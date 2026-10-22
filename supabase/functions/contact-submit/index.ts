@@ -16,6 +16,23 @@ const safeName = (s: string) => s.normalize('NFKD').replace(/[^\w.\- ]+/g, '').r
 const str = (f: FormData, k: string, max = 500) => { const v = f.get(k); return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null; };
 const int = (f: FormData, k: string) => { const n = parseInt(str(f, k) ?? '', 10); return Number.isFinite(n) ? n : null; };
 
+// Limits per sender, so the form can't be used to flood an inbox or fill storage: 3 an hour from one email,
+// 5 an hour from one IP, 20 every 10 minutes in total. The IP is kept only as a salted hash (ip_hash).
+const LIMITS = { email: 3, ip: 5, all: 20 };
+const ipHash = async (req: Request) => {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
+  const salt = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!.slice(-32);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${ip}`));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+const recent = async (minutes: number, col?: 'email' | 'ip_hash', value?: string) => {
+  let q = supabase.from('contact_requests').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - minutes * 60e3).toISOString());
+  if (col === 'email') q = q.ilike('email', value!.replace(/[\\%_]/g, '\\$&'));
+  else if (col) q = q.eq(col, value!);
+  const { count } = await q;
+  return count ?? 0;
+};
+
 // The list of openings arrives as one JSON field. Keep only known values and sizes the portal accepts.
 const SYSTEMS = ['lift-slide', 'sliding', 'bifold', 'hinged', 'windows', 'facades', 'rooflights'];
 const MATERIALS = ['alu', 'timber', 'pvc', 'alutimber'];
@@ -63,6 +80,10 @@ Deno.serve(async (req) => {
   const total = files.reduce((n, x) => n + x.size, 0);
   if (files.length > MAX_FILES || total > MAX_TOTAL || files.some((x) => x.size > MAX_FILE)) return reply(413, { error: 'files' });
 
+  const ip_hash = await ipHash(req);
+  const [byEmail, byIp, all] = await Promise.all([recent(60, 'email', email), recent(60, 'ip_hash', ip_hash), recent(10)]);
+  if (byEmail >= LIMITS.email || byIp >= LIMITS.ip || all >= LIMITS.all) return reply(429, { error: 'rate' });
+
   const link = str(f, 'files_link', 1000);
   const filesLink = link && /^https?:\/\/\S+$/i.test(link) ? link : null;
 
@@ -77,7 +98,7 @@ Deno.serve(async (req) => {
     systems: f.getAll('systems').map(String).slice(0, 20), material: f.getAll('material').map(String).slice(0, 10),
     location: str(f, 'location'), riba_stage: str(f, 'riba_stage'), building: str(f, 'building'), units: str(f, 'units'), start: str(f, 'start'),
     opening_width_mm: int(f, 'opening_width_mm'), opening_height_mm: int(f, 'opening_height_mm'),
-    message: str(f, 'message', 10000), files_link: filesLink, consent_at: new Date().toISOString(),
+    message: str(f, 'message', 10000), files_link: filesLink, consent_at: new Date().toISOString(), ip_hash,
   }).select('id, ref').single();
   if (error || !row) return reply(500, { error: 'save' });
 
@@ -107,17 +128,19 @@ Deno.serve(async (req) => {
         ${str(f, 'message', 10000) ? `<p style="font-size:15px;line-height:1.5;white-space:pre-wrap;margin-top:16px">${escape(str(f, 'message', 10000)!)}</p>` : ''}
       </div>`, email);
   }
+  // The confirmation repeats nothing the sender typed (name, link, file names): anyone can enter someone else's
+  // address in the form, and our domain must not carry their text to that inbox.
   const pl = lang === 'pl';
   await mail(email, pl ? `Otrzymaliśmy Twoje zapytanie · ${row.ref}` : `We've got your request · ${row.ref}`, `
     <div style="font-family:Helvetica,Arial,sans-serif;color:#1c1b1a;max-width:560px">
       <p style="font-size:13px;color:#6f6a62;margin:0 0 16px">Brick &amp; Pane · ${row.ref}</p>
-      <h1 style="font-size:20px;font-weight:600;margin:0 0 12px">${pl ? `Dziękujemy, ${escape(name)}.` : `Thank you, ${escape(name)}.`}</h1>
+      <h1 style="font-size:20px;font-weight:600;margin:0 0 12px">${pl ? 'Dziękujemy.' : 'Thank you.'}</h1>
       <p style="font-size:15px;line-height:1.5">${pl
         ? 'Twoje zapytanie do nas dotarło. Jeśli chcesz coś dodać, po prostu odpowiedz na tę wiadomość.'
         : 'Your request has reached us. To add anything, just reply to this email.'}</p>
       ${paths.length ? `<p style="font-size:15px">${pl ? 'Załączone pliki' : 'Files received'}: ${paths.length}</p>` : ''}
-      ${filesLink ? `<p style="font-size:15px">${pl ? 'Link do plików' : 'Files link'}: ${escape(filesLink)}</p>` : ''}
-      ${rejected.length ? `<p style="font-size:15px">${pl ? 'Tych plików nie udało się przesłać, wyślij je linkiem w odpowiedzi' : 'These files did not upload, please send them as a link in a reply'}: ${escape(rejected.join(', '))}</p>` : ''}
+      ${filesLink ? `<p style="font-size:15px">${pl ? 'Otrzymaliśmy też link do plików.' : 'We’ve also received your link to the files.'}</p>` : ''}
+      ${rejected.length ? `<p style="font-size:15px">${pl ? `Nie udało się przesłać plików: ${rejected.length}. Wyślij je linkiem w odpowiedzi.` : `Files that did not upload: ${rejected.length}. Please send them as a link in a reply.`}</p>` : ''}
       <p style="font-size:15px;line-height:1.5">${pl
         ? `Możesz śledzić to zapytanie w <a href="${SITE}/pl/login.html?next=portal.html">panelu klienta</a>. Zaloguj się lub załóż konto na ten adres e-mail, a zapytanie pojawi się tam automatycznie.`
         : `You can follow this enquiry in the <a href="${SITE}/login.html?next=portal.html">client portal</a>. Sign in or create an account with this email address and the enquiry appears there automatically.`}</p>

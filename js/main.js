@@ -384,9 +384,9 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
         <span class="op-ref" data-op-ref aria-hidden="true">${ref}</span>
         <label class="op-f op-sys"><span>${t('Product', 'Produkt')}</span><select data-k="system">${Object.entries(SYS_NAMES).map(([k, v]) => `<option value="${k}"${k === o.system ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="op-f op-mat"><span>${t('Material', 'Materiał')}</span><select data-k="material">${Object.entries(MAT_NAMES).map(([k, v]) => `<option value="${k}"${k === (o.material || '') ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-        <label class="op-f op-w"><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="${t('e.g. 4800', 'np. 4800')}" value="${o.width_mm || ''}"></label>
-        <label class="op-f op-h"><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="${t('e.g. 2400', 'np. 2400')}" value="${o.height_mm || ''}"></label>
-        <label class="op-f op-qty"><span>${t('Qty', 'Szt.')}</span><input data-k="qty" type="number" inputmode="numeric" min="1" max="999" value="${o.qty || 1}"></label>
+        <label class="op-f op-w"><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="${t('e.g. 4800', 'np. 4800')}" value="${+o.width_mm || ''}"></label>
+        <label class="op-f op-h"><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="${t('e.g. 2400', 'np. 2400')}" value="${+o.height_mm || ''}"></label>
+        <label class="op-f op-qty"><span>${t('Qty', 'Szt.')}</span><input data-k="qty" type="number" inputmode="numeric" min="1" max="999" value="${+o.qty || 1}"></label>
         <label class="op-f op-note"><span>${t('Note', 'Uwagi')}</span><input data-k="note" type="text" maxlength="200" value="${String(o.note || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"></label>
         <button type="button" class="linkish op-remove" data-op-remove aria-label="${t('Remove', 'Usuń')} ${ref}">${t('Remove', 'Usuń')}</button>
       </div>`; };
@@ -529,6 +529,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       files: t('The files are too large or too many (up to 20 files, 50 MB each, 100 MB in total). Paste a WeTransfer or Dropbox link instead.', 'Pliki są za duże albo jest ich za dużo (do 20 plików, po 50 MB, łącznie 100 MB). Zamiast tego wklej link WeTransfer lub Dropbox.'),
       consent: t('Please tick the consent box so we can reply to you.', 'Zaznacz zgodę, żebyśmy mogli Ci odpowiedzieć.'),
       name_email: t('Check your name and email address on step 1.', 'Sprawdź imię i adres e-mail w kroku 1.'),
+      rate: t('We’ve already received several enquiries from you or your network in the last hour. Please try again later.', 'W ciągu ostatniej godziny dostaliśmy już kilka zapytań od Ciebie lub z Twojej sieci. Spróbuj ponownie później.'),
       timeout: t('This is taking too long, probably because of large files. Try again with a link to the files instead.', 'To trwa za długo, pewnie przez duże pliki. Spróbuj ponownie z linkiem do plików zamiast załączników.'),
     };
     form.addEventListener('submit', async (e) => {
