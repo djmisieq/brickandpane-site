@@ -21,19 +21,19 @@ const LOCALES = {
   en: {
     dir: './src/pages/', partials: './src/partials/', out: './', root: '', lang: 'en-GB', og: 'en_GB', ogAlt: 'pl_PL',
     skip: 'Skip to content',
-    actionHref: 'portal.html', actionLabel: 'Client portal',
+    actionHref: 'contact.html?topic=question', actionLabel: 'Ask a question',
     org: 'Windows, doors, sliding doors and glazed facades in aluminium, timber and PVC, made to order and installed in London.',
     ogImageAlt: 'Slim aluminium sliding doors opening onto a walled garden',
-    home: 'Home', products: 'Products',
+    home: 'Home', products: 'Products', guides: 'Guides',
     updated: (d) => `Updated ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
   pl: {
     dir: './src/pl/pages/', partials: './src/pl/partials/', out: './pl/', root: '../', lang: 'pl', og: 'pl_PL', ogAlt: 'en_GB',
     skip: 'Przejdź do treści',
-    actionHref: 'portal.html', actionLabel: 'Panel klienta',
+    actionHref: 'contact.html?topic=question', actionLabel: 'Zadaj pytanie',
     org: 'Okna, drzwi, drzwi przesuwne i przeszklone fasady z aluminium, drewna i PVC, na zamówienie, z montażem w Londynie.',
     ogImageAlt: 'Smukłe aluminiowe drzwi przesuwne otwarte na ogród otoczony murem',
-    home: 'Start', products: 'Produkty',
+    home: 'Start', products: 'Produkty', guides: 'Poradniki',
     updated: (d) => `Aktualizacja: ${d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}`,
   },
 };
@@ -64,7 +64,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
 
     const hasEn = EN.has(file), hasPl = PL.has(file);
     // Language switch: counterpart page if it exists, otherwise the same page with ?lang= (portal pages translate in JS).
-    const enHref = loc === 'en' ? file : (hasEn ? `../${file}` : '../index.html');
+    const enHref = loc === 'en' ? file : (hasEn ? `../${file === 'index.html' ? '' : file}` : '../');
     const plHref = loc === 'pl' ? file : (hasPl ? `pl/${file === 'index.html' ? '' : file}` : `${file}?lang=pl`);
     const alternates = hasEn && hasPl && !meta.private
       ? [`<link rel="alternate" hreflang="en-GB" href="${pageUrl('en', file)}">`, `<link rel="alternate" hreflang="pl" href="${pageUrl('pl', file)}">`, `<link rel="alternate" hreflang="x-default" href="${pageUrl('en', file)}">`].join('\n')
@@ -112,6 +112,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       const name = meta.title.split(' | ')[0];
       const crumbs = [[L.home, pageUrl(loc, 'index.html')]];
       if (PRODUCT_NAV.includes(meta.nav)) crumbs.push([L.products, pageUrl(loc, 'products.html')]);
+      if (meta.article) crumbs.push([L.guides, pageUrl(loc, 'guides.html')]);
       if (file !== 'index.html') crumbs.push([meta.crumb, canonical]);
       const graph = [
         { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'daniel@brickandpane.co.uk',
@@ -135,7 +136,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       if (faq.length) graph.push({ '@type': 'FAQPage', '@id': `${canonical}#faq`, inLanguage: L.lang, isPartOf: { '@id': `${canonical}#webpage` },
         mainEntity: faq.map(([, q, a]) => ({ '@type': 'Question', name: text(q), acceptedAnswer: { '@type': 'Answer', text: text(a) } })) });
       jsonld = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c')}</script>\n`;
-      pages[loc].push({ file, title: meta.title, description: meta.description, updated: meta.updated, alt: hasEn && hasPl });
+      pages[loc].push({ file, title: meta.title, description: meta.description, updated: meta.updated, alt: hasEn && hasPl, article: !!meta.article });
     }
 
     const out = layout
@@ -184,12 +185,20 @@ writeFileSync(url('./llms.txt'), `# Brick & Pane
 
 Contact: daniel@brickandpane.co.uk
 
+## Guides (English)
+
+${llmsList(pages.en.filter((p) => p.article), 'en')}
+
 ## Pages (English)
 
-${llmsList(pages.en, 'en')}
+${llmsList(pages.en.filter((p) => !p.article), 'en')}
+
+## Poradniki (polski)
+
+${llmsList(pages.pl.filter((p) => p.article), 'pl')}
 
 ## Strony (polski)
 
-${llmsList(pages.pl, 'pl')}
+${llmsList(pages.pl.filter((p) => !p.article), 'pl')}
 `);
 console.log('built sitemap.xml, llms.txt');

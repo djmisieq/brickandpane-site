@@ -136,8 +136,11 @@ test('clients cannot use the staff CRM', async ({ page }) => {
 });
 
 test('sizing tool opening carries into a homeowner’s new request, with no automatic price', async ({ page }) => {
+  // One path to a quote: the tool adds to the visitor's list, and the portal takes the list over after sign-in.
   await page.goto('/lift-and-slide-doors.html#sizing');
-  await page.locator('[data-tool-portal]').click();
+  await expect(page.locator('[data-tool-portal]')).toHaveCount(0);
+  await page.locator('[data-tool-add]').click();
+  await page.goto('/portal.html#/new');
   await expect(page).toHaveURL(/login\.html\?next=portal\.html/);
   await page.locator('[data-demo-login="homeowner"]').click();
   await expect(page).toHaveURL(/portal\.html#\/new$/);

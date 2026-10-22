@@ -195,6 +195,8 @@ ul,ol{padding-left:1.2em}
   .action-bar{display:grid;grid-template-columns:1fr 1fr;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--bg);border-top:1px solid var(--line);padding:8px var(--margin) calc(8px + env(safe-area-inset-bottom));gap:8px}
   .action-bar .btn{justify-content:center;min-height:46px;padding-inline:.6em;font-size:.9375rem;text-align:center}
   body.has-action-bar{padding-bottom:var(--action-bar-h,72px)}
+  /* Keyboard focus and in-page jumps must not land under the fixed bar (WCAG 2.4.11). */
+  html:has(body.has-action-bar){scroll-padding-bottom:calc(var(--action-bar-h,72px) + 16px)}
   body.no-action-bar .action-bar{display:none}
   body.no-action-bar{padding-bottom:0}
 }
