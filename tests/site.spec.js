@@ -347,7 +347,8 @@ test('structured data parses and FAQ answers match what the page shows', async (
 test('technical detail is folded behind its heading and opens from links', async ({ page }) => {
   await page.goto('/lift-and-slide-doors.html');
   const tech = page.locator('#performance details.tech');
-  await expect(tech.locator('summary h2')).toBeVisible();
+  await expect(page.locator('#performance > .container > h2')).toBeVisible();
+  await expect(tech.locator('summary h2')).toHaveCount(0);
   await expect(tech).not.toHaveAttribute('open', '');
   await expect(page.locator('#performance table')).toBeHidden();
   // "Sizes and technical data" in the hero opens it.

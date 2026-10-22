@@ -754,7 +754,8 @@ body.app .site-header{position:static}
 /* Photo slot: a drawing until a real photograph exists. To use a photo, put <img src alt> inside the figure. */
 .photo-slot{position:relative;aspect-ratio:4 / 3;margin:0;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;transition:border-color var(--dur-1) var(--ease)}
 .photo-slot>svg{width:78%;height:78%}
-.photo-slot>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo-slot>picture{position:absolute;inset:0}
+.photo-slot>picture>img{display:block;width:100%;height:100%;object-fit:cover}
 .photo-slot.wide{aspect-ratio:16 / 9}
 
 /* ---------- product × material matrix ---------- */
@@ -864,14 +865,13 @@ body.app .site-header{position:static}
 }
 
 /* ---------- technical detail folded behind its heading (product pages) ---------- */
-.tech>summary{list-style:none;cursor:pointer;display:grid;gap:.5rem;grid-template-columns:1fr auto;align-items:end}
+.tech-h{font-size:var(--step-3);letter-spacing:-.02em;line-height:1.12}
+.tech>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:var(--s-m);margin-top:var(--s-m);padding-block:.6rem;min-height:44px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:var(--step--1);font-weight:500;color:var(--muted)}
 .tech>summary::-webkit-details-marker{display:none}
-.tech-label{grid-column:1 / -1;font-size:var(--step--1);font-weight:500;color:var(--muted)}
-.tech>summary h2{font-size:var(--step-3);letter-spacing:-.02em;line-height:1.12}
-.tech>summary::after{content:"+";font-family:var(--mono);font-size:var(--step-3);line-height:1;color:var(--muted);transition:transform var(--dur-2) var(--ease)}
+.tech>summary::after{content:"+";font-family:var(--mono);font-size:var(--step-1);line-height:1;transition:transform var(--dur-2) var(--ease)}
 .tech[open]>summary{margin-bottom:var(--s-xl)}
 .tech[open]>summary::after{transform:rotate(45deg)}
-.tech>summary:hover h2{color:var(--accent)}
+.tech>summary:hover{color:var(--accent)}
 .tech .container{padding-inline:0}
 .section[data-tech]:has(.tech:not([open])){padding-block:var(--s-xl)}
 
@@ -894,8 +894,9 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .mb-s{margin-bottom:var(--s-s)!important}.mb-m{margin-bottom:var(--s-m)!important}.mb-l{margin-bottom:var(--s-l)!important}
 .pt-0{padding-top:0!important}.pt-s{padding-top:var(--s-s)!important}.pt-l{padding-top:var(--s-l)!important}.pb-s{padding-bottom:var(--s-s)!important}
 
-/* Photographs placed by js/photos.js */
+/* Photographs: heroes written by build.mjs, the rest placed by js/photos.js */
 .photo{position:relative;margin:0;overflow:hidden;background:var(--surface);min-width:0}
+.photo picture{display:block;height:100%}
 .photo img{display:block;width:100%;height:100%;object-fit:cover}
 .photo-hero{margin-top:clamp(2rem,1.5rem + 3vw,4rem)}
 .photo-hero picture{display:block;aspect-ratio:16 / 9;max-height:78vh}

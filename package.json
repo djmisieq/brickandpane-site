@@ -7,11 +7,13 @@
     "test:db": "node --test tests/db/rls.test.mjs",
     "test:e2e": "playwright test --grep-invert @visual",
     "test:visual": "playwright test --grep @visual",
-    "test": "node build.mjs && node --test tests/db/rls.test.mjs && playwright test --grep-invert @visual"
+    "test": "node build.mjs && node --test tests/db/rls.test.mjs && playwright test --grep-invert @visual",
+    "images": "node images.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
     "@electric-sql/pglite": "^0.2.17",
-    "@playwright/test": "1.56.1"
+    "@playwright/test": "1.56.1",
+    "sharp": "^0.34.5"
   }
 }
