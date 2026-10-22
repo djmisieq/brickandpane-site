@@ -242,7 +242,19 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
     const system = tool.dataset.sizingTool || 'lift-slide';
     const f = $('form', tool);
     const out = (k, v) => { const el = $(`[data-out="${k}"]`, tool); if (el) el.textContent = v; };
-    const show = (msgs) => { $('[data-messages]', tool).innerHTML = msgs.filter(Boolean).map(([c, t]) => `<li class="${c === 'ok' ? '' : c}">${t}</li>`).join(''); };
+    // Severity is spelled out for screen readers, not only shown by colour (WCAG 1.4.1). A screen reader hears
+    // the messages once typing pauses, from a separate live region, instead of the whole panel on every key.
+    const SEV = { warn: t('Check: ', 'Uwaga: '), stop: t('Out of range: ', 'Poza zakresem: ') };
+    const msgBox = $('[data-messages]', tool);
+    const live = document.createElement('p');
+    live.className = 'visually-hidden'; live.setAttribute('aria-live', 'polite');
+    msgBox.after(live);
+    let liveTimer;
+    const show = (msgs) => {
+      msgBox.innerHTML = msgs.filter(Boolean).map(([c, txt]) => `<li class="${c === 'ok' ? '' : c}">${SEV[c] ? `<span class="visually-hidden">${SEV[c]}</span>` : ''}${txt}</li>`).join('');
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(() => { live.textContent = msgBox.textContent; }, 800);
+    };
     const invalid = (W, H) => {
       if (W >= 1200 && W <= 20000 && H >= 1800 && H <= 4000) return false;
       $$('[data-out]', tool).forEach((el) => { el.textContent = '—'; });
@@ -366,17 +378,18 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       const o = { system: sysKey, width_mm: +params.get('w'), height_mm: +params.get('h'), config: params.get('config') || '', glazing: params.get('glass') || '', note: [layout, PL ? glPl : gl?.label].filter(Boolean).join(', ') };
       if (!readList().some((x) => x.system === o.system && x.width_mm === o.width_mm && x.height_mm === o.height_mm && (x.config || '') === o.config)) addToList(o);
     }
-    const opRow = (o) => `
-      <div class="op-row" data-op>
-        <span class="op-ref" data-op-ref>${String(o.ref || '').replace(/</g, '&lt;')}</span>
+    // Each row is a group named by its reference, so "Width" or "Remove" says which opening it belongs to.
+    const opRow = (o) => { const ref = String(o.ref || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); return `
+      <div class="op-row" data-op role="group" aria-label="${ref || t('Opening', 'Otwór')}">
+        <span class="op-ref" data-op-ref aria-hidden="true">${ref}</span>
         <label class="op-f op-sys"><span>${t('Product', 'Produkt')}</span><select data-k="system">${Object.entries(SYS_NAMES).map(([k, v]) => `<option value="${k}"${k === o.system ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="op-f op-mat"><span>${t('Material', 'Materiał')}</span><select data-k="material">${Object.entries(MAT_NAMES).map(([k, v]) => `<option value="${k}"${k === (o.material || '') ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="op-f op-w"><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" placeholder="${t('e.g. 4800', 'np. 4800')}" value="${o.width_mm || ''}"></label>
         <label class="op-f op-h"><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" placeholder="${t('e.g. 2400', 'np. 2400')}" value="${o.height_mm || ''}"></label>
         <label class="op-f op-qty"><span>${t('Qty', 'Szt.')}</span><input data-k="qty" type="number" inputmode="numeric" min="1" max="999" value="${o.qty || 1}"></label>
         <label class="op-f op-note"><span>${t('Note', 'Uwagi')}</span><input data-k="note" type="text" maxlength="200" value="${String(o.note || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"></label>
-        <button type="button" class="linkish op-remove" data-op-remove>${t('Remove', 'Usuń')}</button>
-      </div>`;
+        <button type="button" class="linkish op-remove" data-op-remove aria-label="${t('Remove', 'Usuń')} ${ref}">${t('Remove', 'Usuń')}</button>
+      </div>`; };
     // Keys the rows don't show (layout, glass) ride along unchanged.
     const opRead = () => (opBox ? $$('[data-op]', opBox) : []).map((row) => {
       const o = { ...row._o };
@@ -457,6 +470,16 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       const ctl = $('[role=radiogroup], input:not([type=hidden]), select, textarea', field);
       if (!ctl || !err) return;
       if (!err.id) err.id = `err-${++errId}`;
+      // The openings list marks the size boxes that are out of range, not the first control in the list.
+      const sizes = $$('[data-op] input[data-k$="_mm"]', field);
+      if (sizes.length) {
+        sizes.forEach((inp) => {
+          const bad = !!msg && inp.value !== '' && (+inp.value < +inp.min || +inp.value > +inp.max);
+          if (bad) { inp.setAttribute('aria-invalid', 'true'); inp.setAttribute('aria-describedby', err.id); }
+          else { inp.removeAttribute('aria-invalid'); inp.removeAttribute('aria-describedby'); }
+        });
+        return;
+      }
       if (msg) { ctl.setAttribute('aria-invalid', 'true'); ctl.setAttribute('aria-describedby', err.id); }
       else { ctl.removeAttribute('aria-invalid'); ctl.removeAttribute('aria-describedby'); }
     };
@@ -575,7 +598,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
           ? t('Curtain walling, rooflights and lanterns are engineered mainly in aluminium: it carries large panes on slim mullions and needs almost no upkeep.', 'Fasady, świetliki i latarnie dachowe powstają głównie z aluminium: uniesie duże tafle na smukłych słupkach i prawie nie wymaga konserwacji.')
           : t('Timber-aluminium curtain walling puts warm timber mullions inside the room and a weatherproof aluminium cap outside.', 'Fasada drewniano-aluminiowa daje ciepłe drewniane słupki od środka i odporną na pogodę aluminiową nakładkę na zewnątrz.');
         notes.push(t('Flat and walk-on rooflights are aluminium only.', 'Świetliki płaskie i pochylne do chodzenia robimy tylko z aluminium.'));
-        if (where === 'listed' || where === 'conservation') notes.push(t('Large new glazing in a sensitive building needs early talks with the planners. We can prepare drawings for that.', 'Duże nowe przeszklenia w chronionym budynku wymagają wczesnych rozmów z urzędem. Możemy przygotować do tego rysunki.'));
+        if (where === 'listed' || where === 'conservation') notes.push(t('Large new glazing in a sensitive building needs early talks with the planners.', 'Duże nowe przeszklenia w chronionym budynku wymagają wczesnych rozmów z urzędem.'));
       } else if (where === 'listed') {
         mat = 'timber';
         text = t('Listed buildings almost always need like-for-like timber, and new windows or doors need listed building consent first.', 'Budynki zabytkowe prawie zawsze wymagają drewna wiernego oryginałowi, a nowe okna i drzwi najpierw zgody konserwatora (listed building consent).');
