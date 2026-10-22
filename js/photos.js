@@ -34,7 +34,6 @@
     'windows-fixed': ['Large fixed window with a window seat, looking onto trees', 'Duże okno stałe z siedziskiem, z widokiem na drzewa'],
     'windows-sash': ['White sash window in a yellow brick wall', 'Białe okno przesuwne pionowo w ścianie z żółtej cegły'],
     'windows-steel-look': ['Slim black glazed screen in a steel style dividing a loft', 'Smukła czarna przeszklona ściana w stylu stalowym dzieląca loft'],
-    'windows-tilt-turn': ['Dark grey tilt and turn window, tilted open', 'Ciemnoszare okno rozwieralno-uchylne w pozycji uchylonej'],
     'hero-login': ['Dark-framed window in a white room with an armchair', 'Okno w ciemnej ramie w białym pokoju z fotelem'],
   };
   const alt = (id) => (ALT[id] ? ALT[id][PL ? 1 : 0] : '').replace(/"/g, '&quot;');
@@ -74,7 +73,7 @@
   const PAGES = {
     index: () => slots(['family-windows', 'family-doors', 'family-sliding', 'family-facades']),
     products: () => slots(['family-windows', 'family-doors', 'family-sliding', 'family-facades']),
-    windows: () => slots(['windows-casement', 'windows-tilt-turn', 'windows-sash', 'windows-steel-look', 'windows-fixed']),
+    windows: () => slots(['windows-casement', '', 'windows-sash', '', 'windows-steel-look', 'windows-fixed']),
     doors: () => slots(['doors-entrance', 'doors-french', 'doors-garden']),
     facades: () => slots(['facades-curtain', 'facades-lanterns', 'facades-rooflights', 'facades-shopfronts']),
     'lift-and-slide-doors': () => { into('#how-it-works', ['lift-slide-corner']); into('#threshold', ['lift-slide-threshold']); into('#options', ['lift-slide-handle']); },

@@ -4,7 +4,7 @@ import { test, expect } from './fixtures.js';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login',
-  'windows', 'doors', 'facades', 'materials', '404', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows', 'guide-steel-windows-conservation-areas', 'guide-roof-lantern-or-rooflight', 'guide-pas-24-secure-doors', 'guide-planning-bifold-sliding-doors', 'guide-aluminium-or-steel-windows', 'guide-slim-double-or-secondary-glazing', 'guide-25-percent-glazing-rule', 'guide-what-affects-the-price', 'guide-windows-leasehold-flat', 'guide-fensa-certificates',
+  'windows', 'doors', 'facades', 'materials', '404', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows', 'guide-steel-windows-conservation-areas', 'guide-roof-lantern-or-rooflight', 'guide-planning-bifold-sliding-doors', 'guide-aluminium-or-steel-windows', 'guide-slim-double-or-secondary-glazing', 'guide-25-percent-glazing-rule', 'guide-what-affects-the-price', 'guide-windows-leasehold-flat', 'guide-fensa-certificates',
 ];
 
 test.describe('every Polish page', () => {

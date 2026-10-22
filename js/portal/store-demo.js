@@ -94,7 +94,7 @@ function seed() {
     { id: uid(), project_id: p5, kind: 'drawing', title: 'Final drawings', version: 'Rev A', size_bytes: 2400000, visible_to_client: true, approval: 'approved', uploaded_by: tom.id, created_at: daysAgo(27) },
   );
   s.changes.push(
-    { id: uid(), project_id: p2, title: 'Handle finish: satin anodised → matt black', description: 'Client prefers black handles to match the kitchen. Same hardware range, finish only.', impact: 'No change to U-value, security (PAS 24) or weather classes. Cost: no change. Programme: no change.', status: 'proposed', raised_by: tom.id, created_at: daysAgo(1), decided_by: null, decided_at: null, comment: '' },
+    { id: uid(), project_id: p2, title: 'Handle finish: satin anodised → matt black', description: 'Client prefers black handles to match the kitchen. Same hardware range, finish only.', impact: 'No change to U-value, security or weather classes. Cost: no change. Programme: no change.', status: 'proposed', raised_by: tom.id, created_at: daysAgo(1), decided_by: null, decided_at: null, comment: '' },
     { id: uid(), project_id: p5, title: 'Glass: add laminated inner pane', description: 'Homeowner asked for extra security on the garden side.', impact: 'U-value unchanged. Security improved. Cost in the revised quotation. Programme: no change.', status: 'approved', raised_by: sam.id, created_at: daysAgo(35), decided_by: sam.id, decided_at: daysAgo(34), comment: 'Yes please.' },
   );
   const pp = s.projects.find((x) => x.id === p5); pp.delivery_at = daysAhead(12); pp.install_at = daysAhead(13);

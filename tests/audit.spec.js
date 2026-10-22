@@ -6,7 +6,7 @@ import { test, expect } from './fixtures.js';
 const PAGES = [
   'index', 'homeowners', 'lift-and-slide-doors', 'sliding-doors', 'bifold-doors', 'products', 'architects', 'developers',
   'guide-large-sliding-doors-london', 'projects', 'about', 'contact', 'privacy', 'login', '404', 'thank-you',
-  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows', 'guide-steel-windows-conservation-areas', 'guide-roof-lantern-or-rooflight', 'guide-pas-24-secure-doors', 'guide-planning-bifold-sliding-doors', 'guide-aluminium-or-steel-windows', 'guide-slim-double-or-secondary-glazing', 'guide-25-percent-glazing-rule', 'guide-what-affects-the-price', 'guide-windows-leasehold-flat', 'guide-fensa-certificates',
+  'windows', 'doors', 'facades', 'materials', 'heritage-conservation', 'guide-bifold-or-sliding', 'guide-replacing-windows', 'guide-steel-windows-conservation-areas', 'guide-roof-lantern-or-rooflight', 'guide-planning-bifold-sliding-doors', 'guide-aluminium-or-steel-windows', 'guide-slim-double-or-secondary-glazing', 'guide-25-percent-glazing-rule', 'guide-what-affects-the-price', 'guide-windows-leasehold-flat', 'guide-fensa-certificates',
 ];
 const URLS = [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)];
 
@@ -33,8 +33,11 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   /technical lead/i, /twój opiekun/i, /opiekun\S* techniczn/i, /budget price/i, /cen\S* budżetow/i, /promised (by|to)/i, /obiecane (do|klientowi)/i, /\(\d+%\)/,
   // Contact form (20.10): no site checks from the postcode, no promised call.
   /we check access/i, /sprawdzamy dojazd/i, /planning context/i, /uwarunkowania planistyczne/i, /like a call/i, /żebyśmy zadzwonili/i,
-  // Guides (21.10): no clients we do not have yet, PAS 24 only as available to order, no promised mark-ups.
-  /we specify/i, /specyfikujemy/i, /PAS 24 tested/i, /certyfikat\S* PAS/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
+  // Guides (21.10): no clients we do not have yet, no promised mark-ups.
+  // 22.10: no PAS 24 at all (each construction would need its own test), no walk-on glass, no post-free corners
+  // on fixed windows (bonded glass), no "anti-snap" wording.
+  /PAS\s?24/i, /walk-on/i, /do chodzenia/i, /anti-snap/i, /frameless-look corners/i,
+  /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
   test.setTimeout(120_000); // every page in both languages
