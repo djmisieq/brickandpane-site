@@ -6,12 +6,19 @@ Contact: daniel@brickandpane.co.uk
 
 ## Guides (English)
 
+- [The 25% glazing rule for extensions](https://brickandpane.co.uk/guide-25-percent-glazing-rule.html): The 25% glazing rule in Approved Document L for extensions: what counts, a worked example, U-value limits and what to do if your design goes over.
+- [Aluminium or steel windows?](https://brickandpane.co.uk/guide-aluminium-or-steel-windows.html): Steel or steel-look aluminium windows in London: sightlines, insulation, condensation, durability, cost and what conservation officers accept.
 - [Bi-fold vs sliding doors for London homes](https://brickandpane.co.uk/guide-bifold-or-sliding.html): Bi-fold, slim sliding or lift & slide: how much of the wall opens, sightlines when closed, sealing, everyday use and stack space in a London extension.
+- [FENSA and window certificates explained](https://brickandpane.co.uk/guide-fensa-certificates.html): What FENSA and other competent person schemes cover, when building control is needed instead, and what to do about missing window certificates.
 - [Large sliding doors in London: design guide](https://brickandpane.co.uk/guide-large-sliding-doors-london.html): For architects: beam deflection, flush thresholds, glass weight and handling on terraced streets, and Approved Documents L, O, K, M and Q.
 - [PAS 24 and Part Q for doors, explained](https://brickandpane.co.uk/guide-pas-24-secure-doors.html): What Approved Document Q and PAS 24 mean for entrance, sliding and bi-fold doors: when they apply, what easily accessible means, and what evidence to ask for.
+- [Planning for bi-fold and sliding doors](https://brickandpane.co.uk/guide-planning-bifold-sliding-doors.html): When new bi-fold or sliding doors in a London home need planning permission: permitted development, extensions, conservation areas, flats.
 - [Replacing windows: Building Regulations](https://brickandpane.co.uk/guide-replacing-windows.html): What replacement windows in an existing home must meet: Part L U-values, Part F ventilation, Part B escape, Part K safety glass and certification.
 - [Roof lantern or flat rooflight?](https://brickandpane.co.uk/guide-roof-lantern-or-rooflight.html): Roof lantern or flat rooflight for a London extension: light, look, rain and cleaning, overheating, Part L U-values and the 25% glazing rule.
+- [Slim double or secondary glazing?](https://brickandpane.co.uk/guide-slim-double-or-secondary-glazing.html): Slim double glazing, vacuum glazing or secondary glazing for a period home in a conservation area or listed building: look, heat, noise and consent.
 - [Steel windows in London conservation areas](https://brickandpane.co.uk/guide-steel-windows-conservation-areas.html): Replacing original steel (Crittall-style) windows in a London conservation area or listed building: repair, secondary glazing, consent and Part L.
+- [What affects the price of windows and doors](https://brickandpane.co.uk/guide-what-affects-the-price.html): We quote every project individually. What drives the price of windows and sliding doors: size, system, glass, thresholds, access and installation.
+- [Replacing windows in a leasehold flat](https://brickandpane.co.uk/guide-windows-leasehold-flat.html): Replacing windows in a London leasehold flat: the lease, the freeholder’s consent, planning for flats, Building Regulations and fire safety.
 - [Windows in London conservation areas](https://brickandpane.co.uk/heritage-conservation.html): Replacing sash windows or doors in a London conservation area or listed building: consent, Article 4 directions and Building Regulations.
 
 ## Pages (English)
@@ -23,7 +30,7 @@ Contact: daniel@brickandpane.co.uk
 - [For developers: glazing packages](https://brickandpane.co.uk/developers.html): Window, door and facade packages in aluminium, timber and PVC for London residential schemes: itemised quotations and a pre-qualification pack.
 - [Entrance, French and garden doors, London](https://brickandpane.co.uk/doors.html): Entrance, French and garden doors in aluminium, timber and PVC, available to PAS 24, with level thresholds. Made to order and fitted in London.
 - [Curtain walling and roof lanterns, London](https://brickandpane.co.uk/facades.html): Aluminium and timber-aluminium curtain walling, roof lanterns, flat and walk-on rooflights and shopfronts, made to order and installed in London.
-- [Guides: windows, doors and the rules in London](https://brickandpane.co.uk/guides.html): Plain-English guides to large sliding doors, bi-fold or sliding, replacing windows, steel windows in conservation areas, roof glazing and PAS 24.
+- [Guides: windows, doors and the rules in London](https://brickandpane.co.uk/guides.html): Plain-English guides to doors, windows and the rules in London: planning, Building Regulations, conservation areas, leasehold flats and FENSA.
 - [Big glass doors, explained simply](https://brickandpane.co.uk/homeowners.html): Planning an extension in London? How large sliding and bi-fold doors work, whether they’ll be draughty, what the rules say and how we work.
 - [Brick & Pane — windows, doors and glazed facades, London](https://brickandpane.co.uk/): Windows, entrance and French doors, lift & slide and bi-fold doors, curtain walling and roof lanterns in aluminium, timber and PVC, installed in London.
 - [Aluminium lift & slide doors, London](https://brickandpane.co.uk/lift-and-slide-doors.html): Aluminium lift & slide doors with panels up to 400 kg, slim interlocks and flush thresholds. Sizing tool, layouts and performance data.
@@ -36,12 +43,19 @@ Contact: daniel@brickandpane.co.uk
 
 ## Poradniki (polski)
 
+- [Zasada 25% przeszkleń w dobudowie](https://brickandpane.co.uk/pl/guide-25-percent-glazing-rule.html): Zasada 25% przeszkleń z Approved Document L dla dobudów: co się wlicza, przykład obliczenia, limity współczynnika U i co zrobić po przekroczeniu.
+- [Okna aluminiowe czy stalowe?](https://brickandpane.co.uk/pl/guide-aluminium-or-steel-windows.html): Okna stalowe czy aluminiowe w stylu stali w Londynie: smukłość, izolacja, kondensacja, trwałość, koszt i co akceptują konserwatorzy.
 - [Harmonijkowe czy przesuwne? Porównanie](https://brickandpane.co.uk/pl/guide-bifold-or-sliding.html): Harmonijkowe, przesuwne slim czy podnoszono-przesuwne: ile ściany się otwiera, co widać po zamknięciu, szczelność i miejsce na pakiet skrzydeł.
+- [FENSA i certyfikaty okien](https://brickandpane.co.uk/pl/guide-fensa-certificates.html): Co obejmuje FENSA i inne programy competent person scheme, kiedy zamiast nich potrzebny jest nadzór budowlany i co zrobić bez certyfikatu okien.
 - [Duże drzwi przesuwne: poradnik projektowy](https://brickandpane.co.uk/pl/guide-large-sliding-doors-london.html): Dla architektów: ugięcie belki, progi bez stopnia, waga i transport szkła w zabudowie szeregowej oraz przepisy L, O, K, M i Q.
 - [PAS 24 i część Q dla drzwi](https://brickandpane.co.uk/pl/guide-pas-24-secure-doors.html): Co Approved Document Q i PAS 24 oznaczają dla drzwi wejściowych, przesuwnych i harmonijkowych: kiedy obowiązują i jakich dowodów żądać.
+- [Pozwolenia na drzwi przesuwne i harmonijkowe](https://brickandpane.co.uk/pl/guide-planning-bifold-sliding-doors.html): Kiedy nowe drzwi harmonijkowe lub przesuwne w Londynie wymagają pozwolenia: permitted development, dobudowy, strefy konserwatorskie, mieszkania.
 - [Wymiana okien: przepisy budowlane](https://brickandpane.co.uk/pl/guide-replacing-windows.html): Co muszą spełniać nowe okna w istniejącym domu: część L (U), F (wentylacja), B (ewakuacja), K (szkło bezpieczne) i certyfikacja.
 - [Latarnia dachowa czy świetlik płaski?](https://brickandpane.co.uk/pl/guide-roof-lantern-or-rooflight.html): Latarnia dachowa czy świetlik płaski w londyńskiej dobudowie: światło, wygląd, deszcz i mycie, przegrzewanie, współczynnik U i zasada 25% przeszkleń.
+- [Szyba slim czy okno dodatkowe?](https://brickandpane.co.uk/pl/guide-slim-double-or-secondary-glazing.html): Cienka szyba zespolona, szyba próżniowa czy okno dodatkowe w zabytkowym domu lub strefie konserwatorskiej: wygląd, ciepło, hałas i zgody.
 - [Okna stalowe w strefie konserwatorskiej](https://brickandpane.co.uk/pl/guide-steel-windows-conservation-areas.html): Wymiana oryginalnych okien stalowych (Crittall) w londyńskiej strefie konserwatorskiej lub zabytku: naprawa, okna wewnętrzne, zgody i część L.
+- [Od czego zależy cena okien i drzwi](https://brickandpane.co.uk/pl/guide-what-affects-the-price.html): Każdy projekt wyceniamy indywidualnie. Od czego zależy cena okien i drzwi przesuwnych: wymiar, system, szkło, próg, dojazd i montaż.
+- [Wymiana okien w mieszkaniu leasehold](https://brickandpane.co.uk/pl/guide-windows-leasehold-flat.html): Wymiana okien w londyńskim mieszkaniu leasehold: umowa najmu, zgoda właściciela budynku, pozwolenia dla mieszkań, przepisy budowlane i pożarowe.
 - [Okna w strefach konserwatorskich](https://brickandpane.co.uk/pl/heritage-conservation.html): Wymiana okien sash i drzwi w strefie konserwatorskiej lub zabytku w Londynie: zgoda konserwatorska, Article 4 i przepisy budowlane.
 
 ## Strony (polski)
@@ -53,7 +67,7 @@ Contact: daniel@brickandpane.co.uk
 - [Dla deweloperów: pakiety stolarki](https://brickandpane.co.uk/pl/developers.html): Pakiety okien, drzwi i fasad z aluminium, drewna i PVC dla londyńskich inwestycji mieszkaniowych: szczegółowa wycena i pakiet kwalifikacyjny.
 - [Drzwi wejściowe i balkonowe, Londyn](https://brickandpane.co.uk/pl/doors.html): Drzwi wejściowe, balkonowe i ogrodowe z aluminium, drewna i PVC, do zamówienia wg PAS 24, z progami bez stopnia. Na zamówienie, z montażem.
 - [Fasady i latarnie dachowe, Londyn](https://brickandpane.co.uk/pl/facades.html): Fasady słupowo-ryglowe z aluminium i drewna-aluminium, latarnie dachowe, świetliki i witryny na zamówienie, z montażem w Londynie.
-- [Poradniki: okna, drzwi i przepisy w Londynie](https://brickandpane.co.uk/pl/guides.html): Poradniki prostym językiem: duże drzwi przesuwne, harmonijkowe czy przesuwne, wymiana okien, okna stalowe w strefie konserwatorskiej, świetliki i PAS 24.
+- [Poradniki: okna, drzwi i przepisy w Londynie](https://brickandpane.co.uk/pl/guides.html): Poradniki prostym językiem o drzwiach, oknach i przepisach w Londynie: pozwolenia, przepisy budowlane, strefy konserwatorskie, mieszkania i FENSA.
 - [Duże przeszklone drzwi po ludzku](https://brickandpane.co.uk/pl/homeowners.html): Planujesz dobudowę w Londynie? Jak działają duże drzwi przesuwne i harmonijkowe, czy będzie wiało, co mówią przepisy i jak pracujemy.
 - [Brick & Pane — okna, drzwi i przeszklone fasady, Londyn](https://brickandpane.co.uk/pl/): Okna, drzwi wejściowe, podnoszono-przesuwne i harmonijkowe, fasady i latarnie dachowe z aluminium, drewna i PVC, z montażem w Londynie.
 - [Drzwi podnoszono-przesuwne (HS), Londyn](https://brickandpane.co.uk/pl/lift-and-slide-doors.html): Aluminiowe drzwi podnoszono-przesuwne ze skrzydłami do 400 kg, smukłym stykiem i progiem bez stopnia. Kalkulator, układy i parametry.
