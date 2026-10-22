@@ -496,7 +496,7 @@ const PL = {
   "Propose a change to the client": "Zaproponuj klientowi zmianę",
   "e.g. Handle finish satin → black": "np. Wykończenie klamek satyna → czarne",
   "Impact on U-value, security, weather, cost and programme": "Wpływ na współczynnik U, bezpieczeństwo, szczelność, koszt i harmonogram",
-  "e.g. No change to U-value or PAS 24. Cost and programme: no change.": "np. Bez zmian U i PAS 24. Koszt i harmonogram: bez zmian.",
+  "e.g. No change to U-value or security. Cost and programme: no change.": "np. Bez zmian U i zabezpieczeń. Koszt i harmonogram: bez zmian.",
   "Send for approval": "Wyślij do akceptacji",
   "Message type": "Rodzaj wiadomości",
   "Message to client": "Wiadomość do klienta",

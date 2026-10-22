@@ -246,7 +246,7 @@ export function changesPanel(d, viewer, user) {
       <h3 class="panel-h">${tr(viewer === 'staff' ? 'Propose a change to the client' : 'Request a change')}</h3>
       <div class="field"><label for="ch-title">${tr('What should change?')}</label><input id="ch-title" name="title" required placeholder="${viewer === 'staff' ? tr('e.g. Handle finish satin → black') : tr('e.g. Add a third panel')}"></div>
       <div class="field"><label for="ch-desc">${tr('Details')}</label><textarea id="ch-desc" name="description" rows="2"></textarea></div>
-      ${viewer === 'staff' ? `<div class="field"><label for="ch-impact">${tr('Impact on U-value, security, weather, cost and programme')}</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="${tr('e.g. No change to U-value or PAS 24. Cost and programme: no change.')}"></textarea></div>` : ''}
+      ${viewer === 'staff' ? `<div class="field"><label for="ch-impact">${tr('Impact on U-value, security, weather, cost and programme')}</label><textarea id="ch-impact" name="impact" rows="2" required placeholder="${tr('e.g. No change to U-value or security. Cost and programme: no change.')}"></textarea></div>` : ''}
       <div><button class="btn btn-sm" type="submit">${tr(viewer === 'staff' ? 'Send for approval' : 'Send request')}</button></div>
     </form>`;
 }

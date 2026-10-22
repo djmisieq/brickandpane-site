@@ -598,7 +598,7 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
         text = mat === 'alu'
           ? t('Curtain walling, rooflights and lanterns are engineered mainly in aluminium: it carries large panes on slim mullions and needs almost no upkeep.', 'Fasady, świetliki i latarnie dachowe powstają głównie z aluminium: uniesie duże tafle na smukłych słupkach i prawie nie wymaga konserwacji.')
           : t('Timber-aluminium curtain walling puts warm timber mullions inside the room and a weatherproof aluminium cap outside.', 'Fasada drewniano-aluminiowa daje ciepłe drewniane słupki od środka i odporną na pogodę aluminiową nakładkę na zewnątrz.');
-        notes.push(t('Flat and walk-on rooflights are aluminium only.', 'Świetliki płaskie i pochylne do chodzenia robimy tylko z aluminium.'));
+        notes.push(t('Flat rooflights are aluminium only.', 'Świetliki płaskie robimy tylko z aluminium.'));
         if (where === 'listed' || where === 'conservation') notes.push(t('Large new glazing in a sensitive building needs early talks with the planners.', 'Duże nowe przeszklenia w chronionym budynku wymagają wczesnych rozmów z urzędem.'));
       } else if (where === 'listed') {
         mat = 'timber';
