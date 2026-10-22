@@ -1,12 +1,17 @@
 // Live store backed by Supabase (auth, Postgres with RLS, storage, realtime).
 // Business rules (timeline, notifications, permissions) are enforced in the database —
 // see supabase/migrations/0001_project_portal.sql. This file only reads and writes.
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+// supabase-js 2.45.4 comes from js/vendor (a script tag build.mjs adds to the portal pages), not from a CDN.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BUCKET = 'project-files';
-const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
+// Network failures get one plain, translated message instead of the browser's "Failed to fetch".
+const OFFLINE = /failed to fetch|networkerror|load failed|network request failed/i;
+const ok = ({ data, error }) => {
+  if (error) throw new Error(OFFLINE.test(error.message) ? 'We can’t reach the portal right now. Check your connection and try again.' : error.message);
+  return data;
+};
 const listeners = new Set();
 const emit = () => listeners.forEach((cb) => cb());
 let channel = null;
@@ -26,7 +31,9 @@ const safeName = (n) => n.replace(/[^\w.\- ]+/g, '_').slice(-120);
 
 async function upload(pid, file) {
   const path = `${pid}/${crypto.randomUUID()}-${safeName(file.name)}`;
-  ok(await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'application/octet-stream' }));
+  const { error } = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'application/octet-stream' });
+  // The bucket accepts drawings, photos, office files and archives only (migration 0011).
+  if (error) throw new Error(/mime|type/i.test(error.message) ? 'This file type isn’t accepted. Send PDF, images, DWG/DXF, Office files or ZIP.' : error.message);
   return path;
 }
 
@@ -65,6 +72,7 @@ export const store = {
   },
   async sendMagicLink(email, next = 'portal.html') { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL(next, location.href).href } })); },
   async signOut() { await sb.auth.signOut(); },
+  async setPassword(password) { ok(await sb.auth.updateUser({ password })); },
 
   async updateProfile(patch) {
     const { data: { user } } = await sb.auth.getUser();
@@ -76,7 +84,8 @@ export const store = {
   // A missing function (migration not applied yet) must not break the dashboard.
   async myEnquiries() {
     const { data, error } = await sb.rpc('my_enquiries');
-    return error ? [] : data || [];
+    if (error?.code === 'PGRST202') return []; // function not deployed
+    return ok({ data: data || [], error }); // any other failure shows as an error, not as "no enquiries"
   },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
   async listRequests() {
@@ -130,16 +139,19 @@ export const store = {
   },
 
   async createProject(data, openings, files) {
-    const { data: { user } } = await sb.auth.getUser();
-    const p = ok(await sb.from('projects').insert({ ...data, owner_id: user.id }).select('id').single());
-    if (openings.length) ok(await sb.from('openings').insert(openings.map((o) => ({ ...o, project_id: p.id }))));
-    if (files.length) await this.uploadFiles(p.id, files);
-    return p.id;
+    // Project and openings in one transaction (create_project, migration 0011): a rejected opening leaves nothing behind.
+    const id = ok(await sb.rpc('create_project', { p: data, ops: openings }));
+    if (files.length) {
+      try { await this.uploadFiles(id, files); } catch (err) { err.projectId = id; throw err; }
+    }
+    emit();
+    return id;
   },
 
   async addMessage(pid, body, internal = false) {
     const { data: { user } } = await sb.auth.getUser();
     ok(await sb.from('messages').insert({ project_id: pid, author_id: user.id, body, internal }));
+    emit(); // shows the message even when realtime is blocked
   },
 
   async uploadFiles(pid, files, meta = {}) {
@@ -157,6 +169,7 @@ export const store = {
         amount: staff && meta.amount ? Number(meta.amount) : null,
       }));
     }
+    emit();
   },
 
   async decide(docId, decision, comment = '', { onBehalf = false } = {}) {

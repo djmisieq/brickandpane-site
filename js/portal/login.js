@@ -15,9 +15,11 @@ const AUTH_ERRORS = [
   [/invalid login credentials/i, 'Invalid login credentials'],
   [/email not confirmed/i, 'Confirm your email address first: use the link we sent when you created the account.'],
   [/already registered|already exists/i, 'An account with that email already exists.'],
+  [/email rate limit/i, 'We’ve sent too many emails in the last hour. Please try again later, or sign in with Google or Microsoft.'],
   [/rate limit|security purposes|too many/i, 'Too many attempts. Please wait a minute and try again.'],
   [/failed to fetch|network|load failed/i, 'We can’t reach the portal right now. Check your connection and try again.'],
-  [/password/i, 'Use at least 10 characters for your password.'],
+  [/pwned|leaked|compromised/i, 'This password has appeared in a data leak. Please choose a different one.'],
+  [/password.*(at least|short|characters|length)/i, 'Use at least 10 characters for your password.'],
 ];
 const fail = (err) => { const hit = AUTH_ERRORS.find(([re]) => re.test(err?.message || '')); say(esc(tr(hit ? hit[1] : (err?.message || 'Something went wrong. Please try again.'))), true); };
 // While a request is running the button is disabled, so a double click can't send two emails.

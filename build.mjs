@@ -13,6 +13,16 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 
 const SITE = 'https://brickandpane.co.uk';
 // Pre-launch: false keeps every page noindex. At launch set true (docs: WDROZENIE.md §8).
 const INDEXABLE = false;
+// Portal pages (signed-in data): a Content-Security-Policy and a frame guard. GitHub Pages sends no security headers,
+// so both live in the page. supabase-js is served from js/vendor (no third-party script can reach the session).
+const APP_PAGES = ['portal.html', 'login.html', 'admin.html'];
+const SUPABASE = 'kgnjyyzjmyilorgaeabc.supabase.co';
+const appHead = (root) => `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${SUPABASE}; font-src 'self'; connect-src 'self' https://${SUPABASE} wss://${SUPABASE}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style id="no-frame">html{display:none!important}</style>
+<script src="${root}js/portal/frame.js"></script>
+<script src="${root}js/vendor/supabase-js-2.45.4.js" defer></script>
+`;
 const url = (p) => new URL(p, import.meta.url);
 const read = (p) => readFileSync(url(p), 'utf8');
 const layout = read('./src/partials/layout.html');
@@ -199,7 +209,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       .replace('{{alternates}}', alternates)
       .replace('{{skip}}', L.skip)
       .replace('{{base}}', meta.base ? `<base href="${meta.base}">\n` : '')
-      .replace('{{head}}', meta.head || '')
+      .replace('{{head}}', () => (meta.head || '') + (APP_PAGES.includes(file) ? appHead(L.root) : ''))
       .replace('{{header}}', nav)
       .replace('{{footer}}', footer
         .replace('{{actionHref}}', meta.actionHref || L.actionHref)

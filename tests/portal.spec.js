@@ -235,8 +235,9 @@ test('an internal note stays internal when the page updates live', async ({ page
 
 test('live mode offers only the sign-in providers switched on in Supabase', async ({ page }) => {
   // Pretend the portal is connected: fake config, auth settings with Google and Microsoft on, Apple off.
-  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://fake.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
-  await page.route('https://fake.supabase.co/**', (r) => {
+  // The project host is the real one (the page's CSP allows only it), but every request to it is answered here.
+  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://kgnjyyzjmyilorgaeabc.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
+  await page.route('https://kgnjyyzjmyilorgaeabc.supabase.co/**', (r) => {
     const url = r.request().url();
     if (url.endsWith('/auth/v1/settings')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ external: { google: true, azure: true, apple: false, email: true } }) });
     if (url.includes('/authorize')) return r.fulfill({ body: 'provider page' });
@@ -247,15 +248,15 @@ test('live mode offers only the sign-in providers switched on in Supabase', asyn
   await expect(signup.locator('[data-provider]')).toHaveText(['Continue with Google', 'Continue with Microsoft']);
   await expect(page.locator('[data-demo]')).toBeHidden();
   await signup.locator('[data-provider="google"]').click();
-  await expect(page).toHaveURL(/fake\.supabase\.co\/auth\/v1\/authorize\?provider=google/);
+  await expect(page).toHaveURL(/kgnjyyzjmyilorgaeabc\.supabase\.co\/auth\/v1\/authorize\?provider=google/);
   expect(decodeURIComponent(page.url())).toContain('redirect_to=http://127.0.0.1:4173/portal.html');
   await page.goto('/404.html'); // back on our origin to read what was stored before the redirect
   expect(await page.evaluate(() => localStorage.getItem('bp-oauth-account-type'))).toBe('homeowner');
 });
 
 test('Polish login labels the provider buttons in Polish', async ({ page }) => {
-  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://fake.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
-  await page.route('https://fake.supabase.co/**', (r) => r.request().url().endsWith('/auth/v1/settings') ? r.fulfill({ contentType: 'application/json', body: '{"external":{"google":true}}' }) : r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
+  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://kgnjyyzjmyilorgaeabc.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
+  await page.route('https://kgnjyyzjmyilorgaeabc.supabase.co/**', (r) => r.request().url().endsWith('/auth/v1/settings') ? r.fulfill({ contentType: 'application/json', body: '{"external":{"google":true}}' }) : r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
   await page.goto('/pl/login.html');
   await expect(page.locator('[data-signin] [data-provider="google"]')).toHaveText('Kontynuuj przez Google');
   await expect(page.locator('[data-signin] .oauth-or')).toHaveText('albo zaloguj się e-mailem');
@@ -265,4 +266,43 @@ test('demo mode shows no provider buttons', async ({ page }) => {
   await page.goto('/login.html');
   await expect(page.locator('[data-demo]')).toBeVisible();
   await expect(page.locator('[data-oauth]').first()).toBeHidden();
+});
+
+test('portal pages: CSP, frame guard, password settings and size checks', async ({ page }) => {
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('/login.html');
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /frame-src 'none'/);
+  await expect(page.locator('#no-frame')).toHaveCount(0); // top window: the page is shown
+  expect(await page.evaluate(() => typeof self.supabase?.createClient)).toBe('function'); // vendored, not from a CDN
+
+  // Inside someone else's frame the page stays hidden.
+  // (sandboxed without allow-top-navigation, so the guard can't redirect this test's page)
+  await page.goto('/404.html');
+  await page.evaluate(() => { const f = document.createElement('iframe'); f.src = 'login.html'; f.sandbox = 'allow-scripts allow-same-origin'; document.body.append(f); });
+  const framed = page.frameLocator('iframe');
+  await expect(framed.locator('#no-frame')).toHaveCount(1);
+
+  await page.goto('/login.html');
+  await page.locator('[data-demo-login="client"]').click();
+  await expect(page.locator('.pcard').first()).toBeVisible();
+  await page.goto('/portal.html#/settings');
+  await page.locator('#s-pw').fill('short');
+  await page.locator('.password button[type=submit]').click();
+  await expect(page.locator('.password .has-error')).toContainText('at least 10 characters');
+  await page.locator('#s-pw').fill('a-long-password');
+  await page.locator('#s-pw2').fill('a-long-password');
+  await page.locator('.password button[type=submit]').click();
+  await expect(page.locator('.toast')).toContainText('Password set.');
+  await expect(page.locator('#app a[href^="mailto:"]')).toHaveText('daniel@brickandpane.co.uk');
+
+  // A size outside what the database accepts is pointed out before anything is created.
+  await page.goto('/portal.html#/new');
+  await page.locator('form [name="name"]').fill('Test house');
+  await page.locator('form [name="location"]').fill('E17');
+  await page.locator('[name="height_mm"]').first().fill('7000');
+  await page.locator('form button[type=submit]').last().click();
+  await expect(page.locator('.toast')).toContainText('Check the sizes');
+  await expect(page.locator('[name="height_mm"]').first()).toHaveAttribute('aria-invalid', 'true');
+  expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([]);
 });

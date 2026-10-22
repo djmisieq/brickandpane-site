@@ -338,11 +338,17 @@ export function bindDetail(root, d, refresh) {
   composer?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const body = f.body.value.trim(); if (!body) return;
     const internal = f.dataset.mode === 'internal';
+    // One click, one message: the button stays off until the first send finishes.
+    const btn = $('button[type=submit]', f); if (btn?.disabled) return; if (btn) btn.disabled = true;
     try { await store.addMessage(d.project.id, body, internal); f.body.value = ''; draft.body = ''; composerDrafts.set(d.project.id, draft); } catch (err) { toast(tr(err.message)); }
+    finally { if (btn) btn.disabled = false; }
   });
   $('[data-client-upload]', root)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const files = [...e.currentTarget.files.files]; if (!files.length) return;
+    if (files.some((x) => x.size > 50e6)) { toast(tr('Each file must be under 50 MB.')); return; }
+    const btn = $('button[type=submit]', e.currentTarget); if (btn?.disabled) return; if (btn) btn.disabled = true;
     try { await store.uploadFiles(d.project.id, files); toast(tr('Uploaded. We’ve been notified.')); } catch (err) { toast(tr(err.message)); }
+    finally { if (btn) btn.disabled = false; }
   });
 }
 
