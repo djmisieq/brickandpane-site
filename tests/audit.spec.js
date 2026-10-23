@@ -37,6 +37,8 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   // 22.10: no PAS 24 at all (each construction would need its own test), no walk-on glass, no post-free corners
   // on fixed windows (bonded glass), no "anti-snap" wording.
   /PAS\s?24/i, /walk-on/i, /do chodzenia/i, /anti-snap/i, /frameless-look corners/i,
+  // 23.10: technical files (DWG, BIM, clauses, DoP) are on request only: no public library, no "preparing" statuses.
+  /technical library/i, /biblioteka techniczna/i, /W przygotowaniu/, /\bPreparing\b/, /opublikujemy/i, /we'll publish/i,
   /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
