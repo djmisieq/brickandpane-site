@@ -683,6 +683,16 @@ body.app .site-header{position:static}
 .lang-switch a{padding:.35rem .55rem;text-decoration:none;color:var(--ink-2)}
 .lang-switch a[aria-current]{background:var(--ink);color:var(--bg)}
 @media (max-width:1099px){.lang-switch{align-self:flex-start;font-size:var(--step--1)}.lang-switch a{padding:.6rem .9rem}}
+/* Desktop: every header item on one centre line, and the language switch as quiet text like the rest of the menu */
+@media (min-width:1100px){
+  .primary-nav ul{align-items:center}
+  .primary-nav>ul>li>a{display:inline-flex;align-items:center}
+  .lang-switch{border:0;font-family:inherit;align-items:center}
+  .lang-switch a{padding:6px .5rem;color:var(--muted);letter-spacing:.02em}
+  .lang-switch a+a{border-left:1px solid var(--line-strong)}
+  .lang-switch a:hover{color:var(--ink)}
+  .lang-switch a[aria-current]{background:none;color:var(--ink);text-decoration:underline;text-underline-offset:.35em;text-decoration-thickness:1px}
+}
 /* Desktop header: keep every item on one line (Polish labels are longer). */
 @media (min-width:1100px){
   .brand-word,.primary-nav a,.primary-nav .sub-toggle,.primary-nav .btn{white-space:nowrap}
