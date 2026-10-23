@@ -38,7 +38,7 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   // on fixed windows (bonded glass), no "anti-snap" wording.
   /PAS\s?24/i, /walk-on/i, /do chodzenia/i, /anti-snap/i, /frameless-look corners/i,
   // 23.10: technical files (DWG, BIM, clauses, DoP) are on request only: no public library, no "preparing" statuses.
-  /technical library/i, /biblioteka techniczna/i, /W przygotowaniu/, /\bPreparing\b/, /opublikujemy/i, /we'll publish/i,
+  /technical library/i, /biblioteka techniczna/i, /W przygotowaniu/, /\bPreparing\b(?! your price)/, /opublikujemy/i, /we'll publish/i,
   // 23.10: accreditations, insurances and the PQQ pack are not published with statuses; the pack is on request.
   /W toku/, /\bIn progress\b/, /\bPlanowane\b/, /\bPlanned\b/, /status openly/i, /status pokazujemy/i,
   /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
