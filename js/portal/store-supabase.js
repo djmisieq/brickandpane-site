@@ -3,8 +3,10 @@
 // see supabase/migrations/0001_project_portal.sql. This file only reads and writes.
 // supabase-js 2.45.4 comes from js/vendor (a script tag build.mjs adds to the portal pages), not from a CDN.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { useClient, syncList, leaveAccountList } from '../account-list.js';
 
 const sb = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+useClient(sb);
 const BUCKET = 'project-files';
 // Network failures get one plain, translated message instead of the browser's "Failed to fetch".
 const OFFLINE = /failed to fetch|networkerror|load failed|network request failed/i;
@@ -71,7 +73,9 @@ export const store = {
     ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo, ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
   },
   async sendMagicLink(email, next = 'portal.html') { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL(next, location.href).href } })); },
-  async signOut() { await sb.auth.signOut(); },
+  async signOut() { await leaveAccountList(); await sb.auth.signOut(); },
+  // The list of openings kept on the account (migration 0012) meets the one in this browser.
+  syncList: () => syncList().catch(() => 0),
   async setPassword(password) { ok(await sb.auth.updateUser({ password })); },
 
   async updateProfile(patch) {

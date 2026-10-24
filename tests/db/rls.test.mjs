@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -232,4 +232,22 @@ test('deleting an account keeps the project and drops the person', async () => {
   assert.equal((await db.query('select count(*)::int n from public.profiles where id = $1', [A])).rows[0].n, 0);
   assert.equal((await db.query('select owner_id from public.projects where id = $1', [P])).rows[0].owner_id, null);
   assert.equal((await db.query('select author_id from public.messages where project_id = $1', [P])).rows[0].author_id, null);
+});
+
+test('a saved list of openings belongs to its account only', async () => {
+  const { db, as, fails } = await setup();
+  const items = JSON.stringify([{ ref: 'D01', system: 'lift-slide', width_mm: 4000, height_mm: 2400, qty: 1 }]);
+  await as(A);
+  await db.query('insert into public.saved_lists (items) values ($1)', [items]);
+  await db.query('update public.saved_lists set items = $1 where user_id = $2', [items, A]);
+  await fails('insert into public.saved_lists (user_id, items) values ($1, $2)', [O, items]);
+  await fails(`insert into public.saved_lists (items) values ('{"a":1}')`);
+  await as(O);
+  assert.equal((await db.query('select * from public.saved_lists')).rows.length, 0);
+  assert.equal((await db.query('update public.saved_lists set items = $1 returning user_id', ['[]'])).rows.length, 0);
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.saved_lists');
+  await db.exec('reset role');
+  await db.query('delete from auth.users where id = $1', [A]);
+  assert.equal((await db.query('select count(*)::int n from public.saved_lists')).rows[0].n, 0);
 });

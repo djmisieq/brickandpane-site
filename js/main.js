@@ -1,5 +1,6 @@
 /* Brick & Pane — site behaviour. No dependencies. */
 import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeList, mergeIntoList } from './openings-list.js';
+import { hasSession, startAccountList } from './account-list.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -376,7 +377,9 @@ import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeL
       <a class="btn" href="contact.html" data-list-send>${t('Send the list for a quote', 'Wyślij listę do wyceny')}</a>
       <button type="button" class="btn btn-ghost" data-list-share>${t('Share a link to the list', 'Udostępnij link do listy')}</button>
     </div>
-    <p class="note list-where">${t('Saved in this browser.', 'Lista jest zapisana w tej przeglądarce.')} <a href="portal.html#/new">${t('Have an account? Start a project from this list in the client portal.', 'Masz konto? Załóż z niej projekt w panelu klienta.')}</a></p>`;
+    <p class="note list-where">${hasSession()
+      ? `${t('Saved in this browser and on your account.', 'Lista jest zapisana w tej przeglądarce i na Twoim koncie.')} <a href="portal.html#/new">${t('Start a project from this list in the client portal.', 'Załóż z niej projekt w panelu klienta.')}</a>`
+      : `${t('Saved in this browser.', 'Lista jest zapisana w tej przeglądarce.')} <a href="portal.html#/new">${t('Have an account? Sign in and the list is saved on it too.', 'Masz konto? Zaloguj się, a lista zapisze się też na nim.')}</a>`}</p>`;
   document.body.append(drawer);
   const listRows = $('[data-list-rows]', drawer), listStatus = $('[data-list-status]', drawer);
   let listOpener = null;
@@ -447,6 +450,7 @@ import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeL
   });
   addEventListener('bp-list', (e) => { renderCount(); if (drawer.open && e.detail.source !== 'drawer') renderList(); });
   renderCount();
+  startAccountList();
 
   // Arriving from a shared link: add its openings, then drop the code from the address.
   const sharedList = new URLSearchParams(location.search).get('list');
