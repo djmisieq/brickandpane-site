@@ -384,6 +384,45 @@ test.describe('the list of openings is visible and nothing typed is lost', () =>
     await expect(page.locator('input[name="why"][value="cost"]')).toBeChecked();
     await expect(page.locator('[data-out-material]')).toHaveText(answer);
   });
+
+  test('signed in, the list is kept on the account and follows removals from another device', async ({ page }) => {
+    // Live mode against a stand-in for supabase-js: the "account" row lives in localStorage so it survives reloads.
+    await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://test.supabase.co'; export const SUPABASE_ANON_KEY = 'k';" }));
+    await page.addInitScript(() => {
+      const A = { ref: 'D01', system: 'lift-slide', material: '', width_mm: 4000, height_mm: 2400, qty: 1, config: '4C', glazing: '3', note: 'From the phone' };
+      const B = { ref: 'D01', system: 'bifold', material: '', width_mm: 3000, height_mm: 2200, qty: 1, config: '3L', glazing: '2', note: 'From this laptop' };
+      if (!localStorage.getItem('__init')) {
+        localStorage.setItem('__init', '1');
+        localStorage.setItem('sb-test-auth-token', '{}');
+        localStorage.setItem('__acct', JSON.stringify([A]));
+        localStorage.setItem('bp-openings-list', JSON.stringify([B]));
+      }
+      const acct = () => JSON.parse(localStorage.getItem('__acct') || 'null');
+      self.supabase = { createClient: () => ({
+        auth: { getSession: async () => ({ data: { session: { user: { id: 'u1' } } } }) },
+        from: () => ({
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: acct() && { items: acct() }, error: null }) }) }),
+          upsert: async (row) => { localStorage.setItem('__acct', JSON.stringify(row.items)); return { error: null }; },
+        }),
+      }) };
+    });
+    const acct = () => page.evaluate(() => JSON.parse(localStorage.getItem('__acct')).map((o) => o.note));
+    await page.goto('/about.html');
+    const btn = page.locator(isMobileNav(page) ? '.site-header .list-btn' : '.list-fab');
+    await expect(btn.locator('[data-list-count]')).toHaveText('2');
+    await expect.poll(acct).toEqual(['From this laptop', 'From the phone']);
+    await btn.click();
+    const drawer = page.locator('.list-drawer');
+    await expect(drawer.locator('.list-where')).toContainText('on your account');
+    await expect(drawer.locator('.list-row', { hasText: 'From the phone' })).toContainText('D02');
+    await drawer.locator('.list-row', { hasText: 'From this laptop' }).locator('[data-list-remove]').click();
+    await expect.poll(acct).toEqual(['From the phone']);
+    // Removed on another device: this browser has seen it on the account, so it goes here too instead of coming back.
+    await page.evaluate(() => { localStorage.setItem('__acct', '[]'); sessionStorage.clear(); });
+    await page.reload();
+    await expect(btn).toBeHidden();
+    expect(await page.evaluate(() => localStorage.getItem('bp-openings-list'))).toBeNull();
+  });
 });
 
 test.describe('full product range', () => {

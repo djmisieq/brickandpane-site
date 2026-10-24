@@ -10,6 +10,7 @@ const bar = $('#appbar');
 let user = null;
 let activeTab = 'overview';
 let lastProjectId = null;
+let listSynced = null;
 
 // Stored values stay in English (they go to the database and the CRM); only labels are translated.
 const opts = (values) => values.map((v) => `<option value="${esc(v)}">${esc(tr(v))}</option>`).join('');
@@ -27,6 +28,8 @@ const keepDrafts = () => {
 async function render(fromStore = false) {
   user = await store.getUser();
   if (!user) { location.href = `login.html?next=${encodeURIComponent('portal.html' + location.hash)}`; return; }
+  // Once per visit, before the new-project form reads the list.
+  await (listSynced ||= store.syncList ? store.syncList() : Promise.resolve(0));
   const r = route();
   if (fromStore && r.name === 'new') { renderAppBar(bar, user, 'portal'); return; }
   const restore = fromStore ? keepDrafts() : () => {};
