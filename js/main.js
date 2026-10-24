@@ -1,6 +1,8 @@
 /* Brick & Pane — site behaviour. No dependencies. */
 import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeList, mergeIntoList } from './openings-list.js';
 import { hasSession, startAccountList } from './account-list.js';
+import { SUPABASE_URL } from './portal/config.js';
+import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -376,6 +378,12 @@ import { hasSession, startAccountList } from './account-list.js';
     <div class="list-actions">
       <a class="btn" href="contact.html" data-list-send>${t('Send the list for a quote', 'Wyślij listę do wyceny')}</a>
       <button type="button" class="btn btn-ghost" data-list-share>${t('Share a link to the list', 'Udostępnij link do listy')}</button>
+      ${SUPABASE_URL ? `<button type="button" class="btn btn-ghost" data-list-mail-open aria-expanded="false" aria-controls="list-mail">${t('Email me this list', 'Wyślij mi listę e-mailem')}</button>
+      <form class="list-mail" id="list-mail" data-list-mail hidden novalidate>
+        <label for="list-mail-email">${t('Your email address', 'Twój adres e-mail')}</label>
+        <div class="list-mail-row"><input id="list-mail-email" name="email" type="email" autocomplete="email" required><button class="btn" type="submit">${t('Send', 'Wyślij')}</button></div>
+        <p class="note">${t('We send the list with a link back to it, and don’t keep the address.', 'Wyślemy listę z linkiem do niej. Adresu nie zapisujemy.')}</p>
+      </form>` : ''}
     </div>
     <p class="note list-where">${hasSession()
       ? `${t('Saved in this browser and on your account.', 'Lista jest zapisana w tej przeglądarce i na Twoim koncie.')} <a href="portal.html#/new">${t('Start a project from this list in the client portal.', 'Załóż z niej projekt w panelu klienta.')}</a>`
@@ -447,6 +455,29 @@ import { hasSession, startAccountList } from './account-list.js';
       listStatus.innerHTML = `${t('Copy this link:', 'Skopiuj ten link:')} <input class="list-link" type="text" readonly value="${esc(url)}" aria-label="${t('Link to the list', 'Link do listy')}">`;
       $('.list-link', listStatus).select();
     }
+  });
+  // "Email me this list": the list goes as a link code; the email repeats only products and sizes (supabase/functions/list-email).
+  const mailForm = $('[data-list-mail]', drawer), mailOpen = $('[data-list-mail-open]', drawer);
+  mailOpen?.addEventListener('click', () => {
+    mailForm.hidden = !mailForm.hidden; mailOpen.setAttribute('aria-expanded', String(!mailForm.hidden));
+    if (!mailForm.hidden) mailForm.email.focus();
+  });
+  mailForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = mailForm.email.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { listStatus.textContent = t('Check the email address.', 'Sprawdź adres e-mail.'); mailForm.email.focus(); return; }
+    const btn = $('button[type=submit]', mailForm); btn.disabled = true;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/list-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, lang: PL ? 'pl' : 'en', list: encodeList(readList()) }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || String(res.status));
+      listStatus.textContent = t(`Sent to ${email}. If it isn’t there in a few minutes, check spam.`, `Wysłane na ${email}. Jeśli nie dojdzie w ciągu kilku minut, zajrzyj do spamu.`);
+      mailForm.hidden = true; mailOpen.setAttribute('aria-expanded', 'false'); mailOpen.focus();
+    } catch (err) {
+      listStatus.textContent = err.message === 'rate'
+        ? t('We’ve sent this list several times in the last hour. Try again later, or share the link instead.', 'W ciągu ostatniej godziny wysłaliśmy już kilka list. Spróbuj później albo udostępnij link.')
+        : t('We couldn’t send it. Try again, or share the link instead.', 'Nie udało się wysłać. Spróbuj ponownie albo udostępnij link.');
+    } finally { btn.disabled = false; }
   });
   addEventListener('bp-list', (e) => { renderCount(); if (drawer.open && e.detail.source !== 'drawer') renderList(); });
   renderCount();
@@ -631,18 +662,39 @@ import { hasSession, startAccountList } from './account-list.js';
     // Files
     const fileInput = $('input[type=file]', form), list = $('[data-file-list]', form), zone = $('.dropzone', form);
     const MAX_MB = 50, MAX_TOTAL = 100;
+    // Picking files again adds to the ones already chosen; all of them are kept in this browser until sending (js/file-draft.js).
+    let kept = [];
+    const setFiles = (files, save = true) => {
+      kept = files;
+      try { const dt = new DataTransfer(); kept.forEach((f) => dt.items.add(f)); fileInput.files = dt.files; } catch { /* old browser: the input keeps its own selection */ }
+      if (save) saveFiles(kept);
+      renderFiles();
+    };
+    const addFiles = (incoming) => {
+      const id = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+      const have = new Set(kept.map(id));
+      setFiles([...kept, ...[...incoming].filter((f) => !have.has(id(f)))]);
+    };
     const renderFiles = () => {
       const files = [...fileInput.files]; let total = 0, err = '';
-      list.innerHTML = files.map((fl) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = t(`${fl.name} is over ${MAX_MB} MB — export a PDF or paste a WeTransfer or Dropbox link in the field below.`, `${fl.name} ma ponad ${MAX_MB} MB — wyeksportuj PDF albo wklej link WeTransfer lub Dropbox w polu poniżej.`); return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB</li>`; }).join('');
+      list.innerHTML = files.map((fl, i) => { total += fl.size; if (fl.size > MAX_MB * 1e6) err = t(`${fl.name} is over ${MAX_MB} MB — export a PDF or paste a WeTransfer or Dropbox link in the field below.`, `${fl.name} ma ponad ${MAX_MB} MB — wyeksportuj PDF albo wklej link WeTransfer lub Dropbox w polu poniżej.`); return `<li>${fl.name.replace(/</g, '&lt;')} · ${(fl.size / 1e6).toFixed(1)} MB <button type="button" class="linkish" data-file-remove="${i}" aria-label="${t('Remove', 'Usuń')} ${esc(fl.name)}">${t('Remove', 'Usuń')}</button></li>`; }).join('');
       if (total > MAX_TOTAL * 1e6) err = t(`Files total over ${MAX_TOTAL} MB — paste a WeTransfer or Dropbox link in the field below instead.`, `Pliki mają łącznie ponad ${MAX_TOTAL} MB — zamiast tego wklej link WeTransfer lub Dropbox w polu poniżej.`);
       fieldError(fileInput.closest('.field'), err);
       return !err;
     };
-    fileInput?.addEventListener('change', renderFiles);
+    if (fileInput) {
+      fileInput.addEventListener('change', () => addFiles(fileInput.files));
+      list.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-file-remove]'); if (!b) return;
+        setFiles(kept.filter((_, i) => i !== +b.dataset.fileRemove));
+        fileInput.focus();
+      });
+      loadFiles().then((files) => { if (files.length && !fileInput.files.length) setFiles(files, false); });
+    }
     if (zone && fileInput) {
       ['dragenter', 'dragover'].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add('is-over'); }));
       ['dragleave', 'drop'].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.remove('is-over'); }));
-      zone.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) { fileInput.files = e.dataTransfer.files; renderFiles(); } });
+      zone.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
     }
 
     const SUBMIT = t('Send enquiry', 'Wyślij zapytanie');
@@ -679,6 +731,7 @@ import { hasSession, startAccountList } from './account-list.js';
         if (!res.ok) throw new Error(data.error || String(res.status));
         try { localStorage.removeItem(DRAFT); } catch { /* ignore */ }
         clearList();
+        await clearFiles();
         // The thank-you page shows the reference, any files that didn't upload, and offers the portal for this email.
         try { sessionStorage.setItem('bp-enquiry', JSON.stringify({ ref: data.ref || '', email: form.email.value.trim(), rejected: data.rejected || [] })); } catch { /* ignore */ }
         location.href = `thank-you.html${data.ref ? `?ref=${encodeURIComponent(data.ref)}` : ''}`;

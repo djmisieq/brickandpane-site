@@ -385,6 +385,45 @@ test.describe('the list of openings is visible and nothing typed is lost', () =>
     await expect(page.locator('[data-out-material]')).toHaveText(answer);
   });
 
+  test('"Email me this list" sends the list code to the mail function', async ({ page }) => {
+    await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://test.supabase.co'; export const SUPABASE_ANON_KEY = 'k';" }));
+    let sent = null;
+    await page.route('https://test.supabase.co/functions/v1/list-email', (r) => { sent = r.request().postDataJSON(); return r.fulfill({ contentType: 'application/json', body: '{"ok":true}' }); });
+    await page.goto('/pl/lift-and-slide-doors.html#sizing');
+    await page.locator('[data-tool-add]').click();
+    const drawer = page.locator('.list-drawer');
+    await drawer.locator('[data-list-mail-open]').click();
+    await drawer.locator('#list-mail-email').fill('nie-adres');
+    await drawer.locator('[data-list-mail] button[type=submit]').click();
+    await expect(drawer.locator('[data-list-status]')).toHaveText('Sprawdź adres e-mail.');
+    await drawer.locator('#list-mail-email').fill('jo@example.com');
+    await drawer.locator('[data-list-mail] button[type=submit]').click();
+    await expect(drawer.locator('[data-list-status]')).toContainText('Wysłane na jo@example.com');
+    await expect(drawer.locator('[data-list-mail]')).toBeHidden();
+    expect(sent.email).toBe('jo@example.com');
+    expect(sent.lang).toBe('pl');
+    expect(sent.list).toMatch(/^[\w-]+$/);
+  });
+
+  test('files picked in the quote form survive a reload, add up and can be removed', async ({ page }) => {
+    await page.goto('/contact.html');
+    const input = page.locator('#f-files');
+    const file = (name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${name}`) });
+    await input.setInputFiles([file('plan.pdf'), file('elevations.pdf')]);
+    await input.setInputFiles([file('schedule.pdf')]);
+    const items = page.locator('[data-file-list] li');
+    await expect(items).toHaveCount(3);
+    await page.reload();
+    await expect(items).toHaveCount(3);
+    await expect(items.first()).toContainText('plan.pdf');
+    expect(await input.evaluate((el) => el.files.length)).toBe(3);
+    await items.filter({ hasText: 'elevations.pdf' }).locator('[data-file-remove]').evaluate((b) => b.click());
+    await expect(items).toHaveCount(2);
+    await page.reload();
+    await expect(items).toHaveCount(2);
+    await expect(page.locator('[data-file-list]')).not.toContainText('elevations.pdf');
+  });
+
   test('signed in, the list is kept on the account and follows removals from another device', async ({ page }) => {
     // Live mode against a stand-in for supabase-js: the "account" row lives in localStorage so it survives reloads.
     await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://test.supabase.co'; export const SUPABASE_ANON_KEY = 'k';" }));

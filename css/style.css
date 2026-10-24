@@ -507,6 +507,12 @@ body.app .list-btn{display:none}
 .list-actions .btn{justify-content:center}
 .list-where{margin-top:var(--s-m)}
 .list-actions[hidden],.list-where[hidden]{display:none}
+.list-mail{display:grid;gap:.4rem;padding-top:var(--s-xs)}
+.list-mail[hidden]{display:none}
+.list-mail label{font-size:var(--step--1)}
+.list-mail-row{display:flex;gap:var(--s-xs)}
+.list-mail-row input{flex:1;min-width:0;min-height:48px;font:inherit;padding:.5rem .75rem;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink)}
+.file-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .75rem}
 .toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-20px);background:var(--ink);color:#fff;padding:.8rem 1.1rem;font-size:var(--step--1);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-2);z-index:100;max-width:90vw}
 .toast.is-on{opacity:1;transform:translate(-50%,0)}
 
