@@ -77,6 +77,17 @@ test.describe('navigation', () => {
     await expect(page).toHaveURL(/architects\.html$/);
   });
 
+  test('mobile menu shows the client portal without scrolling, above the language switch', async ({ page }) => {
+    test.skip(!isMobileNav(page), 'mobile/tablet only');
+    for (const url of ['/index.html', '/pl/index.html']) {
+      await page.goto(url);
+      await page.locator('.menu-toggle').click();
+      const portal = await page.locator('.nav-login').boundingBox();
+      expect(portal.y + portal.height, `${url}: portal below the fold`).toBeLessThanOrEqual(page.viewportSize().height);
+      expect(portal.y).toBeLessThan((await page.locator('.primary-nav .lang-switch').boundingBox()).y);
+    }
+  });
+
   test('mobile menu opens with the current group expanded after scrolling', async ({ page }) => {
     test.skip(!isMobileNav(page), 'mobile/tablet only');
     await page.goto('/bifold-doors.html');
