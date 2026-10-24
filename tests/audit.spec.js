@@ -40,6 +40,8 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   // 23.10: technical files (DWG, BIM, clauses, DoP) are on request only: no public library, no "preparing" statuses.
   /technical library/i, /biblioteka techniczna/i, /W przygotowaniu/, /\bPreparing\b(?! your price)/, /opublikujemy/i, /we'll publish/i,
   // 23.10: accreditations, insurances and the PQQ pack are not published with statuses; the pack is on request.
+  // 24.10: product pages carry typical ranges only (no security or weather classes), certified values come with the quote.
+  /published, not promised/i, /publikujemy, a nie obiecujemy/i, /data sheet is published/i, /po publikacji karty/i,
   /W toku/, /\bIn progress\b/, /\bPlanowane\b/, /\bPlanned\b/, /status openly/i, /status pokazujemy/i,
   /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
 
