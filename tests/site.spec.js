@@ -267,7 +267,8 @@ test.describe('quote form', () => {
     await page.fill('#t-w', '4200');
     await page.locator('[data-tool-add]').click();
     await expect(page.locator('[data-tool-list]')).toContainText('Your list has 2 openings');
-    await page.locator('[data-tool-list] a').click();
+    // Adding opens the list panel; it sends the list to the quote form.
+    await page.locator('.list-drawer [data-list-send]').click();
     // The rows are drawn by the page script: once they are there, the form's buttons work too.
     await expect(page.locator('[data-op]')).toHaveCount(2);
     await page.locator('label.choice', { has: page.locator('input[value="homeowner"]') }).click();
@@ -299,6 +300,89 @@ test.describe('quote form', () => {
     const openings = JSON.parse(json);
     expect(openings.map((o) => [o.ref, o.system, o.width_mm, o.qty])).toEqual([['D01', 'lift-slide', 5600, 1], ['D02', 'bifold', 4200, 1], ['W01', 'windows', 1200, 3]]);
     expect(await page.evaluate(() => localStorage.getItem('bp-openings-list'))).toBeNull();
+  });
+});
+
+test.describe('the list of openings is visible and nothing typed is lost', () => {
+  test('adding opens the list panel, the counter follows the list across pages, edits stick', async ({ page }) => {
+    await page.goto('/lift-and-slide-doors.html#sizing');
+    const btn = page.locator(isMobileNav(page) ? '.site-header .list-btn' : '.list-fab');
+    await expect(btn).toBeHidden();
+    await page.locator('[data-tool-add]').click();
+    const drawer = page.locator('.list-drawer');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator('[data-list-status]')).toHaveText('Added D01 to your list.');
+    await expect(drawer.locator('.list-row')).toHaveCount(1);
+    await expect(drawer.locator('.list-row-note')).toContainText('4 panels — centre opening');
+    await drawer.locator('[data-k="qty"]').fill('3');
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await expect(page.locator('[data-tool-add]')).toBeFocused();
+    await page.goto('/about.html');
+    await expect(btn).toBeVisible();
+    await expect(btn.locator('[data-list-count]')).toHaveText('1');
+    await expect(btn).toHaveAttribute('aria-label', 'Your list: 1 opening');
+    await btn.click();
+    await expect(drawer.locator('[data-k="qty"]')).toHaveValue('3');
+    await drawer.locator('[data-list-remove]').click();
+    await expect(drawer.locator('.list-empty')).toBeVisible();
+    await expect(drawer.locator('[data-list-send]')).toBeHidden();
+    await drawer.locator('[data-list-close]').click();
+    await expect(btn).toBeHidden();
+  });
+
+  test('a shared link brings the list to the quote form in another browser', async ({ page, browser }) => {
+    await page.addInitScript(() => { navigator.clipboard.writeText = async (s) => { window.__copied = s; }; });
+    await page.goto('/pl/bifold-doors.html#sizing');
+    await page.fill('#t-w', '4200');
+    await page.locator('[data-tool-add]').click();
+    await page.locator('.list-drawer [data-k="qty"]').fill('2');
+    await page.locator('[data-list-share]').click();
+    let link = await page.evaluate(() => window.__copied || document.querySelector('.list-link')?.value);
+    expect(link).toContain('/pl/contact.html?list=');
+    link = link.replace(/^https?:\/\/[^/]+/, '');
+    const other = await browser.newPage();
+    await other.goto(link);
+    await expect(other.locator('.list-drawer [data-list-status]')).toHaveText('Dodaliśmy z udostępnionej listy: 1 otwór.');
+    await expect(other).toHaveURL(/\/pl\/contact\.html$/);
+    await other.locator('[data-list-close]').click();
+    await expect(other.locator('[data-op] [data-k="width_mm"]')).toHaveValue('4200');
+    await expect(other.locator('[data-op] [data-k="qty"]')).toHaveValue('2');
+    // Opening it again adds nothing twice.
+    await other.goto(link);
+    await expect(other.locator('.list-drawer')).toBeHidden();
+    await expect(other.locator('[data-op]')).toHaveCount(1);
+    await other.close();
+  });
+
+  test('a bad shared link adds nothing and breaks nothing', async ({ page }) => {
+    await page.goto('/contact.html?list=not-a-list');
+    await expect(page.locator('.list-drawer')).toBeHidden();
+    await expect(page.locator('[data-op]')).toHaveCount(1);
+  });
+
+  test('the quote form keeps choices as well as text after a reload, but not consent', async ({ page }) => {
+    await page.goto('/contact.html');
+    await page.locator('label.choice', { has: page.locator('input[value="architect"]') }).click();
+    await page.fill('#f-name', 'Sam');
+    // Products (step 2) and consent (step 3) sit in steps that are still hidden: tick them as a click would.
+    await page.evaluate(() => ['input[name="systems"][value="bifold"]', 'input[name="consent"]'].forEach((s) => {
+      const el = document.querySelector(s); el.checked = true; el.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+    await page.reload();
+    await expect(page.locator('input[name="role"][value="architect"]')).toBeChecked();
+    await expect(page.locator('input[name="systems"][value="bifold"]')).toBeChecked();
+    await expect(page.locator('#f-name')).toHaveValue('Sam');
+    await expect(page.locator('input[name="consent"]')).not.toBeChecked();
+  });
+
+  test('the material advisor remembers the last answers', async ({ page }) => {
+    await page.goto('/materials.html#advisor');
+    await page.locator('[data-advisor] label', { has: page.locator('input[name="why"][value="cost"]') }).click();
+    const answer = await page.locator('[data-out-material]').textContent();
+    await page.reload();
+    await expect(page.locator('input[name="why"][value="cost"]')).toBeChecked();
+    await expect(page.locator('[data-out-material]')).toHaveText(answer);
   });
 });
 

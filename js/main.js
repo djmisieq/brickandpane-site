@@ -1,5 +1,5 @@
 /* Brick & Pane — site behaviour. No dependencies. */
-import { readList, writeList, addToList, clearList, nextRef } from './openings-list.js';
+import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeList, mergeIntoList } from './openings-list.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -229,11 +229,12 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
     const add = $('[data-tool-add]', tool), note = $('[data-tool-list]', tool);
     if (add) add.onclick = () => {
       const { kg, ...o } = opening; void kg;
-      const saved = addToList(o);
+      const saved = addToList({ ...o, note: openingNote(o) });
       const n = readList().length;
-      note.innerHTML = t(`Added as ${saved.ref}. Your list has ${n} opening${n === 1 ? '' : 's'}. <a href="contact.html">Send the list for a quote</a>`,
-        `Dodano jako ${saved.ref}. Na liście: ${n} ${n === 1 ? 'otwór' : n < 5 ? 'otwory' : 'otworów'}. <a href="contact.html">Wyślij listę do wyceny</a>`);
+      note.innerHTML = t(`Added as ${saved.ref}. Your list has ${n} opening${n === 1 ? '' : 's'}. <button type="button" class="linkish" data-list-open>See your list</button> · <a href="contact.html">Send the list for a quote</a>`,
+        `Dodano jako ${saved.ref}. Na liście: ${countPl(n)}. <button type="button" class="linkish" data-list-open>Zobacz listę</button> · <a href="contact.html">Wyślij listę do wyceny</a>`);
       note.hidden = false;
+      openList(t(`Added ${saved.ref} to your list.`, `Dodano ${saved.ref} do listy.`), add);
     };
   };
 
@@ -344,6 +345,117 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
     run();
   }
 
+  /* ---------- the visitor's list of openings: header counter and list panel ---------- */
+  const SYS_NAMES = PL
+    ? { 'lift-slide': 'Podnoszono-przesuwne', sliding: 'Przesuwne slim', bifold: 'Harmonijkowe', hinged: 'Balkonowe / wejściowe', windows: 'Okna', facades: 'Fasada słupowo-ryglowa', rooflights: 'Latarnia dachowa / świetlik' }
+    : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance door', windows: 'Windows', facades: 'Curtain walling', rooflights: 'Roof lantern / rooflight' };
+  const GLASS_PL = { d: 'szyba podwójna', dl: 'szyba podwójna laminowana', t: 'szyba potrójna', tl: 'szyba potrójna laminowana' };
+  // "4 panels — centre opening, Triple, 6 / 14 / 4 / 14 / 6": layout and glass from a sizing tool, as the note on a row.
+  const openingNote = (o) => {
+    const cfg = SLIDERS[o.system]?.configs[o.config];
+    const layout = PL ? (o.config ? `układ ${o.config}` : '') : cfg ? cfg.label : (o.system === 'bifold' && o.config ? `${o.config} leaves` : '');
+    return [layout, PL ? GLASS_PL[o.glazing] : GLASS[o.glazing]?.label].filter(Boolean).join(', ');
+  };
+  const countPl = (n) => `${n} ${n === 1 ? 'otwór' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'otwory' : 'otworów'}`;
+  const countText = (n) => t(`${n} opening${n === 1 ? '' : 's'}`, countPl(n));
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  // Phones and tablets: the button in the header. Desktop has no room left there, so the list floats bottom right.
+  const headerListBtn = $('[data-list-count]')?.closest('button');
+  const listFab = headerListBtn?.cloneNode(true);
+  if (listFab) { listFab.className = 'list-btn list-fab'; document.body.append(listFab); }
+  const listBtns = [headerListBtn, listFab].filter(Boolean);
+  const drawer = document.createElement('dialog');
+  drawer.className = 'list-drawer';
+  drawer.setAttribute('aria-labelledby', 'list-title');
+  drawer.innerHTML = `
+    <div class="list-head"><h2 id="list-title">${t('Your list of openings', 'Twoja lista otworów')}</h2><button type="button" class="list-close" data-list-close>${t('Close', 'Zamknij')}</button></div>
+    <p class="list-status" data-list-status role="status"></p>
+    <div class="list-rows" data-list-rows></div>
+    <div class="list-actions">
+      <a class="btn" href="contact.html" data-list-send>${t('Send the list for a quote', 'Wyślij listę do wyceny')}</a>
+      <button type="button" class="btn btn-ghost" data-list-share>${t('Share a link to the list', 'Udostępnij link do listy')}</button>
+    </div>
+    <p class="note list-where">${t('Saved in this browser.', 'Lista jest zapisana w tej przeglądarce.')} <a href="portal.html#/new">${t('Have an account? Start a project from this list in the client portal.', 'Masz konto? Załóż z niej projekt w panelu klienta.')}</a></p>`;
+  document.body.append(drawer);
+  const listRows = $('[data-list-rows]', drawer), listStatus = $('[data-list-status]', drawer);
+  let listOpener = null;
+
+  const renderCount = () => {
+    const n = readList().length;
+    listBtns.forEach((b) => {
+      b.hidden = !n;
+      $('[data-list-count]', b).textContent = n;
+      b.setAttribute('aria-label', t(`Your list: ${countText(n)}`, `Twoja lista: ${countText(n)}`));
+    });
+  };
+  const renderList = () => {
+    const list = readList();
+    listRows.innerHTML = list.length ? list.map((o) => `
+      <div class="list-row" role="group" aria-label="${esc(o.ref)}">
+        <p class="list-row-name"><span class="op-ref">${esc(o.ref)}</span> ${esc(SYS_NAMES[o.system] || o.system)}</p>
+        ${o.note ? `<p class="list-row-note">${esc(o.note)}</p>` : ''}
+        <div class="list-row-fields">
+          <label><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" value="${+o.width_mm || ''}"></label>
+          <label><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" value="${+o.height_mm || ''}"></label>
+          <label class="list-qty"><span>${t('Qty', 'Szt.')}</span><input data-k="qty" type="number" inputmode="numeric" min="1" max="999" value="${+o.qty || 1}"></label>
+          <button type="button" class="linkish" data-list-remove aria-label="${t('Remove', 'Usuń')} ${esc(o.ref)}">${t('Remove', 'Usuń')}</button>
+        </div>
+      </div>`).join('')
+      : `<p class="list-empty">${t('Your list is empty. Add an opening with the sizing tool on a door page, or straight in the quote form.', 'Lista jest pusta. Dodaj otwór kalkulatorem na stronie drzwi albo od razu w formularzu wyceny.')}</p>`;
+    $$('.list-actions, .list-where', drawer).forEach((el) => { el.hidden = !list.length; });
+  };
+  const openList = (msg = '', opener = document.activeElement) => {
+    listOpener = opener;
+    renderList();
+    listStatus.textContent = msg;
+    if (!drawer.open) drawer.showModal();
+    $('[data-list-close]', drawer).focus();
+  };
+  const closeList = () => { drawer.close(); };
+  drawer.addEventListener('close', () => { listOpener?.focus?.(); });
+  // A click on the dimmed page beside the panel closes it.
+  drawer.addEventListener('click', (e) => { if (e.target === drawer) closeList(); });
+  $('[data-list-close]', drawer).addEventListener('click', closeList);
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-list-open]'); if (b) openList('', b); });
+  listRows.addEventListener('input', (e) => {
+    const row = e.target.closest('.list-row'); if (!row) return;
+    const list = readList(); const o = list[$$('.list-row', listRows).indexOf(row)]; if (!o) return;
+    const v = e.target.value === '' ? null : +e.target.value;
+    o[e.target.dataset.k] = e.target.dataset.k === 'qty' ? (v || 1) : v;
+    writeList(list, 'drawer');
+  });
+  listRows.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-list-remove]'); if (!rm) return;
+    const list = readList(); const i = $$('.list-row', listRows).indexOf(rm.closest('.list-row'));
+    const [gone] = list.splice(i, 1);
+    writeList(list, 'drawer'); renderList();
+    listStatus.textContent = t(`Removed ${gone.ref}.`, `Usunięto ${gone.ref}.`);
+    ($('.list-row input', listRows) || $('[data-list-close]', drawer)).focus();
+  });
+  $('[data-list-share]', drawer).addEventListener('click', async () => {
+    const url = new URL(`contact.html?list=${encodeList(readList())}`, location.href).href;
+    try {
+      if (navigator.share && matchMedia('(pointer:coarse)').matches) { await navigator.share({ title: t('List of openings', 'Lista otworów'), url }); return; }
+      await navigator.clipboard.writeText(url);
+      listStatus.textContent = t('Link copied. Whoever opens it gets this list in the quote form.', 'Link skopiowany. Kto go otworzy, dostanie tę listę w formularzu wyceny.');
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // share sheet closed
+      listStatus.innerHTML = `${t('Copy this link:', 'Skopiuj ten link:')} <input class="list-link" type="text" readonly value="${esc(url)}" aria-label="${t('Link to the list', 'Link do listy')}">`;
+      $('.list-link', listStatus).select();
+    }
+  });
+  addEventListener('bp-list', (e) => { renderCount(); if (drawer.open && e.detail.source !== 'drawer') renderList(); });
+  renderCount();
+
+  // Arriving from a shared link: add its openings, then drop the code from the address.
+  const sharedList = new URLSearchParams(location.search).get('list');
+  if (sharedList) {
+    const added = mergeIntoList(decodeList(sharedList));
+    const u = new URL(location.href); u.searchParams.delete('list'); history.replaceState(null, '', u);
+    if (added) openList(t(`We’ve added ${countText(added)} from the shared list.`, `Dodaliśmy z udostępnionej listy: ${countPl(added)}.`), null);
+  }
+
   /* ---------- quote form ---------- */
   const form = $('[data-quote-form]');
   if (form) {
@@ -364,18 +476,13 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
     if (topic && form.topic) form.topic.value = topic;
     if (!form.dataset.endpoint) { const note = $('[data-preview-note]', form); if (note) note.hidden = false; }
     /* Openings: one row per window or door, kept in the visitor's list (js/openings-list.js). */
-    const SYS_NAMES = PL
-      ? { 'lift-slide': 'Podnoszono-przesuwne', sliding: 'Przesuwne slim', bifold: 'Harmonijkowe', hinged: 'Balkonowe / wejściowe', windows: 'Okna', facades: 'Fasada słupowo-ryglowa', rooflights: 'Latarnia dachowa / świetlik' }
-      : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance door', windows: 'Windows', facades: 'Curtain walling', rooflights: 'Roof lantern / rooflight' };
     const MAT_NAMES = PL ? { '': 'Doradźcie', alu: 'Aluminium', timber: 'Drewno', pvc: 'PVC', alutimber: 'Drewno-aluminium' } : { '': 'Advise me', alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium' };
     const opBox = $('[data-openings-rows]', form);
     if (params.get('w') && params.get('h')) {
       // Arriving from a sizing tool: add that opening to the list once, with its layout and glass in the note.
       const sysKey = SYS_NAMES[params.get('system')] ? params.get('system') : 'lift-slide';
-      const cfg = SLIDERS[sysKey]?.configs[params.get('config')]; const gl = GLASS[params.get('glass')];
-      const glPl = { d: 'szyba podwójna', dl: 'szyba podwójna laminowana', t: 'szyba potrójna', tl: 'szyba potrójna laminowana' }[params.get('glass')];
-      const layout = PL ? (params.get('config') ? `układ ${params.get('config')}` : '') : cfg ? cfg.label : (sysKey === 'bifold' && params.get('config') ? `${params.get('config')} leaves` : '');
-      const o = { system: sysKey, width_mm: +params.get('w'), height_mm: +params.get('h'), config: params.get('config') || '', glazing: params.get('glass') || '', note: [layout, PL ? glPl : gl?.label].filter(Boolean).join(', ') };
+      const o = { system: sysKey, width_mm: +params.get('w'), height_mm: +params.get('h'), config: params.get('config') || '', glazing: params.get('glass') || '' };
+      o.note = openingNote(o);
       if (!readList().some((x) => x.system === o.system && x.width_mm === o.width_mm && x.height_mm === o.height_mm && (x.config || '') === o.config)) addToList(o);
     }
     // Each row is a group named by its reference, so "Width" or "Remove" says which opening it belongs to.
@@ -405,41 +512,51 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       // An empty list still shows one blank row; it is only saved once something is typed in it.
       const start = readList();
       const sys0 = SYS_NAMES[params.get('system')] ? params.get('system') : 'windows';
-      opRender(start.length ? start : [{ system: sys0, material: '', ref: nextRef([], sys0), qty: 1 }]);
-      opBox.addEventListener('input', () => writeList(opRead()));
+      const blank = () => [{ system: sys0, material: '', ref: nextRef([], sys0), qty: 1 }];
+      opRender(start.length ? start : blank());
+      opBox.addEventListener('input', () => writeList(opRead(), 'form'));
+      // Changed in the list panel or another tab: redraw the rows.
+      addEventListener('bp-list', (e) => { if (e.detail.source !== 'form') { const l = readList(); opRender(l.length ? l : blank()); } });
       opBox.addEventListener('change', (e) => {
         // A new product type gets a matching reference (W for windows, D for doors) if it still has the default one.
         if (e.target.dataset.k !== 'system') return;
         const list = opRead(); const row = e.target.closest('[data-op]'); const i = $$('[data-op]', opBox).indexOf(row);
         list[i].ref = nextRef(list.filter((_, j) => j !== i), list[i].system); list[i].config = ''; list[i].glazing = '';
-        writeList(list); opRender(list);
+        writeList(list, 'form'); opRender(list);
       });
       opBox.addEventListener('click', (e) => {
         const rm = e.target.closest('[data-op-remove]'); if (!rm) return;
         const list = opRead(); list.splice($$('[data-op]', opBox).indexOf(rm.closest('[data-op]')), 1);
-        writeList(list); opRender(list);
+        writeList(list, 'form'); opRender(list);
         $('[data-openings-add]', form).focus();
       });
       $('[data-openings-add]', form).addEventListener('click', () => {
         const list = opRead(); const last = list[list.length - 1];
         const sys = last?.system || params.get('system') || 'windows';
         list.push({ system: SYS_NAMES[sys] ? sys : 'windows', material: last?.material || '', ref: nextRef(list, SYS_NAMES[sys] ? sys : 'windows'), qty: 1 });
-        writeList(list); opRender(list);
+        writeList(list, 'form'); opRender(list);
         $('[data-op]:last-child [data-k="width_mm"]', opBox).focus();
       });
     }
     const openingsValid = () => opRead().every((o) => (o.width_mm == null || (o.width_mm >= 300 && o.width_mm <= 30000)) && (o.height_mm == null || (o.height_mm >= 300 && o.height_mm <= 6000)))
       || t('Check the sizes: width 300–30,000 mm, height 300–6,000 mm. Leave a size blank if you don’t know it yet.', 'Sprawdź wymiary: szerokość 300–30 000 mm, wysokość 300–6000 mm. Zostaw pole puste, jeśli jeszcze nie znasz wymiaru.');
 
-    // Restore an unsent draft (text fields only).
+    // Restore an unsent draft: text, and the choices (who you are, products, material) unless the link already set them.
+    // Consent is never restored: it has to be given again each time.
+    const choiceGroups = () => [...new Set($$('input[type=radio][name],input[type=checkbox][name]:not([name="consent"])', form).map((el) => el.name))];
     try {
       const d = JSON.parse(localStorage.getItem(DRAFT) || '{}');
-      Object.entries(d).forEach(([k, v]) => { const el = form.elements[k]; if (el && 'value' in el && !el.value && el.type !== 'file' && el.type !== 'radio' && el.type !== 'checkbox') el.value = v; });
+      Object.entries(d).forEach(([k, v]) => {
+        const group = $$(`input[name="${CSS.escape(k)}"]`, form).filter((el) => el.type === 'radio' || el.type === 'checkbox');
+        if (group.length) { if (k !== 'consent' && !group.some((el) => el.checked)) group.forEach((el) => { el.checked = [].concat(v).includes(el.value); }); return; }
+        const el = form.elements[k]; if (el && 'value' in el && !el.value && el.type !== 'file') el.value = v;
+      });
     } catch { /* storage unavailable */ }
     form.addEventListener('input', () => {
       try {
         const d = {};
         $$('input[type=text],input[type=email],input[type=tel],textarea,select', form).forEach((el) => { if (el.name) d[el.name] = el.value; });
+        choiceGroups().forEach((n) => { const on = $$(`input[name="${CSS.escape(n)}"]:checked`, form).map((el) => el.value); if (on.length) d[n] = on; });
         localStorage.setItem(DRAFT, JSON.stringify(d));
       } catch { /* ignore */ }
     });
@@ -642,7 +759,16 @@ import { readList, writeList, addToList, clearList, nextRef } from './openings-l
       q.set('material', r.mat);
       $('[data-out-link]', out).href = `contact.html?${q}`;
     };
-    adv.addEventListener('change', update);
+    // The last answers come back on the next visit.
+    const ADV = 'bp-advisor';
+    try {
+      const saved = JSON.parse(localStorage.getItem(ADV) || '{}');
+      Object.entries(saved).forEach(([n, v]) => { const r = $(`form input[name="${CSS.escape(n)}"][value="${CSS.escape(v)}"]`, adv); if (r) r.checked = true; });
+    } catch { /* storage unavailable */ }
+    adv.addEventListener('change', () => {
+      update();
+      try { localStorage.setItem(ADV, JSON.stringify(Object.fromEntries($$('form input[type=radio]:checked', adv).map((r) => [r.name, r.value])))); } catch { /* ignore */ }
+    });
     update();
   }
 })();

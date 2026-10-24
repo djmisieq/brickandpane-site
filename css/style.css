@@ -468,6 +468,45 @@ fieldset{border:0;padding:0;min-width:0}
 .dot-you{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);vertical-align:middle}
 .progress{height:3px;background:var(--line);margin-block:var(--s-s)}
 .progress span{display:block;height:100%;background:var(--ink)}
+/* ---------- the visitor's list of openings: header button and side panel ---------- */
+.list-btn{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;padding:.4rem .7rem;background:none;border:1px solid var(--line-strong);color:var(--ink);font:inherit;font-size:var(--step--1);font-weight:500;cursor:pointer}
+.list-btn[hidden]{display:none}
+.list-btn:hover{border-color:var(--ink)}
+.list-btn svg{width:18px;height:18px;flex:none}
+.list-count{min-width:1.5em;padding:0 .35em;background:var(--accent);color:#fff;font-size:var(--step--2);line-height:1.5;text-align:center;border-radius:999px}
+@media (max-width:1099px){.list-btn{margin-left:auto}.list-btn+.header-cta{margin-left:0}}
+.list-fab{display:none}
+@media (min-width:1100px){
+  .site-header .list-btn{display:none}
+  .list-fab:not([hidden]){display:inline-flex;position:fixed;right:var(--s-l);bottom:var(--s-l);z-index:45;min-height:48px;padding:.6rem 1rem;background:var(--ink);color:var(--bg);border-color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+  .list-fab:hover{background:#000}
+}
+body.app .list-btn{display:none}
+@media (max-width:479px){.list-btn-label{display:none}.brand-word{white-space:nowrap}}
+/* Smallest phones: the hamburger icon alone, so the logo, the list and the menu fit one row */
+@media (max-width:359px){.menu-toggle-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.menu-toggle{padding-inline:.7rem}.header-inner{gap:var(--s-s)}}
+.list-drawer{position:fixed;inset:0 0 0 auto;width:min(460px,100vw);height:100%;max-height:none;max-width:none;margin:0;padding:var(--s-l) var(--s-l) var(--s-xl);border:0;border-left:1px solid var(--line);background:var(--bg);color:var(--ink);overflow-y:auto}
+.list-drawer::backdrop{background:rgba(20,18,15,.45)}
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-m)}
+.list-head h2{font-size:var(--step-2);margin:0}
+.list-close{min-height:44px;padding:.4rem .8rem;background:none;border:1px solid var(--ink);color:var(--ink);font:inherit;font-size:var(--step--1);cursor:pointer}
+.list-status{margin:var(--s-s) 0 0;font-size:var(--step--1);color:var(--ink-2)}
+.list-status:empty{display:none}
+.list-link{width:100%;margin-top:.4rem;font:inherit;font-size:var(--step--2);padding:.5rem;border:1px solid var(--line-strong);background:var(--surface)}
+.list-rows{margin-top:var(--s-m)}
+.list-row{padding:var(--s-s) 0;border-top:1px solid var(--line)}
+.list-row:last-child{border-bottom:1px solid var(--line)}
+.list-row-name{margin:0;font-weight:600}
+.list-row-note{margin:.15rem 0 0;font-size:var(--step--1);color:var(--muted)}
+.list-row-fields{display:grid;grid-template-columns:1fr 1fr 4.5rem auto;align-items:end;gap:.5rem;margin-top:.5rem}
+.list-row-fields label{display:grid;gap:.2rem;font-size:var(--step--2);color:var(--ink-2)}
+.list-row-fields input{width:100%;min-height:44px;padding:.4rem .5rem;font:inherit;font-size:var(--step-0);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink)}
+.list-row-fields .linkish{min-height:44px}
+.list-empty{margin-top:var(--s-m);color:var(--ink-2)}
+.list-actions{display:grid;gap:var(--s-s);margin-top:var(--s-l)}
+.list-actions .btn{justify-content:center}
+.list-where{margin-top:var(--s-m)}
+.list-actions[hidden],.list-where[hidden]{display:none}
 .toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-20px);background:var(--ink);color:#fff;padding:.8rem 1.1rem;font-size:var(--step--1);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-2);z-index:100;max-width:90vw}
 .toast.is-on{opacity:1;transform:translate(-50%,0)}
 
