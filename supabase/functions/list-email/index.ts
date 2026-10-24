@@ -27,7 +27,27 @@ const MATERIALS: Record<string, Record<string, string>> = {
   pl: { alu: 'aluminium', timber: 'drewno', pvc: 'PVC', alutimber: 'drewno-aluminium' },
 };
 
-type Opening = { ref: string; system: string; material: string; width_mm: number | null; height_mm: number | null; qty: number; config: string; glazing: string };
+// Layouts in words, a copy of js/layouts.js: the email never shows codes like '4C' or '4+1'.
+const SLIDE: Record<string, [string, string]> = {
+  '2A': ['2 panels, one slides', '2 skrzydła, jedno przesuwne'], '2B': ['2 panels, both slide', '2 skrzydła, oba przesuwne'],
+  '3T': ['3 panels, opening to one side', '3 skrzydła, otwierane na jedną stronę'],
+  '4C': ['4 panels, opening from the centre', '4 skrzydła, otwierane od środka'], '6C': ['6 panels, opening from the centre', '6 skrzydeł, otwierane od środka'],
+};
+const HINGED: Record<string, [string, string]> = { S: ['Single door', 'Drzwi jednoskrzydłowe'], D: ['Double (French) door', 'Drzwi dwuskrzydłowe'] };
+const leaves = (n: number, pl: boolean) => (pl ? `${n} ${n >= 2 && n <= 4 ? 'skrzydła' : 'skrzydeł'}` : `${n} leaves`);
+const layoutName = (system: string, config: string, pl: boolean) => {
+  if (system === 'bifold') {
+    const m = /^(\d)\+(\d)$/.exec(config);
+    if (!m) return '';
+    const [a, b] = [+m[1], +m[2]];
+    if (!b) return pl ? `${leaves(a, true)}, wszystkie w lewo` : `${leaves(a, false)}, all fold left`;
+    return pl ? `${leaves(a + b, true)}: ${a} w lewo, ${b} w prawo` : `${leaves(a + b, false)}: ${a} fold left, ${b} right`;
+  }
+  const row = system === 'hinged' ? HINGED[config] : ['lift-slide', 'sliding'].includes(system) ? SLIDE[config] : undefined;
+  return row ? row[pl ? 1 : 0] : '';
+};
+
+type Opening ={ ref: string; system: string; material: string; width_mm: number | null; height_mm: number | null; qty: number; config: string; glazing: string };
 const b64urlDecode = (s: string) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)));
 const b64urlEncode = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -94,7 +114,7 @@ Deno.serve(async (req) => {
   const link = `${SITE}${pl ? '/pl' : ''}/contact.html?list=${encode(list)}`;
   const cell = 'padding:6px 12px 6px 0;border-bottom:1px solid #e4e0d8;vertical-align:top';
   const rows = list.map((o) => {
-    const detail = [o.config ? (pl ? `układ ${o.config}` : `layout ${o.config}`) : '', GLASS[lang][o.glazing] ?? '', MATERIALS[lang][o.material] ?? ''].filter(Boolean).join(', ');
+    const detail = [layoutName(o.system, o.config, pl),GLASS[lang][o.glazing] ?? '', MATERIALS[lang][o.material] ?? ''].filter(Boolean).join(', ');
     return `<tr><td style="${cell};color:#6f6a62">${o.ref}</td><td style="${cell}">${NAMES[lang][o.system]}${detail ? `<br><span style="color:#6f6a62;font-size:13px">${detail}</span>` : ''}</td>
       <td style="${cell};white-space:nowrap">${o.width_mm ?? '?'} × ${o.height_mm ?? '?'} mm</td><td style="${cell};white-space:nowrap">× ${o.qty}</td></tr>`;
   }).join('');

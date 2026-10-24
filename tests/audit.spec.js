@@ -43,7 +43,23 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   // 24.10: product pages carry typical ranges only (no security or weather classes), certified values come with the quote.
   /published, not promised/i, /publikujemy, a nie obiecujemy/i, /data sheet is published/i, /po publikacji karty/i,
   /W toku/, /\bIn progress\b/, /\bPlanowane\b/, /\bPlanned\b/, /status openly/i, /status pokazujemy/i,
-  /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i];
+  /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i,
+  // Certified values per project and change notices in writing are not confirmed (24.10.2026): values come with the quotation.
+  /(issue|give|gives) (you )?the certified/i, /certified values go/i, /certyfikowan\w* (wartoś|U\b)/i, /wartoś\w* certyfikowan/i, /silent substitution/i, /cichych zamiennik/i,
+  /in writing and show/i, /na piśmie i pokaż/i, /as each system is certified/i, /po certyfikacji/i];
+
+// Our own short codes for door layouts mean nothing to a visitor (24.10.2026): layouts are named in words (js/layouts.js).
+const CODES = [/\b(LS|SL|BF)[- ](\d|CNR|PKT)/, /\b[2-7]\+[0-7]\b/, /\bukład [2-6][ABCT]\b/i, /\blayout [2-6][ABCT]\b/i];
+
+test('pages name door layouts in words, not codes', async ({ page }) => {
+  test.setTimeout(120_000);
+  for (const url of URLS) {
+    await page.goto(url);
+    // textContent, not innerText: the options of a closed <select> count too.
+    const text = await page.evaluate(() => { const b = document.body.cloneNode(true); b.querySelectorAll('script,style').forEach((s) => s.remove()); return b.textContent; });
+    for (const re of CODES) expect(text, `${url} contains ${re}`).not.toMatch(re);
+  }
+});
 
 test('content makes no promise the company has not confirmed', async ({ page }) => {
   test.setTimeout(120_000); // every page in both languages

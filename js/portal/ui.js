@@ -4,7 +4,8 @@ import {
   STAGES, PHASES, DOC_KINDS, SYSTEMS, MATERIALS, stage, stageIndex, stageLabel, stageText, tracker, esc, fmtDate, fmtDay, ago, fmtSize,
   stageBadge, courtLabel, estimatePanel, $, $$, toast, MEMBER_ROLES, decisionRights, decisionLabels, CHANGE_STATUS, fmtGBP, incVat,
 } from './core.js';
-import { tr } from './i18n.js';
+import { tr, LANG } from './i18n.js';
+import { layoutName } from '../layouts.js';
 
 const ADMIN = 'admin.html';
 
@@ -134,7 +135,7 @@ export function overviewPanel(d, viewer = 'client', audience = 'trade', user = n
       <div class="span-8">
         <h3 class="panel-h">${tr('Openings')}</h3>
         ${d.openings.length ? `<table class="spec spec-compact"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('System')}</th><th scope="col">${tr('W × H (mm)')}</th><th scope="col">${tr('Layout')}</th><th scope="col">${tr('Qty')}</th><th scope="col">${tr('Panel weight')}</th></tr></thead><tbody>
-          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(tr(SYSTEMS[o.system] || o.system))}${o.material && MATERIALS[o.material] ? ` · ${esc(tr(MATERIALS[o.material]))}` : ''}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ` <span class="tag tag-accent">${tr('check')}</span>` : ''}` : '—'}</td></tr>${o.notes ? `<tr class="sub"><td colspan="6">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
+          ${d.openings.map((o) => { const e = estimatePanel(o); return `<tr><th scope="row">${esc(o.ref)}</th><td>${esc(tr(SYSTEMS[o.system] || o.system))}${o.material && MATERIALS[o.material] ? ` · ${esc(tr(MATERIALS[o.material]))}` : ''}</td><td>${esc(o.width_mm)} × ${esc(o.height_mm)}</td><td>${esc(layoutName(o.system, o.config, LANG === 'pl') || o.config || '—')}</td><td>${esc(o.qty)}</td><td>${e ? `${e.kg} kg${e.over ? ` <span class="tag tag-accent">${tr('check')}</span>` : ''}` : '—'}</td></tr>${o.notes ? `<tr class="sub"><td colspan="6">${esc(o.notes)}</td></tr>` : ''}`; }).join('')}
         </tbody></table>` : `<p class="note">${tr('No openings listed yet.')}</p>`}
         ${p.brief ? `<h3 class="panel-h">${tr('Brief')}</h3><p class="measure">${esc(p.brief)}</p>` : ''}
         ${payments.length ? `
