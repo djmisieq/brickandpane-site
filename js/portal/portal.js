@@ -2,8 +2,9 @@
 import { store } from './store.js';
 import { SYSTEMS, MATERIALS, stage, esc, fmtDay, ago, stageBadge, stageText, courtLabel, progressBar, tracker, audienceOf, estimatePanel, $, $$, toast } from './core.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
-import { tr } from './i18n.js';
+import { tr, LANG } from './i18n.js';
 import { readList, clearList } from '../openings-list.js';
+import { layoutName } from '../layouts.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -119,9 +120,10 @@ async function detail(id) {
 }
 
 const LAYOUTS = {
-  'lift-slide': [['2A', '2 panels, 1 sliding'], ['3T', '3 panels, 3 tracks'], ['4C', '4 panels, centre'], ['6C', '6 panels, centre']],
-  sliding: [['2A', '2 panels, 1 sliding'], ['2B', '2 panels, both sliding'], ['3T', '3 panels, 3 tracks'], ['4C', '4 panels, centre']],
-  bifold: ['3+0', '4+0', '2+2', '5+0', '4+1', '3+2', '6+0', '3+3', '7+0', '4+3'].map((l) => [l, `${l} ${tr('leaves')}`]),
+  // Names in words (js/layouts.js); the codes stay as values and in the CSV import.
+  'lift-slide': ['2A', '3T', '4C', '6C'].map((c) => [c, layoutName('lift-slide', c, LANG === 'pl')]),
+  sliding: ['2A', '2B', '3T', '4C'].map((c) => [c, layoutName('sliding', c, LANG === 'pl')]),
+  bifold: ['3+0', '4+0', '2+2', '5+0', '4+1', '3+2', '6+0', '3+3', '7+0', '4+3'].map((c) => [c, layoutName('bifold', c, LANG === 'pl')]),
   hinged: [['S', 'Single door'], ['D', 'Double (French) door']],
   windows: [['', 'Not needed']],
   facades: [['', 'Not needed']],

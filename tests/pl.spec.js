@@ -57,11 +57,11 @@ test('Polish sizing tool speaks Polish and hands off to the Polish form', async 
   await page.fill('#t-w', '9000');
   await page.selectOption('#t-c', '2A');
   await expect(page.locator('[data-messages]')).toContainText('400 kg');
-  await expect(page.locator('[data-messages]')).not.toContainText('beyond the');
+  await expect(page.locator('[data-messages]')).not.toContainText('more than the');
   await page.locator('[data-tool-quote]').click();
   await expect(page).toHaveURL(/\/pl\/contact\.html\?system=lift-slide/);
   await expect(page.locator('[data-op] [data-k="width_mm"]').first()).toHaveValue('9000');
-  await expect(page.locator('[data-op] [data-k="note"]').first()).toHaveValue(/układ 2A/);
+  await expect(page.locator('[data-op] [data-k="note"]').first()).toHaveValue(/2 skrzydła, jedno przesuwne/);
   await expect(page.locator('[data-op] [data-k="system"] option:checked').first()).toHaveText('Podnoszono-przesuwne');
 });
 

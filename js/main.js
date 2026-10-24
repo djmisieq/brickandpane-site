@@ -3,6 +3,7 @@ import { readList, writeList, addToList, clearList, nextRef, encodeList, decodeL
 import { hasSession, startAccountList } from './account-list.js';
 import { SUPABASE_URL } from './portal/config.js';
 import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
+import { layoutName } from './layouts.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -131,17 +132,17 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
   /* ---------- sizing tools (lift & slide, slim sliding, bi-fold) ---------- */
   // Indicative envelopes for each system class. Update from the certified system data sheets.
   const GLASS = { // total glass thickness in mm; glass weighs ~2.5 kg per m² per mm
-    d: { t: 12, label: 'Double, 6 / 20 / 6 toughened' },
-    dl: { t: 14.8, label: 'Double, 8.8 laminated / 18 / 6 toughened' },
-    t: { t: 16, label: 'Triple, 6 / 14 / 4 / 14 / 6' },
-    tl: { t: 18.8, label: 'Triple, 8.8 laminated / 14 / 4 / 14 / 6' },
+    d: { t: 12, label: 'Double glazed' },
+    dl: { t: 14.8, label: 'Double, laminated' },
+    t: { t: 16, label: 'Triple glazed' },
+    tl: { t: 18.8, label: 'Triple, laminated' },
   };
   // dirs: sliding panels and the direction they open (-1 left, 1 right).
   const SLIDERS = {
     'lift-slide': {
       limits: { panelKg: 400, heavyKg: 300, sashH: 3200, sashHMax: 3500, sashW: 3300, sashWMin: 700, handKg: 150, liftKg: 250 },
-      okText: t('Panel weight is inside the standard 300 kg hardware class (heavy-duty goes to 400 kg).', 'Waga skrzydła mieści się w standardowej klasie okuć 300 kg (wzmocnione do 400 kg).'),
-      heavyText: t('Heavy-duty roller carriages needed (300–400 kg class). Fine for the system, but it affects the track and the floor detail.', 'Potrzebne wzmocnione wózki jezdne (klasa 300–400 kg). System to obsłuży, ale ma to wpływ na tor i detal posadzki.'),
+      okText: t('Panel weight is fine: standard rollers carry up to 300 kg, heavy-duty ones 400 kg.', 'Waga skrzydła w porządku: standardowe rolki uniosą do 300 kg, wzmocnione do 400 kg.'),
+      heavyText: t('Heavy panels (300–400 kg): they need heavy-duty rollers. The doors can take it, but it changes the track and how the floor is finished at the door.', 'Ciężkie skrzydła (300–400 kg): potrzebne są wzmocnione rolki. Drzwi to udźwigną, ale zmienia to szynę i wykończenie podłogi przy drzwiach.'),
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
         '3T': { panels: 3, dirs: { 1: -1, 2: -1 }, open: 2 / 3, label: '3 panels on 3 tracks — 2 sliding' },
@@ -151,8 +152,8 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
     },
     sliding: {
       limits: { panelKg: 250, heavyKg: 200, sashH: 3000, sashHMax: 3200, sashW: 2800, sashWMin: 600, handKg: 150, liftKg: 220 },
-      okText: t('Panel weight is well inside the 250 kg inline hardware range.', 'Waga skrzydła mieści się z zapasem w zakresie okuć 250 kg.'),
-      heavyText: t('Upper end of the 250 kg inline hardware range (over 200 kg). If panels grow, lift & slide hardware is the safer choice.', 'Górna granica zakresu okuć 250 kg (ponad 200 kg). Jeśli skrzydła urosną, bezpieczniejsze będą okucia podnoszono-przesuwne.'),
+      okText: t('Panel weight is fine: the rollers of these doors carry up to 250 kg.', 'Waga skrzydła w porządku: rolki tych drzwi uniosą do 250 kg.'),
+      heavyText: t('Close to the 250 kg these doors can carry (over 200 kg). If the panels get bigger, lift & slide doors are the safer choice.', 'Blisko granicy 250 kg, którą udźwigną te drzwi (ponad 200 kg). Jeśli skrzydła będą większe, bezpieczniejsze będą drzwi podnoszono-przesuwne.'),
       configs: {
         '2A': { panels: 2, dirs: { 1: -1 }, open: 1 / 2, label: '2 panels — 1 sliding, 1 fixed' },
         '2B': { panels: 2, dirs: { 0: 1, 1: -1 }, open: 1 / 2, label: '2 panels — both sliding' },
@@ -212,7 +213,7 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
     [door(left, 'L'), door(right, 'R')].filter((i) => i >= 0 && n > 0).forEach((i) => {
       g += `<text class="dim" x="${x0 + i * lw + lw / 2}" y="${y0 + h - 14}" text-anchor="middle">${t('door', 'drzwi')}</text>`;
     });
-    g += `<text class="dim" x="${x0 + w / 2}" y="${y0 + h + 16}" text-anchor="middle">${fmt(W)} mm · ${left}+${right}</text>`;
+    g += `<text class="dim" x="${x0 + w / 2}" y="${y0 + h + 16}" text-anchor="middle">${fmt(W)} mm</text>`;
     svg.setAttribute('viewBox', `0 0 ${vbW} ${y0 + h + 24}`);
     svg.innerHTML = g;
   };
@@ -279,13 +280,13 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
       out('clear', `${fmt(Math.round((W * cfg.open - 100) / 10) * 10)} mm`);
       out('area', `${fmt(totalM2, 1)} m²`);
       const msgs = [];
-      if (kg > L.panelKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per panel this is beyond the ${L.panelKg} kg hardware class. Add a panel, reduce the height${system === 'sliding' ? ', or consider lift &amp; slide' : ''}.`, `Przy ok. ${fmt(kg)} kg na skrzydło przekraczasz klasę okuć ${L.panelKg} kg. Dodaj skrzydło, zmniejsz wysokość${system === 'sliding' ? ' albo rozważ drzwi podnoszono-przesuwne' : ''}.`)]);
+      if (kg > L.panelKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per panel this is more than the rollers of these doors can carry (${L.panelKg} kg). Add a panel, reduce the height${system === 'sliding' ? ', or consider lift &amp; slide' : ''}.`, `Przy ok. ${fmt(kg)} kg na skrzydło to więcej, niż udźwigną rolki tych drzwi (${L.panelKg} kg). Dodaj skrzydło, zmniejsz wysokość${system === 'sliding' ? ' albo rozważ drzwi podnoszono-przesuwne' : ''}.`)]);
       else if (kg > L.heavyKg) msgs.push(['warn', def.heavyText]);
       else msgs.push(['ok', def.okText]);
-      if (sashW > L.sashW) msgs.push(['stop', t(`Each panel would be about ${fmt(sashW)} mm wide, over the ${fmt(L.sashW)} mm limit. Choose a configuration with more panels.`, `Każde skrzydło miałoby ok. ${fmt(sashW)} mm szerokości, ponad limit ${fmt(L.sashW)} mm. Wybierz konfigurację z większą liczbą skrzydeł.`)]);
-      if (sashW < L.sashWMin) msgs.push(['warn', t(`Panels under ~${fmt(L.sashWMin)} mm wide waste the slim interlock. Fewer panels will look better and cost less.`, `Skrzydła węższe niż ok. ${fmt(L.sashWMin)} mm marnują zaletę smukłego styku. Mniej skrzydeł będzie wyglądać lepiej i kosztować mniej.`)]);
-      if (sashH > L.sashHMax) msgs.push(['stop', t(`A ${fmt(sashH)} mm panel height is outside the system range. Talk to us about a transom or a different system.`, `Wysokość skrzydła ${fmt(sashH)} mm wykracza poza zakres systemu. Porozmawiaj z nami o naświetlu albo innym systemie.`)]);
-      else if (sashH > L.sashH) msgs.push(['warn', t(`Panel height over ${fmt(L.sashH)} mm needs an engineering check (deflection, glass and handling).`, `Skrzydło wyższe niż ${fmt(L.sashH)} mm wymaga sprawdzenia technicznego (ugięcie, szkło i transport).`)]);
+      if (sashW > L.sashW) msgs.push(['stop', t(`Each panel would be about ${fmt(sashW)} mm wide, over the ${fmt(L.sashW)} mm limit. Choose a layout with more panels.`, `Każde skrzydło miałoby ok. ${fmt(sashW)} mm szerokości, ponad limit ${fmt(L.sashW)} mm. Wybierz układ z większą liczbą skrzydeł.`)]);
+      if (sashW < L.sashWMin) msgs.push(['warn', t(`Panels under ~${fmt(L.sashWMin)} mm wide just add frames. Fewer panels will look better and cost less.`, `Skrzydła węższe niż ok. ${fmt(L.sashWMin)} mm to tylko więcej ram. Mniej skrzydeł będzie wyglądać lepiej i kosztować mniej.`)]);
+      if (sashH > L.sashHMax) msgs.push(['stop', t(`A ${fmt(sashH)} mm panel height is outside the system range. Talk to us about a fixed glass panel above the doors or a different system.`, `Wysokość skrzydła ${fmt(sashH)} mm wykracza poza zakres systemu. Porozmawiaj z nami o stałej szybie nad drzwiami albo innym systemie.`)]);
+      else if (sashH > L.sashH) msgs.push(['warn', t(`Panel height over ${fmt(L.sashH)} mm needs an extra technical check (the beam above, the glass, getting it into the house).`, `Skrzydło wyższe niż ${fmt(L.sashH)} mm wymaga dodatkowego sprawdzenia (belka nad otworem, szkło, wniesienie do domu).`)]);
       if (kg > L.liftKg) msgs.push(['warn', t('Handling: plan for a glazing robot or a crane. On a London terrace with no rear access, that can mean a road licence or parking suspension from the borough, so build it into the programme.', 'Transport: zaplanuj robota do szkła albo dźwig. W londyńskim szeregowcu bez dojazdu od tyłu może to oznaczać pozwolenie na zajęcie drogi lub zawieszenie miejsc parkingowych z urzędu dzielnicy, więc uwzględnij to w harmonogramie.')]);
       else if (kg > L.handKg) msgs.push(['warn', t('Handling: too heavy to carry by hand safely. We plan a vacuum lifter and check the route from the kerb to the opening at survey.', 'Transport: za ciężkie, żeby bezpiecznie przenieść ręcznie. Przy pomiarze planujemy przyssawkę próżniową i sprawdzamy trasę od krawężnika do otworu.')]);
       msgs.push(partL(totalM2, +f.floor.value));
@@ -310,18 +311,18 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
       out('clear', `${fmt(Math.round(clear / 10) * 10)} mm`);
       out('stack', `${fmt(Math.round(leafW / 10) * 10)} mm`);
       const msgs = [];
-      if (kg > B.leafKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per leaf this is beyond the ${B.leafKg} kg bi-fold hardware range. Add leaves or consider a slider.`, `Przy ok. ${fmt(kg)} kg na skrzydło przekraczasz zakres okuć harmonijkowych ${B.leafKg} kg. Dodaj skrzydła albo rozważ drzwi przesuwne.`)]);
-      else if (kg > B.warnKg) msgs.push(['warn', t('Heavy leaves (80–100 kg): fine for the hardware, but the head must be stiff. Get your engineer to design to the system deflection limit.', 'Ciężkie skrzydła (80–100 kg): okucia to obsłużą, ale nadproże musi być sztywne. Niech konstruktor zaprojektuje je według limitu ugięcia systemu.')]);
-      else msgs.push(['ok', t(`Leaf weight is comfortably inside the hardware range (up to ${B.warnKg} kg).`, `Waga skrzydła mieści się z zapasem w zakresie okuć (do ${B.warnKg} kg).`)]);
+      if (kg > B.leafKg) msgs.push(['stop', t(`At about ${fmt(kg)} kg per leaf this is more than bi-fold hinges carry (${B.leafKg} kg). Add leaves or consider a slider.`, `Przy ok. ${fmt(kg)} kg na skrzydło to więcej, niż udźwigną zawiasy drzwi harmonijkowych (${B.leafKg} kg). Dodaj skrzydła albo rozważ drzwi przesuwne.`)]);
+      else if (kg > B.warnKg) msgs.push(['warn', t('Heavy leaves (80–100 kg): the doors can take it, but the beam above the opening must be stiff. Your structural engineer designs it to the limit the door maker gives.', 'Ciężkie skrzydła (80–100 kg): drzwi to udźwigną, ale belka nad otworem musi być sztywna. Konstruktor projektuje ją według limitu podanego przez producenta drzwi.')]);
+      else msgs.push(['ok', t(`Leaf weight is fine (comfortable up to ${B.warnKg} kg).`, `Waga skrzydła w porządku (bez problemu do ${B.warnKg} kg).`)]);
       if (leafW > B.leafW) msgs.push(['stop', t(`Each leaf would be about ${fmt(leafW)} mm wide, over the ${fmt(B.leafW)} mm limit. Choose a layout with more leaves.`, `Każde skrzydło miałoby ok. ${fmt(leafW)} mm szerokości, ponad limit ${fmt(B.leafW)} mm. Wybierz układ z większą liczbą skrzydeł.`)]);
       if (leafW < B.leafWMin) msgs.push(['warn', t('Leaves under ~500 mm wide look busy and add frames. Choose fewer leaves.', 'Skrzydła węższe niż ok. 500 mm wyglądają na zatłoczone i dodają ram. Wybierz mniej skrzydeł.')]);
       if (leafH > B.leafHMax) msgs.push(['stop', t(`A ${fmt(leafH)} mm leaf height is outside the bi-fold range. Consider a slider for this opening.`, `Wysokość skrzydła ${fmt(leafH)} mm wykracza poza zakres drzwi harmonijkowych. Rozważ drzwi przesuwne.`)]);
-      else if (leafH > B.leafH) msgs.push(['warn', t('Tall leaves (over 2.6 m) need stiffer profiles and careful head detailing. We confirm at Stage 3.', 'Wysokie skrzydła (ponad 2,6 m) wymagają sztywniejszych profili i starannego detalu nadproża. Potwierdzimy to na etapie koncepcji.')]);
+      else if (leafH > B.leafH) msgs.push(['warn', t('Tall leaves (over 2.6 m) need stiffer frames and a carefully designed top detail. We check it on your drawings.', 'Wysokie skrzydła (ponad 2,6 m) wymagają sztywniejszych ram i starannie zaprojektowanej góry otworu. Sprawdzamy to na rysunkach.')]);
       const doors = (left % 2) + (right % 2);
       msgs.push([doors ? 'ok' : 'warn', doors
-        ? t(`This layout has ${doors === 2 ? 'two traffic doors' : 'a traffic door'}, so you can go in and out without folding the whole set.`, `Ten układ ma ${doors === 2 ? 'dwoje drzwi przechodnich' : 'drzwi przechodnie'}, więc wychodzisz bez składania całości.`)
-        : t('No traffic door: an even number of leaves on each side means folding the set every time you go out. Consider an odd leaf on one side.', 'Brak drzwi przechodnich: parzysta liczba skrzydeł po każdej stronie oznacza składanie całości przy każdym wyjściu. Rozważ nieparzystą liczbę po jednej stronie.')]);
-      msgs.push(['ok', t(`When folded, the stack projects about ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'into the room' : 'into the garden'}. Keep it clear of steps, furniture and planting.`, `Po złożeniu pakiet wystaje na ok. ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'do pomieszczenia' : 'do ogrodu'}. Zostaw tam wolne miejsce, bez schodów, mebli i roślin.`)]);
+        ? t(`This layout has ${doors === 2 ? 'a door on each side' : 'a door'} that opens on its own, so you can go in and out without folding the whole set.`, `Ten układ ma ${doors === 2 ? 'dwoje drzwi przechodnich' : 'drzwi przechodnie'}, więc wychodzisz bez składania całości.`)
+        : t('No door that opens on its own: with an even number of leaves on each side you fold the set every time you go out. Choose an odd number on one side.', 'Brak drzwi przechodnich: parzysta liczba skrzydeł po każdej stronie oznacza składanie całości przy każdym wyjściu. Rozważ nieparzystą liczbę po jednej stronie.')]);
+      msgs.push(['ok', t(`When folded, the leaves stick out about ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'into the room' : 'into the garden'}. Keep it clear of steps, furniture and planting.`, `Po złożeniu skrzydła wystają na ok. ${fmt(Math.round(leafW / 10) * 10)} mm ${f.swing?.value === 'in' ? 'do pomieszczenia' : 'do ogrodu'}. Zostaw tam wolne miejsce, bez schodów, mebli i roślin.`)]);
       msgs.push(partL(totalM2, +f.floor.value));
       show(msgs);
       drawBifold($('[data-elevation]', tool), left, right, W, H);
@@ -353,10 +354,9 @@ import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
     ? { 'lift-slide': 'Podnoszono-przesuwne', sliding: 'Przesuwne slim', bifold: 'Harmonijkowe', hinged: 'Balkonowe / wejściowe', windows: 'Okna', facades: 'Fasada słupowo-ryglowa', rooflights: 'Latarnia dachowa / świetlik' }
     : { 'lift-slide': 'Lift & slide', sliding: 'Slim sliding', bifold: 'Bi-fold', hinged: 'French / entrance door', windows: 'Windows', facades: 'Curtain walling', rooflights: 'Roof lantern / rooflight' };
   const GLASS_PL = { d: 'szyba podwójna', dl: 'szyba podwójna laminowana', t: 'szyba potrójna', tl: 'szyba potrójna laminowana' };
-  // "4 panels — centre opening, Triple, 6 / 14 / 4 / 14 / 6": layout and glass from a sizing tool, as the note on a row.
+  // "4 panels, opening from the centre, Triple glazed": layout and glass from a sizing tool, as the note on a row.
   const openingNote = (o) => {
-    const cfg = SLIDERS[o.system]?.configs[o.config];
-    const layout = PL ? (o.config ? `układ ${o.config}` : '') : cfg ? cfg.label : (o.system === 'bifold' && o.config ? `${o.config} leaves` : '');
+    const layout = layoutName(o.system, o.config, PL);
     return [layout, PL ? GLASS_PL[o.glazing] : GLASS[o.glazing]?.label].filter(Boolean).join(', ');
   };
   const countPl = (n) => `${n} ${n === 1 ? 'otwór' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'otwory' : 'otworów'}`;

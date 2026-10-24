@@ -130,7 +130,7 @@ test.describe('sizing tools', () => {
     await expect(page.locator('[data-out="weight"]')).toHaveText('140 kg');
     await page.fill('#t-w', '9000');
     await page.selectOption('#t-c', '2A');
-    await expect(page.locator('[data-messages]')).toContainText('beyond the 400 kg hardware class');
+    await expect(page.locator('[data-messages]')).toContainText('more than the rollers of these doors can carry (400 kg)');
     await expect(page.locator('[data-messages]')).toContainText('over the 3,300 mm limit');
     await page.fill('#t-a', '30');
     await expect(page.locator('[data-messages]')).toContainText('Building Regulations (Part L)');
@@ -147,7 +147,7 @@ test.describe('sizing tools', () => {
 
   test('slim sliding: recommends lift & slide when too heavy', async ({ page }) => {
     await page.goto('/sliding-doors.html#sizing');
-    await expect(page.locator('[data-messages]')).toContainText('inside the 250 kg inline hardware range');
+    await expect(page.locator('[data-messages]')).toContainText('the rollers of these doors carry up to 250 kg');
     await page.fill('#t-w', '6000'); await page.fill('#t-h', '3000');
     await page.selectOption('#t-c', '2A'); await page.selectOption('#t-g', 't');
     await expect(page.locator('[data-messages]')).toContainText('consider lift & slide');
@@ -155,12 +155,12 @@ test.describe('sizing tools', () => {
     await expect(page.locator('[data-op] [data-k="system"]').first()).toHaveValue('sliding');
   });
 
-  test('bi-fold: traffic door, stack projection, leaf limits', async ({ page }) => {
+  test('bi-fold: a leaf that opens on its own, folded leaves, leaf limits', async ({ page }) => {
     await page.goto('/bifold-doors.html#sizing');
-    await expect(page.locator('[data-messages]')).toContainText('traffic door');
+    await expect(page.locator('[data-messages]')).toContainText('opens on its own');
     await expect(page.locator('[data-out="stack"]')).not.toHaveText('—');
     await page.selectOption('#t-l', '2+2');
-    await expect(page.locator('[data-messages]')).toContainText('No traffic door');
+    await expect(page.locator('[data-messages]')).toContainText('No door that opens on its own');
     await page.selectOption('#t-l', '3+0'); await page.fill('#t-w', '6000');
     await expect(page.locator('[data-messages]')).toContainText('over the 1,200 mm limit');
     await page.selectOption('#t-s', 'in');
@@ -313,7 +313,7 @@ test.describe('the list of openings is visible and nothing typed is lost', () =>
     await expect(drawer).toBeVisible();
     await expect(drawer.locator('[data-list-status]')).toHaveText('Added D01 to your list.');
     await expect(drawer.locator('.list-row')).toHaveCount(1);
-    await expect(drawer.locator('.list-row-note')).toContainText('4 panels — centre opening');
+    await expect(drawer.locator('.list-row-note')).toContainText('4 panels, opening from the centre');
     await drawer.locator('[data-k="qty"]').fill('3');
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
