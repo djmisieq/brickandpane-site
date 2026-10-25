@@ -79,7 +79,7 @@ $('[data-signup]', root).addEventListener('submit', (e) => {
 });
 
 // The submit buttons start disabled in the HTML: a click before this script ran would post the password to the web host.
-$('button[type=submit]', root).forEach((b) => { b.disabled = false; });
+$$('button[type=submit]', root).forEach((b) => { b.disabled = false; });
 
 // Network calls last: the forms above already work (and never fall back to a native submit) while these load.
 try {
