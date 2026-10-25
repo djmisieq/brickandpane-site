@@ -21,6 +21,19 @@ export const SIDE_STAGES = [
   { id: 'closed', label: 'Closed', court: 'none', client: 'This project is closed.' },
 ];
 export const ALL_STAGES = [...STAGES, ...SIDE_STAGES];
+// Prospects: architects and companies we want to work with (migration 0014). Staff only.
+export const PROSPECT_STAGES = [
+  { id: 'to_contact', label: 'To contact' },
+  { id: 'contacted', label: 'First contact made' },
+  { id: 'talking', label: 'Talking / meeting' },
+  { id: 'first_project', label: 'First enquiry or project' },
+  { id: 'partner', label: 'Working together' },
+  { id: 'not_now', label: 'Not now' },
+];
+export const PROSPECT_KINDS = { architect: 'Architect', developer: 'Developer', contractor: 'Builder / contractor', designer: 'Interior designer', other: 'Other' };
+export const prospectStage = (id) => PROSPECT_STAGES.find((s) => s.id === id) || PROSPECT_STAGES[0];
+// A follow-up date today or earlier on a prospect still in play.
+export const prospectDue = (c) => !!c.next_at && !['partner', 'not_now'].includes(c.stage) && c.next_at <= new Date().toISOString().slice(0, 10);
 export const PHASES = ['Quotation', 'Design', 'Delivery'];
 export const stage = (id) => ALL_STAGES.find((s) => s.id === id) || ALL_STAGES[0];
 export const audienceOf = (user) => (user?.role === 'staff' ? 'staff' : user?.account_type === 'homeowner' ? 'home' : 'trade');

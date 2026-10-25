@@ -1,6 +1,6 @@
 // Internal CRM for Brick & Pane staff: pipeline board, list, enquiries from the public form, project control panel.
 import { store } from './store.js';
-import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
+import { STAGES, SIDE_STAGES, ALL_STAGES, PROSPECT_STAGES, PROSPECT_KINDS, prospectStage, prospectDue, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 
@@ -11,6 +11,8 @@ let activeTab = 'messages';
 let lastId = null;
 let query = '';
 let reqFilter = 'open';
+let kindFilter = '';
+let dueCount = 0;
 
 // Values the contact form stores in contact_requests (src/pages/contact.html).
 const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project', closed: 'Closed', spam: 'Spam' };
@@ -19,21 +21,26 @@ const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review'
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
+const listProspects = () => (store.listProspects ? store.listProspects().catch(() => []) : []);
 
 async function render(fromStore = false) {
   user = await store.getUser();
   if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + location.hash)}`; return; }
   if (user.role !== 'staff') { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr('This area is for Brick & Pane staff.'))} <a href="portal.html">${tr('Go to your projects')}</a>.</p></div>`; await renderAppBar(bar, user, 'portal'); return; }
-  const keep = {}; if (fromStore) $$('textarea[id], input[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; });
+  // A live update redraws the page: fields the user has changed keep their values (lists too), others refill empty ones.
+  const keep = {}, dirty = new Set(); if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); });
   const focused = document.activeElement?.id;
   await renderAppBar(bar, user, 'admin');
   const r = route();
   try {
+    dueCount = (await listProspects()).filter(prospectDue).length;
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'prospects') await prospects(r.id === 'list');
+    else if (r.name === 'c' && r.id) await prospect(r.id);
     else await board(r.name === 'list');
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
-  Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && !el.value) el.value = v; });
+  Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && (dirty.has(id) || (!el.value && el.tagName !== 'SELECT'))) { el.value = v; if (dirty.has(id)) el.dataset.dirty = '1'; } });
   if (focused) document.getElementById(focused)?.focus();
 }
 
@@ -85,7 +92,7 @@ async function board(asList) {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${store.listProspects ? link('prospects', '#/prospects', `${tr('Prospects')}${dueCount ? ` <span class="seg-count" title="${tr('Follow-ups due')}">${dueCount}</span>` : ''}`) : ''}</div>`;
 }
 
 async function enquiries() {
@@ -285,6 +292,191 @@ async function detail(id) {
   });
 }
 
+/* ---------- prospects: architects and companies we want to work with (migration 0014) ---------- */
+const prospectSearch = (c) => [c.company, c.contact_name, c.email, c.area, c.source, c.next_step].join(' ').toLowerCase();
+const prospectFoot = (c) => (c.next_at ? (prospectDue(c) ? tr('Follow up {date}', { date: fmtDay(c.next_at) }) : tr('Next {date}', { date: fmtDay(c.next_at) })) : ago(c.updated_at));
+
+async function prospects(asList) {
+  document.title = `${tr('Prospects')} | CRM`;
+  const [all, requests] = await Promise.all([listProspects(), listRequests()]);
+  const q = query.toLowerCase();
+  const shown = all.filter((c) => (!kindFilter || c.kind === kindFilter) && (!q || prospectSearch(c).includes(q)));
+  const inStage = (id) => all.filter((c) => c.stage === id).length;
+  const card = (c) => `
+    <a class="kcard ${prospectDue(c) ? 'is-overdue' : ''}" href="#/c/${esc(c.id)}">
+      <span class="kcard-ref">${esc(tr(PROSPECT_KINDS[c.kind] || c.kind))}</span>
+      <span class="kcard-name">${esc(c.company)}</span>
+      <span class="kcard-client">${esc([c.contact_name, c.area].filter(Boolean).join(' · '))}</span>
+      ${c.next_step ? `<span class="kcard-client">${esc(c.next_step)}</span>` : ''}
+      <span class="kcard-foot"><span>${esc(c.source || '')}</span><span>${prospectFoot(c)}</span></span>
+    </a>`;
+  app.innerHTML = `
+    <div class="container-wide section-tight">
+      <div class="dash-head">
+        <div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Prospects')}</h1></div>
+        <dl class="stats">
+          <div class="stat ${dueCount ? 'is-you' : ''}"><dt>${tr('Follow-ups due')}</dt><dd>${dueCount}</dd></div>
+          <div class="stat"><dt>${tr('To contact')}</dt><dd>${inStage('to_contact')}</dd></div>
+          <div class="stat"><dt>${tr('In conversation')}</dt><dd>${inStage('contacted') + inStage('talking')}</dd></div>
+          <div class="stat"><dt>${tr('Working together')}</dt><dd>${inStage('first_project') + inStage('partner')}</dd></div>
+        </dl>
+      </div>
+      <p class="note mb-m">${tr('Architects and companies we want to start working with. Only the team sees this.')}</p>
+      <div class="board-tools">
+        ${viewSwitch('prospects', requests)}
+        <div class="seg" role="group" aria-label="${tr('Layout')}"><a href="#/prospects" class="${asList ? '' : 'is-on'}">${tr('Funnel')}</a><a href="#/prospects/list" class="${asList ? 'is-on' : ''}">${tr('List')}</a></div>
+        <label class="visually-hidden" for="pr-kind">${tr('Type')}</label>
+        <select id="pr-kind"><option value="">${tr('All types')}</option>${Object.entries(PROSPECT_KINDS).map(([k, v]) => `<option value="${k}" ${k === kindFilter ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select>
+        <label class="visually-hidden" for="crm-q">${tr('Search prospects')}</label>
+        <input id="crm-q" type="search" placeholder="${tr('Search company, person, area')}" value="${esc(query)}">
+        <a class="btn btn-sm" href="#/c/new">${tr('Add a company')}</a>
+      </div>
+      ${!all.length ? `<p class="callout">${tr('No companies yet. Add the first one with “Add a company”.')}</p>`
+      : asList ? `
+        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">${tr('Company')}</th><th scope="col">${tr('Type')}</th><th scope="col">${tr('Contact')}</th><th scope="col">${tr('Status')}</th><th scope="col">${tr('Area')}</th><th scope="col">${tr('Next step')}</th><th scope="col">${tr('Updated')}</th></tr></thead><tbody>
+          ${shown.map((c) => `<tr class="${prospectDue(c) ? 'is-overdue' : ''}"><th scope="row"><a href="#/c/${esc(c.id)}">${esc(c.company)}</a></th><td>${esc(tr(PROSPECT_KINDS[c.kind] || c.kind))}</td><td>${esc(c.contact_name)}${c.email ? `<br><a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</td><td><span class="badge">${esc(tr(prospectStage(c.stage).label))}</span></td><td>${esc(c.area)}</td><td>${esc(c.next_step)}${c.next_at ? ` <span class="note">${fmtDay(c.next_at)}</span>` : ''}</td><td>${ago(c.updated_at)}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : `<div class="board">${PROSPECT_STAGES.filter((s) => s.id !== 'not_now' || shown.some((c) => c.stage === 'not_now')).map((s) => {
+          const items = shown.filter((c) => c.stage === s.id);
+          return `<section class="col ${items.length ? '' : 'col-empty'}" aria-label="${esc(tr(s.label))}"><h2 class="col-h">${esc(tr(s.label))} <span>${items.length}</span></h2>${items.map(card).join('')}</section>`;
+        }).join('')}</div>`}
+    </div>`;
+  // Debounced search: redraw whichever prospects view is open by then, or nothing if the user has moved on.
+  const again = () => { const r = route(); if (r.name !== 'prospects') return; prospects(r.id === 'list').then(() => { const n = $('#crm-q', app); n?.focus(); n?.setSelectionRange(n.value.length, n.value.length); }); };
+  const qi = $('#crm-q', app);
+  qi.addEventListener('input', () => { query = qi.value; clearTimeout(qi._t); qi._t = setTimeout(again, 200); });
+  $('#pr-kind', app).addEventListener('change', (e) => { kindFilter = e.target.value; prospects(asList); });
+}
+
+// Enquiries from the same address, or from the same company domain (not for gmail.com and the like).
+const FREE_MAIL = /@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|aol|btinternet|sky|virginmedia|proton|protonmail)\./i;
+const sameSender = (c, r) => {
+  const a = (c.email || '').toLowerCase(), b = (r.email || '').toLowerCase();
+  if (!a || !b) return false;
+  return a === b || (!FREE_MAIL.test(a) && a.split('@')[1] === b.split('@')[1]);
+};
+
+async function prospect(id) {
+  const isNew = id === 'new';
+  const [all, staff, requests] = await Promise.all([listProspects(), store.listStaff(), listRequests()]);
+  const c = isNew ? { kind: 'architect', stage: 'to_contact', log: [] } : all.find((x) => x.id === id);
+  if (!c) { app.innerHTML = `<div class="container section-tight"><p class="callout">${tr('This company is no longer on the list.')} <a href="#/prospects">${tr('Back to prospects')}</a></p></div>`; return; }
+  document.title = `${isNew ? tr('Add a company') : c.company} | CRM`;
+  const related = isNew ? [] : requests.filter((r) => sameSender(c, r));
+  const f = (name, label, type = 'text', extra = '') => `<div class="field"><label for="pr-${name}">${tr(label)}</label><input id="pr-${name}" name="${name}" type="${type}" value="${esc(c[name] || '')}" ${extra}></div>`;
+  const stageField = `<div class="field"><label for="pr-stage">${tr('Status')}</label><select id="pr-stage" name="stage">${PROSPECT_STAGES.map((s) => `<option value="${s.id}" ${s.id === c.stage ? 'selected' : ''}>${esc(tr(s.label))}</option>`).join('')}</select></div>`;
+  const ownerField = `<div class="field"><label for="pr-owner">${tr('Owner')}</label><select id="pr-owner" name="owner_id"><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === c.owner_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></div>`;
+  const nextFields = `${f('next_step', 'Next step', 'text', `maxlength="500" placeholder="${tr('e.g. Send the intro email')}"`)}${f('next_at', 'When', 'date')}`;
+  const details = `
+    ${f('company', 'Company', 'text', 'required maxlength="200"')}
+    <div class="field"><label for="pr-kind-f">${tr('Type')}</label><select id="pr-kind-f" name="kind">${Object.entries(PROSPECT_KINDS).map(([k, v]) => `<option value="${k}" ${k === c.kind ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
+    <div class="field-row">${f('contact_name', 'Contact person', 'text', 'maxlength="200"')}${f('contact_role', 'Their role', 'text', 'maxlength="200"')}</div>
+    <div class="field-row">${f('email', 'Email', 'email', 'maxlength="320"')}${f('phone', 'Phone', 'tel', 'maxlength="50"')}</div>
+    ${f('website', 'Website', 'text', 'maxlength="500" inputmode="url" autocomplete="off" placeholder="www."')}
+    <div class="field-row">${f('area', 'Area', 'text', `maxlength="200" placeholder="${tr('e.g. Hackney, E8')}"`)}${f('source', 'Where we found them', 'text', `maxlength="200" placeholder="${tr('e.g. Instagram, recommendation')}"`)}</div>
+    <div class="field"><label for="pr-notes">${tr('Notes')}</label><textarea id="pr-notes" name="notes" rows="3" maxlength="10000">${esc(c.notes || '')}</textarea></div>`;
+  const crumbs = `<nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/prospects">${tr('Prospects')}</a></li><li aria-current="page">${esc(isNew ? tr('Add a company') : c.company)}</li></ol></nav>`;
+  const row = (label, value) => (value ? `<tr><th scope="row">${esc(tr(label))}</th><td>${value}</td></tr>` : '');
+
+  app.innerHTML = isNew ? `
+    <div class="container section-tight">
+      ${crumbs}
+      <h1 class="app-h1">${tr('Add a company')}</h1>
+      <form class="ctl prospect-new" data-prospect-form novalidate>
+        ${details}
+        <div class="field-row">${stageField}${ownerField}</div>
+        <div class="field-row">${nextFields}</div>
+        <div class="btn-row"><button class="btn" type="submit">${tr('Save')}</button><a class="btn btn-ghost" href="#/prospects">${tr('Cancel')}</a></div>
+      </form>
+    </div>` : `
+    <div class="container section-tight">
+      ${crumbs}
+      <div class="detail-head">
+        <div><h1 class="app-h1">${esc(c.company)}</h1><p class="note">${esc([tr(PROSPECT_KINDS[c.kind] || c.kind), c.area, c.contact_name].filter(Boolean).join(' · '))}</p></div>
+      </div>
+      <div class="crm-grid">
+        <div class="crm-main">
+          <section class="now-card ${prospectDue(c) ? 'is-you' : ''}" aria-label="${tr('Current status')}">
+            <div class="now-head"><span class="badge">${esc(tr(prospectStage(c.stage).label))}</span>${prospectDue(c) ? `<span class="court court-you">${tr('Follow-up due')}</span>` : ''}</div>
+            <p class="now-text">${c.next_step ? esc(c.next_step) : tr('No next step set.')}</p>
+            <ul class="proof-list">
+              ${c.next_at ? `<li><span>${tr('When')}</span><span>${fmtDay(c.next_at)}</span></li>` : ''}
+              <li><span>${tr('Owner')}</span><span>${esc(staff.find((s) => s.id === c.owner_id)?.full_name || tr('Unassigned'))}</span></li>
+              <li><span>${tr('Updated')}</span><span>${ago(c.updated_at)}</span></li>
+            </ul>
+          </section>
+          <table class="spec spec-compact mt-m"><tbody>
+            ${row('Contact person', esc([c.contact_name, c.contact_role].filter(Boolean).join(', ')))}
+            ${row('Email', c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '')}
+            ${row('Phone', c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '')}
+            ${row('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer">${esc(c.website.replace(/^https?:\/\//, ''))}</a>` : '')}
+            ${row('Where we found them', esc(c.source || ''))}
+            ${row('Added', esc(fmtDate(c.created_at)))}
+          </tbody></table>
+          ${c.notes ? `<p class="enq-msg">${esc(c.notes)}</p>` : ''}
+          ${related.length ? `<h2 class="panel-h mt-m">${tr('Enquiries from this company')}</h2><ul class="prospect-related">${related.map((r) => `<li><button type="button" class="linkish" data-open-enq="${esc(r.ref)}">${esc(r.ref)}</button> · ${esc(r.name)} · ${ago(r.created_at)}</li>`).join('')}</ul>` : ''}
+          <h2 class="panel-h mt-m">${tr('Contact history')}</h2>
+          <form class="ctl" data-prospect-note>
+            <div class="field"><label for="pr-log">${tr('What happened')}</label><textarea id="pr-log" name="text" rows="2" maxlength="2000" required placeholder="${tr('e.g. Call: they have two extensions at stage 3. Send the spec pack.')}"></textarea></div>
+            <button class="btn btn-sm" type="submit">${tr('Add to history')}</button>
+          </form>
+          ${c.log?.length ? `<ol class="timeline">${c.log.map((e) => `
+            <li><span class="tl-date">${fmtDate(e.at, true)}</span>
+              <span class="tl-body">${e.stage ? `<span class="badge">${esc(tr(prospectStage(e.stage).label))}</span>` : ''}${e.text ? `<span class="tl-note">${esc(e.text)}</span>` : ''}<span class="tl-actor">${esc(e.by || '')}</span></span></li>`).join('')}</ol>`
+          : `<p class="note">${tr('Nothing recorded yet.')}</p>`}
+        </div>
+        <aside class="crm-side">
+          <form class="ctl" data-prospect-status>
+            <h2 class="panel-h">${tr('Status and next step')}</h2>
+            ${stageField}${nextFields}${ownerField}
+            <button class="btn btn-sm" type="submit">${tr('Save')}</button>
+          </form>
+          <form class="ctl" data-prospect-form novalidate>
+            <h2 class="panel-h">${tr('Company details')}</h2>
+            ${details}
+            <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
+          </form>
+          <div class="ctl"><button type="button" class="btn btn-sm btn-ghost" data-prospect-delete>${tr('Delete this company')}</button></div>
+        </aside>
+      </div>
+    </div>`;
+
+  const read = (form) => Object.fromEntries([...new FormData(form)].map(([k, v]) => [k, String(v).trim()]));
+  const clean = (v) => ({ ...v, ...('next_at' in v ? { next_at: v.next_at || null } : {}), ...('owner_id' in v ? { owner_id: v.owner_id || null } : {}),
+    ...('website' in v && v.website && !/^https?:\/\//i.test(v.website) ? { website: `https://${v.website}` } : {}) });
+  $('[data-prospect-form]', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const form = e.currentTarget;
+    if (!form.company.value.trim()) { form.company.focus(); toast(tr('Enter the company name.')); return; }
+    if (!form.reportValidity()) return;
+    try {
+      const saved = await store.saveProspect(isNew ? null : id, clean(read(form)));
+      toast(tr('Saved.'));
+      if (isNew) location.hash = `#/c/${saved}`;
+    } catch (err) { toast(tr(err.message)); }
+  });
+  if (isNew) return;
+  $('[data-prospect-status]', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const v = clean(read(e.currentTarget));
+    try {
+      await store.saveProspect(id, v);
+      if (v.stage !== c.stage) await store.addProspectNote(id, '', v.stage);
+      toast(tr('Saved.'));
+    } catch (err) { toast(tr(err.message)); }
+  });
+  $('[data-prospect-note]', app).addEventListener('submit', async (e) => {
+    e.preventDefault(); const text = e.currentTarget.text.value.trim(); if (!text) return;
+    try { await store.addProspectNote(id, text); e.currentTarget.reset(); toast(tr('Added to history.')); } catch (err) { toast(tr(err.message)); }
+  });
+  $$('[data-open-enq]', app).forEach((b) => b.addEventListener('click', () => { query = b.dataset.openEnq; reqFilter = 'all'; location.hash = '#/enquiries'; }));
+  // Two clicks instead of a confirm() dialog.
+  $('[data-prospect-delete]', app).addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = tr('Click again to delete'); return; }
+    try { await store.deleteProspect(id); toast(tr('Deleted.')); location.hash = '#/prospects'; } catch (err) { toast(tr(err.message)); }
+  });
+}
+
+['input', 'change'].forEach((type) => app.addEventListener(type, (ev) => { if (ev.target.matches?.('input, select, textarea')) ev.target.dataset.dirty = '1'; }));
 let t = null;
 store.onChange(() => { clearTimeout(t); t = setTimeout(() => render(true), 120); });
 addEventListener('hashchange', () => render());

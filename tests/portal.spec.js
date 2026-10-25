@@ -82,6 +82,71 @@ test('architect submits a new project with an openings schedule', async ({ page 
   await expect(page.locator('.spec-compact')).toContainText('Roof lantern / rooflight');
 });
 
+test('staff keep a funnel of companies to win, with status, next step and contact history', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  // One demo follow-up is due today and one is overdue.
+  await expect(page.locator('.seg a[href="#/prospects"] .seg-count')).toHaveText('2');
+  await page.locator('.seg a[href="#/prospects"]').click();
+  await expect(page.locator('h1')).toHaveText('Prospects');
+  await expect(page.locator('.col', { hasText: 'To contact' }).locator('.kcard')).toHaveCount(1);
+  await expect(page.locator('.kcard.is-overdue')).toHaveCount(2);
+
+  await page.locator('a', { hasText: 'Add a company' }).click();
+  await page.locator('[data-prospect-form] button[type="submit"]').click();
+  await expect(page.locator('#pr-company')).toBeFocused();
+  await page.fill('#pr-company', 'Test Studio');
+  await page.locator('#pr-kind-f').selectOption('architect');
+  await page.fill('#pr-contact_name', 'Alex Moore');
+  await page.fill('#pr-email', 'alex@teststudio.example');
+  await page.fill('#pr-website', 'teststudio.example');
+  await page.fill('#pr-area', 'Camden, NW1');
+  await page.fill('#pr-next_step', 'Send the intro email');
+  await page.locator('[data-prospect-form] button[type="submit"]').click();
+  await expect(page.locator('h1')).toHaveText('Test Studio');
+  await expect(page.locator('.spec-compact')).toContainText('teststudio.example');
+  await expect(page.locator('.spec-compact a[href="https://teststudio.example"]')).toHaveCount(1);
+
+  // Moving the status writes it into the history; notes go there too.
+  await page.locator('[data-prospect-status] select[name="stage"]').selectOption('contacted');
+  await page.locator('[data-prospect-status] button[type="submit"]').click();
+  await expect(page.locator('.now-head .badge')).toHaveText('First contact made');
+  await page.fill('#pr-log', 'Intro email sent, they replied.');
+  await page.locator('[data-prospect-note] button[type="submit"]').click();
+  await expect(page.locator('.timeline li')).toHaveCount(2);
+  await expect(page.locator('.timeline li').first()).toContainText('Intro email sent, they replied.');
+  await expect(page.locator('.timeline li').nth(1)).toContainText('First contact made');
+
+  await page.locator('a', { hasText: 'Prospects' }).first().click();
+  await expect(page.locator('.col', { hasText: 'First contact made' }).locator('.kcard', { hasText: 'Test Studio' })).toBeVisible();
+  await page.fill('#crm-q', 'camden');
+  await expect(page.locator('.kcard')).toHaveCount(1);
+  await page.fill('#crm-q', '');
+  await page.locator('#pr-kind').selectOption('developer');
+  await expect(page.locator('.kcard')).toHaveCount(1);
+  await page.locator('#pr-kind').selectOption('');
+  await page.locator('.seg a[href="#/prospects/list"]').click();
+  await expect(page.locator('.crm-table tbody tr')).toHaveCount(4);
+
+  // Delete takes two clicks.
+  await page.locator('.crm-table a', { hasText: 'Test Studio' }).click();
+  const del = page.locator('[data-prospect-delete]');
+  await del.click();
+  await expect(del).toHaveText('Click again to delete');
+  await del.click();
+  await expect(page.locator('h1')).toHaveText('Prospects');
+  await expect(page.locator('#app')).not.toContainText('Test Studio');
+});
+
+test('Polish CRM names the prospect funnel in Polish', async ({ page }) => {
+  await page.goto('/pl/login.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/pl/admin.html#/prospects');
+  await expect(page.locator('h1')).toHaveText('Pozyskiwanie');
+  await expect(page.locator('.col-h').first()).toContainText('Do kontaktu');
+  await expect(page.locator('a', { hasText: 'Dodaj firmę' })).toBeVisible();
+});
+
 test('staff see website enquiries sent without an account and triage them', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html');

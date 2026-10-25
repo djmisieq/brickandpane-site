@@ -107,7 +107,21 @@ function seed() {
   n(anna.id, p2, 'approval_request', 'Approval needed: Shop drawings — corner slider', 'Mews house, corner glazing', daysAgo(2));
   n(anna.id, p1, 'approval_request', 'Approval needed: Quotation Q1 — Hartley Road', 'Hartley Road rear extension', daysAgo(4), true);
   n(tom.id, p3, 'new_project', 'New project: Garden room, Dulwich', 'SE21', daysAgo(0, 9));
+  s.prospects = demoProspects(tom);
   return s;
+}
+
+// Demo prospects for the staff CRM (admin.html#/prospects). Fictional names, marked (demo).
+function demoProspects(tom) {
+  const day = (d) => daysAhead(d).slice(0, 10);
+  const base = { contact_role: '', phone: '', website: '', notes: '', next_step: '', next_at: null, owner_id: tom.id, created_by: tom.id, log: [] };
+  return [
+    { ...base, id: uid(), company: 'Northlight Architects (demo)', kind: 'architect', stage: 'to_contact', contact_name: 'Maya Ellis', email: 'maya@example-northlight.co.uk', area: 'Islington, N1', source: 'Instagram', next_step: 'Send the intro email with the spec pack', next_at: day(0), created_at: daysAgo(3), updated_at: daysAgo(3) },
+    { ...base, id: uid(), company: 'Fieldhouse Studio (demo)', kind: 'architect', stage: 'contacted', contact_name: 'Ben Okafor', contact_role: 'Associate', email: 'ben@example-fieldhouse.co.uk', area: 'Hackney, E8', source: 'Recommendation', next_step: 'Call to offer a CPD session', next_at: day(-2), created_at: daysAgo(12), updated_at: daysAgo(5),
+      log: [{ at: daysAgo(5), by: tom.full_name, text: 'Intro email sent. Ben replied that they have two rear extensions at stage 3.' }] },
+    { ...base, id: uid(), company: 'Greenway Homes (demo)', kind: 'developer', stage: 'talking', contact_name: 'Priya Shah', email: 'priya@example-greenway.co.uk', area: 'Croydon', source: 'LinkedIn', next_step: 'Meeting on site', next_at: day(6), created_at: daysAgo(20), updated_at: daysAgo(2),
+      log: [{ at: daysAgo(2), by: tom.full_name, text: 'Call: 14 flats, start in spring. Wants a meeting on site.' }, { at: daysAgo(9), by: tom.full_name, text: 'LinkedIn message sent.' }] },
+  ];
 }
 
 // ---------- trigger mirrors ----------
@@ -162,6 +176,28 @@ export const store = {
     const u = me(load());
     if (u?.account_type !== 'homeowner') return [];
     return [{ id: 'demo-enquiry', ref: 'BP-261013-7A3C', created_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'replied', topic: 'quote', systems: ['lift-slide'], project_id: null }];
+  },
+  async listProspects() {
+    const s = load(); needStaff(s);
+    return [...(s.prospects || [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  },
+  async saveProspect(id, patch) {
+    const s = load(); const u = needStaff(s);
+    s.prospects ||= [];
+    let c = id && s.prospects.find((x) => x.id === id);
+    if (id && !c) throw new Error('Not found.');
+    if (!c) { c = { id: uid(), kind: 'architect', stage: 'to_contact', contact_name: '', contact_role: '', email: '', phone: '', website: '', area: '', source: '', next_step: '', next_at: null, owner_id: null, notes: '', log: [], created_by: u.id, created_at: now() }; s.prospects.push(c); }
+    Object.assign(c, patch, { updated_at: now() }); save(s);
+    return c.id;
+  },
+  async addProspectNote(id, text, stage = null) {
+    const s = load(); const u = needStaff(s);
+    const c = (s.prospects || []).find((x) => x.id === id);
+    c.log = [{ at: now(), by: u.full_name, text, ...(stage ? { stage } : {}) }, ...(c.log || [])]; c.updated_at = now(); save(s);
+  },
+  async deleteProspect(id) {
+    const s = load(); needStaff(s);
+    s.prospects = (s.prospects || []).filter((x) => x.id !== id); save(s);
   },
   async listRequests() {
     const s = load(); needStaff(s);

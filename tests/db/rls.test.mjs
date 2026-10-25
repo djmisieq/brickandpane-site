@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -250,4 +250,25 @@ test('a saved list of openings belongs to its account only', async () => {
   await db.exec('reset role');
   await db.query('delete from auth.users where id = $1', [A]);
   assert.equal((await db.query('select count(*)::int n from public.saved_lists')).rows[0].n, 0);
+});
+
+test('prospects are for staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(S);
+  const id = (await db.query('insert into public.prospects (company, contact_name, email) values ($1, $2, $3) returning id', ['Studio North', 'Ola', 'ola@studio.example'])).rows[0].id;
+  await db.query('update public.prospects set stage = $1, log = $2 where id = $3', ['contacted', JSON.stringify([{ at: '2026-10-25', by: 'Tom', text: 'Sent intro email' }]), id]);
+  await fails('update public.prospects set stage = $1 where id = $2', ['won', id]);
+  await fails('update public.prospects set email = $1 where id = $2', ['not-an-email', id]);
+  await fails('update public.prospects set website = $1 where id = $2', ['javascript:alert(1)', id]);
+  await fails("update public.prospects set log = '{}' where id = $1", [id]);
+  await as(A);
+  assert.equal((await db.query('select * from public.prospects')).rows.length, 0);
+  await fails('insert into public.prospects (company) values ($1)', ['Sneaky']);
+  assert.equal((await db.query('update public.prospects set company = $1 returning id', ['x'])).rows.length, 0);
+  assert.equal((await db.query('delete from public.prospects returning id')).rows.length, 0);
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.prospects');
+  await db.exec('reset role');
+  await as(S);
+  assert.equal((await db.query('delete from public.prospects returning id')).rows.length, 1);
 });
