@@ -4,6 +4,7 @@ import { hasSession, startAccountList } from './account-list.js';
 import { SUPABASE_URL } from './portal/config.js';
 import { saveFiles, loadFiles, clearFiles } from './file-draft.js';
 import { layoutName } from './layouts.js';
+import { captcha } from './captcha.js';
 
 (() => {
   const PL = document.documentElement.lang === 'pl';
@@ -704,8 +705,10 @@ import { layoutName } from './layouts.js';
       consent: t('Please tick the consent box so we can reply to you.', 'Zaznacz zgodę, żebyśmy mogli Ci odpowiedzieć.'),
       name_email: t('Check your name and email address on step 1.', 'Sprawdź imię i adres e-mail w kroku 1.'),
       rate: t('We’ve already received several enquiries from you or your network in the last hour. Please try again later.', 'W ciągu ostatniej godziny dostaliśmy już kilka zapytań od Ciebie lub z Twojej sieci. Spróbuj ponownie później.'),
+      captcha: t('We couldn’t confirm the form was sent by a person. Please try again.', 'Nie udało się potwierdzić, że formularz wysyła człowiek. Spróbuj ponownie.'),
       timeout: t('This is taking too long, probably because of large files. Try again with a link to the files instead.', 'To trwa za długo, pewnie przez duże pliki. Spróbuj ponownie z linkiem do plików zamiast załączników.'),
     };
+    const cap = captcha($('button[type=submit]', form));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       // Enter in a field on step 1 or 2 means "Continue", not "send the whole form".
@@ -727,7 +730,10 @@ import { layoutName } from './layouts.js';
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5 * 60e3);
       try {
-        const res = await fetch(endpoint, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' }, signal: ctrl.signal });
+        const body = new FormData(form);
+        const token = await cap.token();
+        if (token) body.set('cf-turnstile-response', token);
+        const res = await fetch(endpoint, { method: 'POST', body, headers: { Accept: 'application/json' }, signal: ctrl.signal });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || String(res.status));
         try { localStorage.removeItem(DRAFT); } catch { /* ignore */ }
@@ -743,6 +749,7 @@ import { layoutName } from './layouts.js';
         status.innerHTML = `${ERRORS[code] || t('We couldn’t send that.', 'Nie udało się wysłać.')} ${t('Your details are still here. Try again, or email <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>.', 'Twoje dane nadal tu są. Spróbuj ponownie albo napisz na <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>.')}`;
         status.focus();
         btn.disabled = false; btn.textContent = SUBMIT;
+        cap.reset();
       } finally { clearTimeout(timer); }
     });
   }

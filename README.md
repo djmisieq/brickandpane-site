@@ -9,6 +9,7 @@ Static site published with GitHub Pages at brickandpane.co.uk.
   - `tests/a11y.spec.js`: axe WCAG 2.2 AA on every page, plus a page-weight budget.
   - `tests/visual.spec.js` (`npm run test:visual`): full-page screenshots. Baselines are per machine and not committed: run `npx playwright test --grep @visual --update-snapshots` before a design change, then `npm run test:visual` after it.
   - GitHub Actions runs everything except the visual baselines on each push and pull request.
+- Captcha: the public Cloudflare Turnstile site key is the `TURNSTILE` constant in `build.mjs` (empty = no captcha). With a key, `node build.mjs` adds the Turnstile script to `contact.html` and `login.html` (EN and PL) and `js/captcha.js` sends a token to `contact-submit` and Supabase Auth. Tests stub Cloudflare (`tests/fixtures.js`). The secret key never goes in this repo: it lives in the Supabase secret `TURNSTILE_SECRET` and in Supabase Auth → Attack Protection.
 - Internal audit, strategy and deployment notes live in the private repo `djmisieq/brickandpane-docs`, not here.
 
 ## Photos

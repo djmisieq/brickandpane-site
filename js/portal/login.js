@@ -2,6 +2,7 @@
 import { store } from './store.js';
 import { $, $$, toast, esc } from './core.js';
 import { tr } from './i18n.js';
+import { captcha } from '../captcha.js';
 
 const next = new URLSearchParams(location.search).get('next') || 'portal.html';
 const safeNext = /^(portal|admin)\.html/.test(next) ? next : 'portal.html';
@@ -17,6 +18,7 @@ const AUTH_ERRORS = [
   [/already registered|already exists/i, 'An account with that email already exists.'],
   [/email rate limit/i, 'We’ve sent too many emails in the last hour. Please try again later, or sign in with Google or Microsoft.'],
   [/rate limit|security purposes|too many/i, 'Too many attempts. Please wait a minute and try again.'],
+  [/captcha/i, 'We couldn’t confirm you’re a person. Please try again.'],
   [/failed to fetch|network|load failed/i, 'We can’t reach the portal right now. Check your connection and try again.'],
   [/pwned|leaked|compromised/i, 'This password has appeared in a data leak. Please choose a different one.'],
   [/password.*(at least|short|characters|length)/i, 'Use at least 10 characters for your password.'],
@@ -55,15 +57,19 @@ if (preset) {
   if (r) r.checked = true;
 }
 
+// Turnstile (only when build.mjs has a site key): one widget per form, a fresh token after every attempt.
+const capIn = captcha($('[data-signin] button[type=submit]', root));
+const capUp = captcha($('[data-signup] button[type=submit]', root));
+
 $('[data-signin]', root).addEventListener('submit', (e) => {
   e.preventDefault(); const f = e.currentTarget;
-  busy($('button[type=submit]', f), async () => { try { await store.signIn(f.email.value.trim(), f.password.value); go(); } catch (err) { fail(err); } });
+  busy($('button[type=submit]', f), async () => { try { await store.signIn(f.email.value.trim(), f.password.value, await capIn.token()); go(); } catch (err) { fail(err); capIn.reset(); } });
 });
 
 $('[data-magic]', root).addEventListener('click', (e) => {
   const email = $('[data-signin]', root).email.value.trim();
   if (!email) { say(tr('Enter your email first.'), true); return; }
-  busy(e.currentTarget, async () => { try { await store.sendMagicLink(email, safeNext); say(tr('We’ve emailed a sign-in link to {email}.', { email: `<strong>${esc(email)}</strong>` })); } catch (err) { fail(err); } });
+  busy(e.currentTarget, async () => { try { await store.sendMagicLink(email, safeNext, await capIn.token()); say(tr('We’ve emailed a sign-in link to {email}.', { email: `<strong>${esc(email)}</strong>` })); } catch (err) { fail(err); } finally { capIn.reset(); } });
 });
 
 $('[data-signup]', root).addEventListener('submit', (e) => {
@@ -71,10 +77,10 @@ $('[data-signup]', root).addEventListener('submit', (e) => {
   if (f.password.value.length < 10) { say(tr('Use at least 10 characters for your password.'), true); return; }
   busy($('button[type=submit]', f), async () => {
     try {
-      const r = await store.signUp({ email: f.email.value.trim(), password: f.password.value, full_name: f.full_name.value.trim(), company: f.company.value.trim(), account_type: f.account_type.value, next: safeNext });
+      const r = await store.signUp({ email: f.email.value.trim(), password: f.password.value, full_name: f.full_name.value.trim(), company: f.company.value.trim(), account_type: f.account_type.value, next: safeNext, captchaToken: await capUp.token() });
       if (r.needsConfirmation) say(tr('Check {email} for a link to confirm your account.', { email: `<strong>${esc(f.email.value.trim())}</strong>` }));
       else { toast(tr('Account created.')); go(); }
-    } catch (err) { fail(err); }
+    } catch (err) { fail(err); capUp.reset(); }
   });
 });
 
