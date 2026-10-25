@@ -411,7 +411,9 @@ fieldset{border:0;padding:0;min-width:0}
 .footer-social a:hover,.footer-social a:focus-visible{border-color:var(--dark-ink)}
 .footer-social svg{width:20px;height:20px}
 .footer-bottom{display:flex;flex-wrap:wrap;gap:var(--s-m) var(--s-l);margin-top:var(--s-3xl);padding-top:var(--s-m);border-top:1px solid var(--dark-line);color:var(--dark-ink-2)}
-.footer-ogl{flex-basis:100%}
+.footer-ogl,.footer-legal{flex-basis:100%}
+.legal-info dt{font-weight:600;margin-top:var(--s-s)}
+.legal-info dd{margin:0}
 @media (max-width:860px){.footer-top{grid-template-columns:1fr 1fr}}
 
 @media print{.site-header,.action-bar,.site-footer,.skip{display:none}body{background:#fff}}

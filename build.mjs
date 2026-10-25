@@ -168,7 +168,8 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       if (meta.article) crumbs.push([L.guides, pageUrl(loc, 'guides.html')]);
       if (file !== 'index.html') crumbs.push([meta.crumb, canonical]);
       const graph = [
-        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'daniel@brickandpane.co.uk',
+        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'contact@brickandpane.co.uk', telephone: '+44 7575 626 775',
+          address: { '@type': 'PostalAddress', streetAddress: '30 Pettman Close', addressLocality: 'Herne Bay', addressRegion: 'Kent', postalCode: 'CT6 5TJ', addressCountry: 'GB' },
           logo: `${SITE}/img/logo.svg`, image: `${SITE}/img/photos/og-image.jpg`, description: L.org,
           areaServed: { '@type': 'City', name: 'London' },
           sameAs: ['https://www.linkedin.com/company/brickandpane/', 'https://www.facebook.com/profile.php?id=61595551690070', 'https://www.instagram.com/brickandpane/'] },
@@ -237,7 +238,7 @@ writeFileSync(url('./llms.txt'), `# Brick & Pane
 
 > ${LOCALES.en.org} Every project is quoted individually; the site publishes system data, Building Regulations guidance and how we work.
 
-Contact: daniel@brickandpane.co.uk
+Contact: contact@brickandpane.co.uk, +44 7575 626 775
 
 ## Guides (English)
 
