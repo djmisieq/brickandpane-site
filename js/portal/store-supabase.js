@@ -21,7 +21,7 @@ let channel = null;
 const subscribe = () => {
   if (channel) return;
   channel = sb.channel('portal');
-  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members'].forEach((table) =>
+  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members', 'prospects'].forEach((table) =>
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
   channel.subscribe();
 };
@@ -97,6 +97,28 @@ export const store = {
   },
   async updateRequest(id, { status, staff_note }) {
     ok(await sb.from('contact_requests').update({ status, staff_note }).eq('id', id));
+    emit();
+  },
+  // Prospects: companies we want to work with (migration 0014, staff-only RLS).
+  async listProspects() {
+    return ok(await sb.from('prospects').select('*').order('updated_at', { ascending: false }).limit(1000));
+  },
+  async saveProspect(id, patch) {
+    const row = id
+      ? ok(await sb.from('prospects').update(patch).eq('id', id).select('id').single())
+      : ok(await sb.from('prospects').insert(patch).select('id').single());
+    emit();
+    return row.id;
+  },
+  async addProspectNote(id, text, stage = null) {
+    const { data: { user } } = await sb.auth.getUser();
+    const me = ok(await sb.from('profiles').select('full_name').eq('id', user.id).single());
+    const { log } = ok(await sb.from('prospects').select('log').eq('id', id).single());
+    ok(await sb.from('prospects').update({ log: [{ at: new Date().toISOString(), by: me.full_name || '', text, ...(stage ? { stage } : {}) }, ...(log || [])] }).eq('id', id));
+    emit();
+  },
+  async deleteProspect(id) {
+    ok(await sb.from('prospects').delete().eq('id', id));
     emit();
   },
   // Staff only: creates the project with the enquiry's openings (migration 0008) and returns its id.
