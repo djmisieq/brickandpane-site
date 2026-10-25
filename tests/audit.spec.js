@@ -44,6 +44,11 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   /published, not promised/i, /publikujemy, a nie obiecujemy/i, /data sheet is published/i, /po publikacji karty/i,
   /W toku/, /\bIn progress\b/, /\bPlanowane\b/, /\bPlanned\b/, /status openly/i, /status pokazujemy/i,
   /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i,
+  // 25.10: no "new company" framing, no "vetted partners" (who installs is not a promise), no CPD or DWG/BIM spec packs,
+  // and no "UK company" (Brick and Pane is a sole trader's trading name).
+  /vetted/i, /sprawdzon\S* partner/i, /sprawdzeni partner/i, /punkt\S* kontaktu/i, /\bCPD\b/, /spec pack/i, /pakiet\S* specyfikac/i,
+  /\bBIM\b/, /\bRVT\b/, /new (London )?(window )?company/i, /nowa (londyńska )?firma/i, /founding project/i, /projekt\S* założyciel/i,
+  /UK company/i, /brytyjsk\S* spółk/i,
   // Certified values per project and change notices in writing are not confirmed (24.10.2026): values come with the quotation.
   /(issue|give|gives) (you )?the certified/i, /certified values go/i, /certyfikowan\w* (wartoś|U\b)/i, /wartoś\w* certyfikowan/i, /silent substitution/i, /cichych zamiennik/i,
   /in writing and show/i, /na piśmie i pokaż/i, /as each system is certified/i, /po certyfikacji/i];
@@ -214,8 +219,8 @@ test('aria-current="page" only marks the page you are on', async ({ page }) => {
 });
 
 test('language switch keeps the query, and portal pages keep the switch', async ({ page }) => {
-  await page.goto('/contact.html?role=architect&topic=cpd');
-  await expect(page.locator('.lang-switch a[hreflang="pl"]')).toHaveAttribute('href', /pl\/contact\.html\?role=architect&topic=cpd$/);
+  await page.goto('/contact.html?role=architect&topic=review');
+  await expect(page.locator('.lang-switch a[hreflang="pl"]')).toHaveAttribute('href', /pl\/contact\.html\?role=architect&topic=review$/);
   await page.goto('/login.html');
   await page.locator('[data-demo-login="homeowner"]').click();
   await expect(page.locator('.lang-switch')).toBeVisible();
