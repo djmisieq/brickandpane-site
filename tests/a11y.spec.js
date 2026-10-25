@@ -23,7 +23,8 @@ test('pages stay light and load nothing from other domains', async ({ page }, in
     const foreign = [];
     let bytes = 0;
     let photoBytes = 0;
-    page.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1')) foreign.push(r.url()); });
+    // Only the Turnstile captcha script may come from elsewhere (contact and login, when build.mjs has a site key).
+    page.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1') && !r.url().startsWith('https://challenges.cloudflare.com/turnstile/')) foreign.push(r.url()); });
     page.on('response', async (r) => { try { const n = (await r.body()).length; if (r.url().includes('/img/photos/')) photoBytes += n; else bytes += n; } catch { /* redirects have no body */ } });
     await page.goto(url, { waitUntil: 'networkidle' });
     expect(foreign, url).toEqual([]);

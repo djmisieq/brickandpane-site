@@ -19,7 +19,7 @@ const APP_PAGES = ['portal.html', 'login.html', 'admin.html'];
 const SUPABASE = 'kgnjyyzjmyilorgaeabc.supabase.co';
 // Cloudflare Turnstile site key (public). Empty = no captcha anywhere. With a key: widget on the quote form and on
 // sign-in (js/captcha.js), Cloudflare allowed in the login CSP. Switch-on order: brickandpane-docs CLAUDE.md → Turnstile.
-const TURNSTILE = '';
+const TURNSTILE = '0x4AAAAAAFlmJCZFfGLlPmw7';
 const CF = 'https://challenges.cloudflare.com';
 const CAPTCHA_PAGES = ['contact.html', 'login.html'];
 const captchaHead = () => `<meta name="turnstile" content="${TURNSTILE}">
