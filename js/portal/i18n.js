@@ -391,6 +391,7 @@ const PL = {
   'Add your opening': 'Dodaj swój otwór',
   'Confirm your email address first: use the link we sent when you created the account.': 'Najpierw potwierdź adres e-mail: kliknij link, który wysłaliśmy przy zakładaniu konta.',
   'Too many attempts. Please wait a minute and try again.': 'Za dużo prób. Odczekaj chwilę i spróbuj ponownie.',
+  'We couldn’t confirm you’re a person. Please try again.': 'Nie udało się potwierdzić, że jesteś człowiekiem. Spróbuj ponownie.',
   'We can’t reach the portal right now. Check your connection and try again.': 'Nie możemy teraz połączyć się z panelem. Sprawdź połączenie i spróbuj ponownie.',
   'Something went wrong. Please try again.': 'Coś poszło nie tak. Spróbuj ponownie.',
 

@@ -56,9 +56,10 @@ export const store = {
     }
     return { ...p, email: user.email };
   },
-  async signIn(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); },
-  async signUp({ email, password, full_name, company, account_type = 'architect', next = 'portal.html' }) {
-    const data = ok(await sb.auth.signUp({ email, password, options: { data: { full_name, company, account_type }, emailRedirectTo: new URL(next, location.href).href } }));
+  // captchaToken: Turnstile token, required once captcha is switched on in Supabase (Auth → Attack Protection).
+  async signIn(email, password, captchaToken) { ok(await sb.auth.signInWithPassword({ email, password, options: { captchaToken } })); },
+  async signUp({ email, password, full_name, company, account_type = 'architect', next = 'portal.html', captchaToken }) {
+    const data = ok(await sb.auth.signUp({ email, password, options: { captchaToken, data: { full_name, company, account_type }, emailRedirectTo: new URL(next, location.href).href } }));
     return { needsConfirmation: !data.session };
   },
   // Providers switched on in Supabase (Authentication → Sign In / Providers), read from the public auth settings.
@@ -72,7 +73,7 @@ export const store = {
     try { if (accountType) localStorage.setItem(PENDING_TYPE, accountType); else localStorage.removeItem(PENDING_TYPE); } catch { /* ignore */ }
     ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo, ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
   },
-  async sendMagicLink(email, next = 'portal.html') { ok(await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: new URL(next, location.href).href } })); },
+  async sendMagicLink(email, next = 'portal.html', captchaToken) { ok(await sb.auth.signInWithOtp({ email, options: { captchaToken, emailRedirectTo: new URL(next, location.href).href } })); },
   async signOut() { await leaveAccountList(); await sb.auth.signOut(); },
   // The list of openings kept on the account (migration 0012) meets the one in this browser.
   syncList: () => syncList().catch(() => 0),

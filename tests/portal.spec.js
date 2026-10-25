@@ -337,7 +337,7 @@ test('portal pages: CSP, frame guard, password settings and size checks', async 
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('/login.html');
-  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /frame-src 'none'/);
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /frame-src ('none'|https:\/\/challenges\.cloudflare\.com);/); // Turnstile only, when on
   await expect(page.locator('#no-frame')).toHaveCount(0); // top window: the page is shown
   expect(await page.evaluate(() => typeof self.supabase?.createClient)).toBe('function'); // vendored, not from a CDN
 

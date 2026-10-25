@@ -3,6 +3,7 @@
 // emails the team and sends the sender a confirmation with their reference.
 // Deploy with JWT verification off (the form is public): supabase functions deploy contact-submit --no-verify-jwt
 // Secrets: RESEND_API_KEY, MAIL_FROM, ENQUIRY_TO (team inbox), ALLOWED_ORIGIN (e.g. https://brickandpane.co.uk),
+// optional TURNSTILE_SECRET (Cloudflare captcha; set it only after the site sends tokens),
 // plus SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided automatically).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -71,6 +72,18 @@ Deno.serve(async (req) => {
   try { f = await req.formData(); } catch { return reply(400, { error: 'form' }); }
   // Honeypot: bots fill the hidden "company_website" field. Pretend success, store nothing.
   if (str(f, 'company_website')) return reply(200, { ok: true });
+
+  // Cloudflare Turnstile: checked only once TURNSTILE_SECRET is set, so the widget must be live on the site first.
+  // Fails closed: if Cloudflare can't confirm the token, nothing is stored.
+  const secret = Deno.env.get('TURNSTILE_SECRET');
+  if (secret) {
+    const check = new URLSearchParams({ secret, response: str(f, 'cf-turnstile-response', 2048) ?? '' });
+    const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
+    if (ip) check.set('remoteip', ip);
+    const human = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: check })
+      .then((r) => r.json()).then((d) => d.success === true).catch(() => false);
+    if (!human) return reply(403, { error: 'captcha' });
+  }
 
   const name = str(f, 'name', 200), email = str(f, 'email', 320);
   if (!name || !email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(422, { error: 'name_email' });

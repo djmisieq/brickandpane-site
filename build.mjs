@@ -17,7 +17,15 @@ const INDEXABLE = false;
 // so both live in the page. supabase-js is served from js/vendor (no third-party script can reach the session).
 const APP_PAGES = ['portal.html', 'login.html', 'admin.html'];
 const SUPABASE = 'kgnjyyzjmyilorgaeabc.supabase.co';
-const appHead = (root) => `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${SUPABASE}; font-src 'self'; connect-src 'self' https://${SUPABASE} wss://${SUPABASE}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+// Cloudflare Turnstile site key (public). Empty = no captcha anywhere. With a key: widget on the quote form and on
+// sign-in (js/captcha.js), Cloudflare allowed in the login CSP. Switch-on order: brickandpane-docs CLAUDE.md → Turnstile.
+const TURNSTILE = '';
+const CF = 'https://challenges.cloudflare.com';
+const CAPTCHA_PAGES = ['contact.html', 'login.html'];
+const captchaHead = () => `<meta name="turnstile" content="${TURNSTILE}">
+<script src="${CF}/turnstile/v0/api.js?render=explicit" async defer></script>
+`;
+const appHead = (root, cf) => `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'${cf ? ` ${CF}` : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${SUPABASE}; font-src 'self'; connect-src 'self' https://${SUPABASE} wss://${SUPABASE}; frame-src ${cf ? CF : "'none'"}; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <style id="no-frame">html{display:none!important}</style>
 <script src="${root}js/portal/frame.js"></script>
@@ -211,7 +219,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       .replace('{{alternates}}', alternates)
       .replace('{{skip}}', L.skip)
       .replace('{{base}}', meta.base ? `<base href="${meta.base}">\n` : '')
-      .replace('{{head}}', () => (meta.head || '') + (APP_PAGES.includes(file) ? appHead(L.root) : ''))
+      .replace('{{head}}', () => (meta.head || '') + (APP_PAGES.includes(file) ? appHead(L.root, TURNSTILE && CAPTCHA_PAGES.includes(file)) : '') + (TURNSTILE && CAPTCHA_PAGES.includes(file) ? captchaHead() : ''))
       .replace('{{header}}', nav)
       .replace('{{footer}}', footer
         .replace('{{actionHref}}', meta.actionHref || L.actionHref)
