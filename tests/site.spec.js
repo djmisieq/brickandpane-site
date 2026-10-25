@@ -542,6 +542,21 @@ test('every page names who trades as Brick and Pane, with phone and email', asyn
   expect(await page.content()).not.toContain('daniel@');
 });
 
+test('the About page introduces the team with photos and roles', async ({ page }) => {
+  for (const [url, roles] of [['/about.html', ['Founder', 'Project Manager', 'Project Manager']], ['/pl/about.html', ['Założyciel', 'Project Manager', 'Project Manager']]]) {
+    await page.goto(url);
+    const people = page.locator('#team .person');
+    await expect(people).toHaveCount(3);
+    await expect(people.locator('h3')).toHaveText(['Christopher', 'Kate', 'Daniel']);
+    await expect(people.locator('.person-role')).toHaveText(roles);
+    for (const img of await people.locator('img').all()) {
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => img.evaluate((i) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+      expect(await img.getAttribute('alt')).toBeTruthy();
+    }
+  }
+});
+
 test('structured data parses and FAQ answers match what the page shows', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'runs once');
   for (const url of [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)]) {

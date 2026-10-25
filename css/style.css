@@ -412,6 +412,12 @@ fieldset{border:0;padding:0;min-width:0}
 .footer-social svg{width:20px;height:20px}
 .footer-bottom{display:flex;flex-wrap:wrap;gap:var(--s-m) var(--s-l);margin-top:var(--s-3xl);padding-top:var(--s-m);border-top:1px solid var(--dark-line);color:var(--dark-ink-2)}
 .footer-ogl,.footer-legal{flex-basis:100%}
+.people{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s-xl) var(--gutter)}
+.person .photo{aspect-ratio:4 / 5;margin-bottom:var(--s-m)}
+.person .photo img{width:100%;height:100%;object-fit:cover;display:block}
+.person h3{margin:0}
+.person-role{font-family:var(--mono);font-size:var(--step--2);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--muted);margin:.25rem 0 var(--s-s)}
+.person p:last-child{color:var(--ink-2);margin:0}
 .legal-info dt{font-weight:600;margin-top:var(--s-s)}
 .legal-info dd{margin:0}
 @media (max-width:860px){.footer-top{grid-template-columns:1fr 1fr}}
