@@ -21,7 +21,7 @@ const PRICES = [/£\s?\d/, /£\/m²/, /±\s?\d/, /discount/i, /rabat/i, /zniżk/
   /fixed (price|quot)/i, /included in (our|the) price/i, /w cenie/i, /stał\w* (cen|wycen)/i, /wiążąc\w* wycen/i];
 const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'?s free\b/i, /, free\./i, /próbk\w* narożnik/i, /pełnowymiarow/i, /za darmo/i,
   /nic nie kosztuje/i, /straight away/i, /od razu zobaczysz/i, /our own (team|installers|london team)/i, /własn\w+ zesp/i, /podwykonawc/i, /subcontract/i,
-  /project manager/i, /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\S* osob/i,
+  /one (named )?person/i, /named person/i, /kierownik\w* projektu/i, /jedn\S* osob/i,
   // Promises the company has not confirmed (19.10): one contact person, samples, extras, dates, terms.
   /package manager/i, /opiekun\S* pakietu/i, /point of contact/i, /jeden kontakt/i, /samples to your/i, /próbki do pracowni/i,
   /roughly what it costs/i, /mniej więcej ile/i, /budget (figure|range)/i, /przedział\S* budżetu/i, /nothing hidden/i, /nic ukrytego/i,

@@ -168,7 +168,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       if (meta.article) crumbs.push([L.guides, pageUrl(loc, 'guides.html')]);
       if (file !== 'index.html') crumbs.push([meta.crumb, canonical]);
       const graph = [
-        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'contact@brickandpane.co.uk', telephone: '+44 7575 626 775',
+        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'contact@brickandpane.co.uk', founder: { '@type': 'Person', name: 'Christopher' }, telephone: '+44 7575 626 775',
           address: { '@type': 'PostalAddress', streetAddress: '30 Pettman Close', addressLocality: 'Herne Bay', addressRegion: 'Kent', postalCode: 'CT6 5TJ', addressCountry: 'GB' },
           logo: `${SITE}/img/logo.svg`, image: `${SITE}/img/photos/og-image.jpg`, description: L.org,
           areaServed: { '@type': 'City', name: 'London' },
