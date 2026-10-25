@@ -715,7 +715,7 @@ import { layoutName } from './layouts.js';
       const btn = $('button[type=submit]', form);
       status.hidden = false; status.classList.remove('is-error');
       if (!endpoint) {
-        status.innerHTML = t('<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Your details are still in the form.', '<strong>Tryb podglądu — nic nie zostało wysłane.</strong> Formularz nie jest jeszcze podłączony. Wyślij rysunki na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>. Twoje dane nadal są w formularzu.');
+        status.innerHTML = t('<strong>Preview mode — nothing has been sent.</strong> The form isn’t connected yet. Please email your drawings to <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>. Your details are still in the form.', '<strong>Tryb podglądu — nic nie zostało wysłane.</strong> Formularz nie jest jeszcze podłączony. Wyślij rysunki na <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>. Twoje dane nadal są w formularzu.');
         status.focus();
         return;
       }
@@ -740,7 +740,7 @@ import { layoutName } from './layouts.js';
         const code = err.name === 'AbortError' ? 'timeout' : err.message;
         status.hidden = false;
         status.classList.add('is-error');
-        status.innerHTML = `${ERRORS[code] || t('We couldn’t send that.', 'Nie udało się wysłać.')} ${t('Your details are still here. Try again, or email <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.', 'Twoje dane nadal tu są. Spróbuj ponownie albo napisz na <a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>.')}`;
+        status.innerHTML = `${ERRORS[code] || t('We couldn’t send that.', 'Nie udało się wysłać.')} ${t('Your details are still here. Try again, or email <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>.', 'Twoje dane nadal tu są. Spróbuj ponownie albo napisz na <a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>.')}`;
         status.focus();
         btn.disabled = false; btn.textContent = SUBMIT;
       } finally { clearTimeout(timer); }

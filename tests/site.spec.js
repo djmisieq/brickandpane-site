@@ -522,6 +522,26 @@ test.describe('full product range', () => {
   });
 });
 
+test('every page names who trades as Brick and Pane, with phone and email', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'runs once');
+  for (const [url, words] of [['/index.html', 'trading name of Christopher Rozek'], ['/pl/index.html', 'nazwa handlowa Christophera Rozka']]) {
+    await page.goto(url);
+    const footer = page.locator('.site-footer, footer').first();
+    await expect(footer).toContainText(words);
+    await expect(footer).toContainText('30 Pettman Close, Herne Bay, Kent, CT6 5TJ');
+    await expect(footer.locator('a[href="tel:+447575626775"]')).toHaveText('+44 7575 626 775');
+    await expect(footer.locator('a[href="mailto:contact@brickandpane.co.uk"]')).toBeVisible();
+  }
+  await page.goto('/contact.html');
+  await expect(page.locator('.legal-info')).toContainText('Christopher Rozek (sole trader)');
+  await page.goto('/privacy.html');
+  await expect(page.locator('.prose')).toContainText('data controller for information collected through this website is Christopher Rozek');
+  const org = (await page.$$eval('script[type="application/ld+json"]', (ss) => ss.map((s) => JSON.parse(s.textContent))))
+    .flatMap((d) => d['@graph'] || [d]).find((d) => d['@type'] === 'HomeAndConstructionBusiness');
+  expect(org).toMatchObject({ email: 'contact@brickandpane.co.uk', telephone: '+44 7575 626 775', address: { postalCode: 'CT6 5TJ' } });
+  expect(await page.content()).not.toContain('daniel@');
+});
+
 test('structured data parses and FAQ answers match what the page shows', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'runs once');
   for (const url of [...PAGES.map((p) => `/${p}.html`), ...PAGES.map((p) => `/pl/${p}.html`)]) {

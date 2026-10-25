@@ -359,7 +359,7 @@ test('portal pages: CSP, frame guard, password settings and size checks', async 
   await page.locator('#s-pw2').fill('a-long-password');
   await page.locator('.password button[type=submit]').click();
   await expect(page.locator('.toast')).toContainText('Password set.');
-  await expect(page.locator('#app a[href^="mailto:"]')).toHaveText('daniel@brickandpane.co.uk');
+  await expect(page.locator('#app a[href^="mailto:"]')).toHaveText('contact@brickandpane.co.uk');
 
   // A size outside what the database accepts is pointed out before anything is created.
   await page.goto('/portal.html#/new');

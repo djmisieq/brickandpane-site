@@ -318,7 +318,7 @@ function settings() {
       </form>
       <section class="mt-l" style="max-width:640px">
         <h2 class="panel-h">${tr('Your data')}</h2>
-        <p class="note">${tr('To delete your account and personal data, email {email} from the address you sign in with.', { email: '<a href="mailto:daniel@brickandpane.co.uk">daniel@brickandpane.co.uk</a>' })} <a href="privacy.html">${tr('Privacy notice')}</a></p>
+        <p class="note">${tr('To delete your account and personal data, email {email} from the address you sign in with.', { email: '<a href="mailto:contact@brickandpane.co.uk">contact@brickandpane.co.uk</a>' })} <a href="privacy.html">${tr('Privacy notice')}</a></p>
       </section>
     </div>`;
   $('.settings', app).addEventListener('submit', async (e) => {
