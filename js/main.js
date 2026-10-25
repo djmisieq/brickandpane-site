@@ -405,7 +405,7 @@ import { layoutName } from './layouts.js';
     listRows.innerHTML = list.length ? list.map((o) => `
       <div class="list-row" role="group" aria-label="${esc(o.ref)}">
         <p class="list-row-name"><span class="op-ref">${esc(o.ref)}</span> ${esc(SYS_NAMES[o.system] || o.system)}</p>
-        ${o.note ? `<p class="list-row-note">${esc(o.note)}</p>` : ''}
+        ${o.note || openingNote(o) ? `<p class="list-row-note">${esc(o.note || openingNote(o))}</p>` : ''}
         <div class="list-row-fields">
           <label><span>${t('Width (mm)', 'Szerokość (mm)')}</span><input data-k="width_mm" type="number" inputmode="numeric" min="300" max="30000" value="${+o.width_mm || ''}"></label>
           <label><span>${t('Height (mm)', 'Wysokość (mm)')}</span><input data-k="height_mm" type="number" inputmode="numeric" min="300" max="6000" value="${+o.height_mm || ''}"></label>
@@ -486,7 +486,8 @@ import { layoutName } from './layouts.js';
   // Arriving from a shared link: add its openings, then drop the code from the address.
   const sharedList = new URLSearchParams(location.search).get('list');
   if (sharedList) {
-    const added = mergeIntoList(decodeList(sharedList));
+    // The email and shared links carry no notes: describe layout and glass in words, as the sizing tools do.
+    const added = mergeIntoList(decodeList(sharedList).map((o) => ({ ...o, note: o.note || openingNote(o) })));
     const u = new URL(location.href); u.searchParams.delete('list'); history.replaceState(null, '', u);
     if (added) openList(t(`We’ve added ${countText(added)} from the shared list.`, `Dodaliśmy z udostępnionej listy: ${countPl(added)}.`), null);
   }

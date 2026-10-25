@@ -355,6 +355,17 @@ test.describe('the list of openings is visible and nothing typed is lost', () =>
     await other.close();
   });
 
+  test('a list from the email link describes layout and glass in words', async ({ page }) => {
+    // The email link carries no notes (supabase/functions/list-email).
+    const rows = [['D01', 'bifold', 'alu', 4800, 2400, 1, '4+1', 'd', ''], ['D02', 'lift-slide', '', 5600, 2600, 1, '4C', 'tl', '']];
+    const code = Buffer.from(JSON.stringify(rows)).toString('base64url');
+    await page.goto(`/pl/contact.html?list=${code}`);
+    const drawer = page.locator('.list-drawer');
+    await expect(drawer.locator('.list-row-note')).toHaveText(['5 skrzydeł: 4 w lewo, 1 w prawo, szyba podwójna', '4 skrzydła, otwierane od środka, szyba potrójna laminowana']);
+    await drawer.locator('[data-list-close]').click();
+    await expect(page.locator('[data-op] [data-k="note"]').first()).toHaveValue('5 skrzydeł: 4 w lewo, 1 w prawo, szyba podwójna');
+  });
+
   test('a bad shared link adds nothing and breaks nothing', async ({ page }) => {
     await page.goto('/contact.html?list=not-a-list');
     await expect(page.locator('.list-drawer')).toBeHidden();
