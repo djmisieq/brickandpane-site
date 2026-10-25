@@ -17,7 +17,7 @@ let dueCount = 0;
 // Values the contact form stores in contact_requests (src/pages/contact.html).
 const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project', closed: 'Closed', spam: 'Spam' };
 const REQ_ROLES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner', other: 'Other' };
-const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A quotation for a scheme', 'spec-pack': 'The spec pack (DWG / BIM / clauses)', samples: 'Samples', cpd: 'A CPD session', pqq: 'The pre-qualification pack', founding: 'Founding project', question: 'Just a question' };
+const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A quotation for a scheme', 'spec-pack': 'Technical files (old form)', samples: 'Samples', cpd: 'Training session (old form)', pqq: 'The pre-qualification pack', founding: 'A project for a case study', question: 'Just a question' };
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
@@ -417,7 +417,7 @@ async function prospect(id) {
           ${related.length ? `<h2 class="panel-h mt-m">${tr('Enquiries from this company')}</h2><ul class="prospect-related">${related.map((r) => `<li><button type="button" class="linkish" data-open-enq="${esc(r.ref)}">${esc(r.ref)}</button> · ${esc(r.name)} · ${ago(r.created_at)}</li>`).join('')}</ul>` : ''}
           <h2 class="panel-h mt-m">${tr('Contact history')}</h2>
           <form class="ctl" data-prospect-note>
-            <div class="field"><label for="pr-log">${tr('What happened')}</label><textarea id="pr-log" name="text" rows="2" maxlength="2000" required placeholder="${tr('e.g. Call: they have two extensions at stage 3. Send the spec pack.')}"></textarea></div>
+            <div class="field"><label for="pr-log">${tr('What happened')}</label><textarea id="pr-log" name="text" rows="2" maxlength="2000" required placeholder="${tr('e.g. Call: they have two extensions at stage 3. Offer a drawing review.')}"></textarea></div>
             <button class="btn btn-sm" type="submit">${tr('Add to history')}</button>
           </form>
           ${c.log?.length ? `<ol class="timeline">${c.log.map((e) => `

@@ -582,6 +582,6 @@ test('technical detail is folded behind its heading and opens from links', async
   await expect(tech).toHaveAttribute('open', '');
   await expect(page.locator('#performance table')).toBeVisible();
   // A deep link opens the right section too.
-  await page.goto('/pl/bifold-doors.html#downloads');
-  await expect(page.locator('#downloads details.tech')).toHaveAttribute('open', '');
+  await page.goto('/pl/bifold-doors.html#london');
+  await expect(page.locator('#london details.tech')).toHaveAttribute('open', '');
 });
