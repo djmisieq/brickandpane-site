@@ -49,6 +49,9 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   /vetted/i, /sprawdzon\S* partner/i, /sprawdzeni partner/i, /punkt\S* kontaktu/i, /\bCPD\b/, /spec pack/i, /pakiet\S* specyfikac/i,
   /\bBIM\b/, /\bRVT\b/, /new (London )?(window )?company/i, /nowa (londyńska )?firma/i, /founding project/i, /projekt\S* założyciel/i,
   /UK company/i, /brytyjsk\S* spółk/i,
+  // 25.10: no change promises "in writing" and no "no substitutions" guarantees: the spec is in the quote, changes in the project thread.
+  /written change control/i, /pisemn\S* kontrol/i, /written OK/i, /Twoją pisemną zgod/i, /written sign-off/i, /no substitutions/i,
+  /zamiennik\S* bez/i, /component swaps/i, /zamian komponent/i, /everything is in writing/i, /wszystko jest na piśmie/i, /in writing for building control/i,
   // Certified values per project and change notices in writing are not confirmed (24.10.2026): values come with the quotation.
   /(issue|give|gives) (you )?the certified/i, /certified values go/i, /certyfikowan\w* (wartoś|U\b)/i, /wartoś\w* certyfikowan/i, /silent substitution/i, /cichych zamiennik/i,
   /in writing and show/i, /na piśmie i pokaż/i, /as each system is certified/i, /po certyfikacji/i];
