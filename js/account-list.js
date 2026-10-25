@@ -23,10 +23,17 @@ const getClient = () => client ||= new Promise((resolve, reject) => {
 }).then((lib) => lib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { detectSessionInUrl: false } }));
 
 const key = (o) => [o.system, o.width_mm, o.height_mm, o.config || ''].join('|');
+// What can change on an opening without changing its key: quantity, note, material, glass.
+const detail = (o) => JSON.stringify([+o.qty || 1, o.note || '', o.material || '', o.glazing || '']);
 const readSynced = (uid) => {
-  try { const v = JSON.parse(localStorage.getItem(SYNCED) || 'null'); return v && v.uid === uid ? new Set(v.keys) : new Set(); } catch { return new Set(); }
+  try {
+    const v = JSON.parse(localStorage.getItem(SYNCED) || 'null');
+    return v && v.uid === uid ? { keys: new Set(v.keys), details: v.details || {} } : { keys: new Set(), details: {} };
+  } catch { return { keys: new Set(), details: {} }; }
 };
-const writeSynced = (uid, list) => { try { localStorage.setItem(SYNCED, JSON.stringify({ uid, keys: list.map(key) })); } catch { /* storage unavailable */ } };
+const writeSynced = (uid, list) => {
+  try { localStorage.setItem(SYNCED, JSON.stringify({ uid, keys: list.map(key), details: Object.fromEntries(list.map((o) => [key(o), detail(o)])) })); } catch { /* storage unavailable */ }
+};
 
 const userId = async (sb) => (await sb.auth.getSession()).data.session?.user.id || null;
 
@@ -59,18 +66,25 @@ export async function syncList() {
   const { data, error } = await sb.from('saved_lists').select('items').eq('user_id', uid).maybeSingle();
   if (error) return 0;
   const remote = Array.isArray(data?.items) ? data.items : [];
-  const seen = readSynced(uid);
-  const there = new Set(remote.map(key));
+  const { keys: seen, details } = readSynced(uid);
+  const there = new Map(remote.map((o) => [key(o), o]));
   const local = readList();
   const here = new Set(local.map(key));
-  const list = local.filter((o) => there.has(key(o)) || !seen.has(key(o)));
+  let changed = false;
+  // On both: an opening not edited here since the last sync takes the account's quantity, note, material and glass.
+  const list = local.filter((o) => there.has(key(o)) || !seen.has(key(o))).map((o) => {
+    const r = there.get(key(o)), was = details[key(o)];
+    if (!r || !was || detail(o) !== was || detail(r) === was) return o;
+    changed = true;
+    return { ...o, qty: r.qty, note: r.note, material: r.material, glazing: r.glazing };
+  });
   let added = 0;
   remote.filter((o) => !here.has(key(o)) && !seen.has(key(o))).forEach((o) => {
     const copy = { ...o };
     if (!copy.ref || list.some((x) => x.ref === copy.ref)) copy.ref = nextRef(list, copy.system);
     list.push(copy); added += 1;
   });
-  if (list.length !== local.length || added) writeList(list, 'account');
+  if (list.length !== local.length || added || changed) writeList(list, 'account');
   await save(sb, uid).catch(() => {});
   return added;
 }

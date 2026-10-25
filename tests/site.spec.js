@@ -456,6 +456,13 @@ test.describe('the list of openings is visible and nothing typed is lost', () =>
     await expect(drawer.locator('.list-row', { hasText: 'From the phone' })).toContainText('D02');
     await drawer.locator('.list-row', { hasText: 'From this laptop' }).locator('[data-list-remove]').click();
     await expect.poll(acct).toEqual(['From the phone']);
+    // Quantity changed on another device: this browser hasn't touched it since, so it takes the new one and doesn't write the old one back.
+    await page.evaluate(() => { const a = JSON.parse(localStorage.getItem('__acct')); a[0].qty = 3; localStorage.setItem('__acct', JSON.stringify(a)); sessionStorage.clear(); });
+    await page.reload();
+    await btn.click();
+    await expect(drawer.locator('.list-row', { hasText: 'From the phone' }).locator('input[data-k="qty"]')).toHaveValue('3');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('__acct'))[0].qty)).toBe(3);
+    await page.keyboard.press('Escape');
     // Removed on another device: this browser has seen it on the account, so it goes here too instead of coming back.
     await page.evaluate(() => { localStorage.setItem('__acct', '[]'); sessionStorage.clear(); });
     await page.reload();
