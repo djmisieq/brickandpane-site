@@ -180,7 +180,7 @@ for (const [loc, L] of Object.entries(LOCALES)) {
           address: { '@type': 'PostalAddress', streetAddress: '30 Pettman Close', addressLocality: 'Herne Bay', addressRegion: 'Kent', postalCode: 'CT6 5TJ', addressCountry: 'GB' },
           logo: `${SITE}/img/logo.svg`, image: `${SITE}/img/photos/og-image.jpg`, description: L.org,
           areaServed: { '@type': 'City', name: 'London' },
-          sameAs: ['https://www.linkedin.com/company/brickandpane/', 'https://www.facebook.com/profile.php?id=61595551690070', 'https://www.instagram.com/brickandpane/'] },
+          sameAs: ['https://www.linkedin.com/company/145344832/', 'https://www.facebook.com/profile.php?id=61595551690070', 'https://www.instagram.com/brickandpane.co.uk/'] },
         { '@type': 'WebSite', '@id': `${SITE}/#website`, url: `${SITE}/`, name: 'Brick & Pane', publisher: { '@id': ORG }, inLanguage: ['en-GB', 'pl'] },
         { '@type': 'WebPage', '@id': `${canonical}#webpage`, url: canonical, name,
           description: meta.description, inLanguage: L.lang, isPartOf: { '@id': `${SITE}/#website` }, about: { '@id': ORG },
