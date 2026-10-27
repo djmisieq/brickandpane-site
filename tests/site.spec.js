@@ -535,7 +535,7 @@ test('every page names who trades as Brick and Pane, with phone and email', asyn
   await page.goto('/contact.html');
   await expect(page.locator('.legal-info')).toContainText('Christopher Rozek (sole trader)');
   await page.goto('/privacy.html');
-  await expect(page.locator('.prose')).toContainText('data controller for information collected through this website is Christopher Rozek');
+  await expect(page.locator('.prose')).toContainText('data controller for the information described on this page is Christopher Rozek');
   const org = (await page.$$eval('script[type="application/ld+json"]', (ss) => ss.map((s) => JSON.parse(s.textContent))))
     .flatMap((d) => d['@graph'] || [d]).find((d) => d['@type'] === 'HomeAndConstructionBusiness');
   expect(org).toMatchObject({ email: 'contact@brickandpane.co.uk', telephone: '+44 7575 626 775', address: { postalCode: 'CT6 5TJ' } });
