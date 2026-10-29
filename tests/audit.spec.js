@@ -45,7 +45,7 @@ const BANNED = [...PRICES,/corner sample/i, /full-size (corner|sample)/i, /\bit'
   /W toku/, /\bIn progress\b/, /\bPlanowane\b/, /\bPlanned\b/, /status openly/i, /status pokazujemy/i,
   /we specify/i, /specyfikujemy/i, /many clients/i, /wielu klientów/i, /we talk clients/i, /z klientami/i, /mark them up/i,
   // 25.10: no "new company" framing, no "vetted partners" (who installs is not a promise), no CPD or DWG/BIM spec packs,
-  // and no "UK company" (Brick and Pane is a sole trader's trading name).
+  // and no "UK company" (Brick and Pane is a trading name, not a limited company).
   /vetted/i, /sprawdzon\S* partner/i, /sprawdzeni partner/i, /punkt\S* kontaktu/i, /\bCPD\b/, /spec pack/i, /pakiet\S* specyfikac/i,
   /\bBIM\b/, /\bRVT\b/, /new (London )?(window )?company/i, /nowa (londyńska )?firma/i, /founding project/i, /projekt\S* założyciel/i,
   /UK company/i, /brytyjsk\S* spółk/i,
