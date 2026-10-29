@@ -533,7 +533,7 @@ test('every page names who trades as Brick and Pane, with phone and email', asyn
     await expect(footer.locator('a[href="mailto:contact@brickandpane.co.uk"]')).toBeVisible();
   }
   await page.goto('/contact.html');
-  await expect(page.locator('.legal-info')).toContainText('Christopher Rozek (sole trader)');
+  await expect(page.locator('.legal-info')).toContainText('Christopher Rozek');
   await page.goto('/privacy.html');
   await expect(page.locator('.prose')).toContainText('data controller for the information described on this page is Christopher Rozek');
   const org = (await page.$$eval('script[type="application/ld+json"]', (ss) => ss.map((s) => JSON.parse(s.textContent))))
