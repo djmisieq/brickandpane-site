@@ -543,6 +543,8 @@ const PL = {
   "Units": "Liczba lokali",
   "Language": "Język",
   "Link to larger files": "Link do większych plików",
+  "Synced": "Zsynchronizowane",
+  "Error: {msg}": "Błąd: {msg}",
   "Team note": "Notatka zespołu",
   "Show": "Pokaż",
   "Open (new and replied)": "Otwarte (nowe i odpowiedziane)",

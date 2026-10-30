@@ -3,9 +3,10 @@
 // emails the team and sends the sender a confirmation with their reference.
 // Deploy with JWT verification off (the form is public): supabase functions deploy contact-submit --no-verify-jwt
 // Secrets: RESEND_API_KEY, MAIL_FROM, ENQUIRY_TO (team inbox), ALLOWED_ORIGIN (e.g. https://brickandpane.co.uk),
-// optional TURNSTILE_SECRET (Cloudflare captcha; set it only after the site sends tokens),
+// optional TURNSTILE_SECRET (Cloudflare captcha; set it only after the site sends tokens), HUBSPOT_TOKEN (optional),
 // plus SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided automatically).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { syncEnquiry } from '../_shared/hubspot.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const ORIGINS = (Deno.env.get('ALLOWED_ORIGIN') ?? 'https://brickandpane.co.uk').split(',').map((s) => s.trim());
@@ -122,6 +123,7 @@ Deno.serve(async (req) => {
     if (up.error) rejected.push(file.name.slice(0, 120)); else paths.push(path);
   }
   if (paths.length) await supabase.from('contact_requests').update({ files: paths }).eq('id', row.id);
+  EdgeRuntime.waitUntil(syncEnquiry(supabase, row.id).catch(() => {}));
 
   const fields = [['Role', str(f, 'role')], ['Company', str(f, 'company')], ['Phone', str(f, 'phone')], ['Topic', str(f, 'topic')],
     ['Systems', f.getAll('systems').join(', ')], ['Material', f.getAll('material').join(', ')], ['Location', str(f, 'location')],
