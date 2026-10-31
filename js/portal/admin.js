@@ -126,6 +126,7 @@ async function enquiries() {
           ${row('Units', esc(r.units || ''))}
           ${row('Start on site', esc(tr(r.start || '')))}
           ${row('Language', r.lang === 'pl' ? 'Polski' : 'English')}
+          ${row('HubSpot', r.hubspot_error ? esc(tr('Error: {msg}', { msg: r.hubspot_error })) : r.hubspot_synced_at ? esc(tr('Synced')) : '')}
         </tbody></table>
         ${r.openings?.length ? `<div class="table-scroll"><table class="spec spec-compact"><caption>${tr('Openings')} (${r.openings.reduce((n, o) => n + (o.qty || 1), 0)})</caption><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Product')}</th><th scope="col">${tr('Material')}</th><th scope="col">${tr('Size')}</th><th scope="col">${tr('Qty')}</th><th scope="col">${tr('Note')}</th></tr></thead><tbody>
           ${r.openings.map((o) => `<tr><th scope="row">${esc(o.ref || '')}</th><td>${esc(tr(SYSTEMS[o.system] || o.system || ''))}</td><td>${esc(tr(REQ_MATERIALS[o.material] || 'Not sure'))}</td><td>${o.width_mm || '?'} × ${o.height_mm || '?'} mm</td><td>${o.qty || 1}</td><td>${esc(o.note || '')}</td></tr>`).join('')}
