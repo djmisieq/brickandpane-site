@@ -1,6 +1,6 @@
 // Supabase Edge Function: repeat HubSpot syncs that failed and alert the team when one never gets through.
 // Called by pg_cron every 15 minutes (migration 0016). Looks only at the last 7 days of enquiries without a deal,
-// not spam and not test ("TEST …"). The backoff and the 5-attempt limit live in _shared/hubspot.ts (retryDue), so
+// not spam and not test ("TEST …" or "(TEST)", see isTestEnquiry). The backoff and the 5-attempt limit live in _shared/hubspot.ts (retryDue), so
 // calling it more often changes nothing; that is also why it can run without JWT verification, like notify-email.
 // Deploy: supabase functions deploy hubspot-retry --no-verify-jwt
 // Secrets: HUBSPOT_TOKEN, RESEND_API_KEY, MAIL_FROM, optional HUBSPOT_ALERT_TO (default chris@ and kate@),

@@ -204,7 +204,8 @@ const dealOf = async (token: string, r: Enquiry, contactId: string, products: { 
 type Db = { from: (table: string) => any };
 
 // Retries (hubspot-retry, every 15 min): attempt 1 is the form itself, then 15, 30, 60 and 120 min after the
-// previous one. After the 5th failure the team gets one email. Test enquiries (name or company "TEST …") are skipped.
+// previous one. After the 5th failure the team gets one email. Test enquiries are skipped: name or company starting
+// with "TEST", or "(TEST)" anywhere in them (the marker the leads script also skips).
 export const MAX_ATTEMPTS = 5;
 const BACKOFF_MIN = [15, 30, 60, 120];
 type Attempts = { created_at: string; hubspot_attempts: number; hubspot_attempted_at: string | null };
@@ -214,7 +215,8 @@ export const retryDue = (r: Attempts, now = Date.now()) => {
   const wait = r.hubspot_attempts ? BACKOFF_MIN[r.hubspot_attempts - 1] : 10;
   return now - Date.parse(r.hubspot_attempted_at ?? r.created_at) >= wait * 60e3;
 };
-export const isTestEnquiry = (r: { name?: string | null; company?: string | null }) => /^TEST\b/.test(r.name ?? '') || /^TEST\b/.test(r.company ?? '');
+const TEST = /^TEST\b|\(TEST\)/;
+export const isTestEnquiry = (r: { name?: string | null; company?: string | null }) => TEST.test(r.name ?? '') || TEST.test(r.company ?? '');
 
 export async function syncEnquiry(supabase: Db, id: string) {
   const token = Deno.env.get('HUBSPOT_TOKEN');
