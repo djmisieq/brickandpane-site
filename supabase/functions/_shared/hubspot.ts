@@ -40,7 +40,7 @@ export type Enquiry = {
   phone: string | null; company: string | null; topic: string | null; systems: string[] | null; material: string[] | null;
   location: string | null; riba_stage: string | null; building: string | null; units: string | null; start: string | null;
   message: string | null; files: string[] | null; files_link: string | null; consent_at: string; openings: Opening[] | null;
-  hubspot_deal_id: string | null;
+  hubspot_deal_id: string | null; project_id: string | null;
   utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; landing_page: string | null;
 };
 
@@ -91,7 +91,7 @@ export const noteBody = (r: Enquiry) => {
 
 // ---------- HubSpot API ----------
 
-class HubSpotError extends Error {
+export class HubSpotError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
@@ -252,9 +252,62 @@ export async function syncEnquiry(supabase: Db, id: string) {
     await supabase.from('contact_requests').update({
       hubspot_contact_id: contactId, hubspot_deal_id: dealId, hubspot_synced_at: new Date().toISOString(), hubspot_error: null,
     }).eq('id', id);
+    // Converted before HubSpot had the deal (e.g. after retries): link the project now.
+    if (r.project_id) await linkProject(supabase, r.project_id).catch(() => {});
   } catch (e) {
     const err = e as Error;
     const message = e instanceof HubSpotError ? `${e.status} ${e.message}` : err?.name === 'TimeoutError' ? 'timeout' : String(err?.message ?? e);
     try { await supabase.from('contact_requests').update({ hubspot_error: message.slice(0, 500) }).eq('id', id); } catch { /* never break the form */ }
   }
+}
+
+// ---------- portal links (migration 0018, function hubspot-link) ----------
+// One way only: the portal stamps HubSpot with bp_portal_*; nothing in HubSpot changes the portal. Nothing is created
+// in HubSpot here: a project without a deal or an account without a contact is simply left unlinked.
+
+// Contact's newest open deal for this enquiry: one that already has the ref, or has none yet (not another enquiry's).
+export const dealForProject = (deals: DealRow[], ref: string) => deals
+  .filter((d) => d.properties.hs_is_closed !== 'true' && (!d.properties.bp_enquiry_ref || d.properties.bp_enquiry_ref === ref))
+  .sort((a, b) => Date.parse(b.properties.createdate ?? '') - Date.parse(a.properties.createdate ?? ''))[0] ?? null;
+
+type Project = { id: string; ref: string; stage: string };
+type Request = { ref: string; email: string; hubspot_deal_id: string | null; hubspot_contact_id: string | null };
+
+// Returns what happened, for the function's count-only log.
+export async function linkProject(supabase: Db, projectId: string): Promise<string> {
+  const token = Deno.env.get('HUBSPOT_TOKEN');
+  if (!token) return 'no token';
+  const { data: p } = await supabase.from('projects').select('id, ref, stage').eq('id', projectId).maybeSingle() as { data: Project | null };
+  const { data: r } = await supabase.from('contact_requests').select('ref, email, hubspot_deal_id, hubspot_contact_id')
+    .eq('project_id', projectId).order('created_at').limit(1).maybeSingle() as { data: Request | null };
+  if (!p || !r) return 'not an enquiry project';
+  const { data: internal } = await supabase.from('project_internal').select('hubspot_deal_id').eq('project_id', projectId).maybeSingle();
+
+  let dealId: string | null = internal?.hubspot_deal_id ?? r.hubspot_deal_id ?? (await search(token, 'deals', 'bp_enquiry_ref', r.ref))?.id ?? null;
+  if (!dealId) {
+    const contactId = r.hubspot_contact_id ?? (await search(token, 'contacts', 'email', r.email))?.id;
+    const ids = contactId ? await linked(token, 'contact', contactId, 'deal') : [];
+    const deals = ids.length ? (await hs(token, 'POST', '/crm/v3/objects/deals/batch/read', { properties: DEAL_PROPS, inputs: ids.map((id) => ({ id })) })).results ?? [] : [];
+    dealId = dealForProject(deals, r.ref)?.id ?? null;
+  }
+  if (!dealId) return 'no deal';
+  await hs(token, 'PATCH', `/crm/v3/objects/deals/${dealId}`, { properties: { bp_portal_project_id: p.id, bp_portal_project_ref: p.ref, bp_portal_stage: p.stage } });
+  if (internal?.hubspot_deal_id !== dealId) await supabase.from('project_internal').update({ hubspot_deal_id: dealId }).eq('project_id', projectId);
+  return 'linked';
+}
+
+// deno-lint-ignore no-explicit-any
+type DbAuth = Db & { auth: { admin: { getUserById: (id: string) => Promise<{ data: { user: any } }> } } };
+export async function linkProfile(supabase: DbAuth, profileId: string): Promise<string> {
+  const token = Deno.env.get('HUBSPOT_TOKEN');
+  if (!token) return 'no token';
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', profileId).maybeSingle();
+  const { data: { user } } = await supabase.auth.admin.getUserById(profileId);
+  // Only confirmed addresses: an unconfirmed sign-up could be someone else's email.
+  if (!profile || profile.role === 'staff' || !user?.email || !user.email_confirmed_at) return 'skipped';
+  const contact = await search(token, 'contacts', 'email', user.email);
+  if (!contact) return 'no contact';
+  await hs(token, 'PATCH', `/crm/v3/objects/contacts/${contact.id}`, { properties: { bp_portal_user_id: profileId, bp_portal_account: 'true' } });
+  await supabase.from('profile_internal').upsert({ profile_id: profileId, hubspot_contact_id: contact.id, updated_at: new Date().toISOString() });
+  return 'linked';
 }
