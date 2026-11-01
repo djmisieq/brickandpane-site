@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -250,6 +250,34 @@ test('a saved list of openings belongs to its account only', async () => {
   await db.exec('reset role');
   await db.query('delete from auth.users where id = $1', [A]);
   assert.equal((await db.query('select count(*)::int n from public.saved_lists')).rows[0].n, 0);
+});
+
+test('converting with an invitation marks it for email; a staff email gets no invite; stage emails use labels', async () => {
+  const { db, as } = await setup();
+  await db.exec('grant all on public.contact_requests to service_role; grant usage on schema public to service_role; set role service_role');
+  const [kim, staffMail, known] = (await db.query(`insert into public.contact_requests (name, email, consent_at) values
+    ('Kim', 'kim@new.com', now()), ('Bot (TEST)', 'S@bp.com', now()), ('Jo', 'client@x.com', now()) returning id`)).rows.map((x) => x.id);
+  await db.exec('reset role');
+  await as(S);
+  const r1 = (await db.query('select public.convert_enquiry($1, true) as r', [kim])).rows[0].r;
+  assert.equal(r1.client, 'invited'); assert.equal(r1.emailed, true); // pg_net is absent here: the failed call is swallowed
+  await db.exec('reset role');
+  assert.deepEqual((await db.query('select send_email, emailed_at from public.project_invites where project_id = $1', [r1.project_id])).rows, [{ send_email: true, emailed_at: null }]);
+  await as(S);
+  const r2 = (await db.query('select public.convert_enquiry($1, true) as r', [staffMail])).rows[0].r;
+  assert.equal(r2.client, 'staff'); assert.equal(r2.emailed, false);
+  await db.exec('reset role');
+  assert.equal((await db.query('select count(*)::int n from public.project_invites where project_id = $1', [r2.project_id])).rows[0].n, 0);
+  await as(S);
+  const r3 = (await db.query('select public.convert_enquiry($1, false) as r', [known])).rows[0].r;
+  assert.equal(r3.client, 'linked');
+  // Old callers keep working, and an unticked box marks nothing.
+  assert.equal((await db.query('select public.convert_request($1) as id', [kim])).rows[0].id, r1.project_id);
+  // A client-visible stage change is announced with the portal's label.
+  await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, visible_to_client, actor_id) values ($1, 'submitted', 'quote_issued', true, $2)`, [r3.project_id, S]);
+  await db.exec('reset role');
+  const titles = (await db.query(`select title from public.notifications where project_id = $1 and type = 'stage'`, [r3.project_id])).rows.map((x) => x.title);
+  assert.deepEqual(titles, ['Jo: Quote issued']);
 });
 
 test('the prospects table is gone, and dropping it never loses a row', async () => {

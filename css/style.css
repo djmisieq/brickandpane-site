@@ -648,6 +648,7 @@ body.app .list-btn{display:none}
 .enq-msg{white-space:pre-wrap;margin:0}
 .table-scroll{overflow-x:auto}
 .enq-convert{display:flex;flex-wrap:wrap;gap:var(--s-s);align-items:center;margin:0}
+.enq-invite{display:inline-flex;gap:.4rem;align-items:center}
 .enq-files{display:flex;flex-wrap:wrap;gap:var(--s-s);align-items:center;margin:0}
 @media (max-width:600px){.enq summary{grid-template-columns:1fr}.enq-meta,.enq-foot{grid-column:auto;grid-row:auto}.enq-foot{flex-direction:row;align-items:center}}
 .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--s-s);padding-bottom:var(--s-m)}
