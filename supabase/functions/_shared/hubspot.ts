@@ -1,9 +1,11 @@
-// HubSpot CRM sync for website enquiries: one contact_requests row becomes a contact, a company (if given),
+// HubSpot CRM sync for website enquiries: one contact_requests row becomes a contact, a company (if known),
 // a deal and a note with the full enquiry. contact-submit calls it in the background after saving the request,
-// so the form never waits for HubSpot and never fails because of it.
-// Secret: HUBSPOT_TOKEN (private app token); without it nothing happens. Properties it expects in HubSpot:
-// contact bp_product_interest (multi-select), bp_segment; deal bp_enquiry_ref, bp_product_type, bp_material.
-// The result goes to hubspot_* columns (migration 0015). Nothing personal is ever logged.
+// so the form never waits for HubSpot and never fails because of it; hubspot-retry repeats failed ones.
+// Secret: HUBSPOT_TOKEN (private app token); without it nothing happens. Optional HUBSPOT_OWNER_ID (default Kate).
+// Properties it expects in HubSpot: contact bp_product_interest (multi-select), bp_segment; deal bp_enquiry_ref,
+// bp_product_type, bp_material, bp_source. Properties the leads script owns (bp_ball_*, bp_quote_*, bp_followup_*,
+// bp_last_*, bp_overdue, bp_reply_task_id, bp_lost_reason) are never written here.
+// The result goes to hubspot_* columns (migrations 0015, 0016). Nothing personal is ever logged.
 
 // Supabase Edge Runtime global (keeps the function alive for background work); declared for type checks.
 declare global {
@@ -12,6 +14,8 @@ declare global {
 
 const API = 'https://api.hubapi.com';
 const SITE = 'https://brickandpane.co.uk';
+// Website deals belong to Kate (owner decision 01.11.2026); a new contact gets her only if it has no owner yet.
+const owner = () => Deno.env.get('HUBSPOT_OWNER_ID') ?? '39646197';
 
 // ---------- mappings (pure, tested in hubspot.test.ts) ----------
 
@@ -124,13 +128,14 @@ const associate = (token: string, from: string, fromId: string, to: string, toId
 
 const contactOf = async (token: string, r: Enquiry, interest: string[]) => {
   const { firstname, lastname } = splitName(r.name);
-  const found = await search(token, 'contacts', 'email', r.email, ['firstname', 'lastname', 'phone', 'company', 'bp_product_interest', 'bp_segment']);
+  const found = await search(token, 'contacts', 'email', r.email, ['firstname', 'lastname', 'phone', 'company', 'bp_product_interest', 'bp_segment', 'hubspot_owner_id']);
   if (found) {
     // An existing contact keeps what the team already has; the enquiry only fills gaps.
     const p = found.properties ?? {};
     const patch = props({
       firstname: p.firstname ? null : firstname, lastname: p.lastname ? null : lastname,
       phone: p.phone ? null : r.phone, company: p.company ? null : r.company, bp_segment: p.bp_segment ? null : r.role,
+      hubspot_owner_id: p.hubspot_owner_id ? null : owner(),
     });
     const merged = mergeMulti(p.bp_product_interest, interest);
     if (merged !== mergeMulti(p.bp_product_interest, [])) patch.bp_product_interest = merged;
@@ -141,6 +146,7 @@ const contactOf = async (token: string, r: Enquiry, interest: string[]) => {
     return await create(token, 'contacts', props({
       firstname, lastname, email: r.email, phone: r.phone, company: r.company, ...placeOf(r.location),
       hs_language: r.lang, bp_segment: r.role, lifecyclestage: 'lead', hs_lead_status: 'NEW', bp_product_interest: interest.join(';'),
+      hubspot_owner_id: owner(),
     }));
   } catch (e) {
     // Search lags a few seconds behind writes, so a second enquiry right after the first can miss the new contact.
@@ -150,41 +156,89 @@ const contactOf = async (token: string, r: Enquiry, interest: string[]) => {
   }
 };
 
+// With a company name: match by email domain, then by name, else create. Without one: only attach to a company
+// that already has this (non-free) email domain, e.g. a firm from the cold list. Never a company without a name.
 const companyOf = async (token: string, r: Enquiry) => {
-  if (!r.company) return null;
   const domain = companyDomain(r.email);
-  const found = (domain ? await search(token, 'companies', 'domain', domain) : null) ?? await search(token, 'companies', 'name', r.company);
-  return found ? found.id : await create(token, 'companies', props({ name: r.company, domain }));
+  const byDomain = domain ? await search(token, 'companies', 'domain', domain) : null;
+  if (byDomain) return byDomain.id;
+  if (!r.company) return null;
+  const byName = await search(token, 'companies', 'name', r.company);
+  return byName ? byName.id : await create(token, 'companies', props({ name: r.company, domain }));
+};
+
+// A deal the leads script opened from a cold-mail reply: open, no enquiry ref yet, created in the last 14 days.
+// The enquiry joins it instead of starting a second deal. A deal with another ref is a separate project.
+type DealRow = { id: string; properties: Record<string, string | null> };
+export const pickOpenDeal = (deals: DealRow[], now = Date.now()) => deals
+  .filter((d) => !d.properties.bp_enquiry_ref && d.properties.hs_is_closed !== 'true' && now - Date.parse(d.properties.createdate ?? '') <= 14 * 864e5)
+  .sort((a, b) => Date.parse(b.properties.createdate!) - Date.parse(a.properties.createdate!))[0] ?? null;
+
+const DEAL_PROPS = ['bp_enquiry_ref', 'hs_is_closed', 'createdate', 'bp_product_type', 'bp_material', 'bp_source'];
+const linked = async (token: string, from: string, id: string, to: string, limit = 100): Promise<string[]> =>
+  ((await hs(token, 'GET', `/crm/v4/objects/${from}/${id}/associations/${to}?limit=${limit}`)).results ?? []).map((a: { toObjectId: number | string }) => String(a.toObjectId));
+
+// Returns the deal and whether it still needs the enquiry note, so a retry never adds a second one.
+const dealOf = async (token: string, r: Enquiry, contactId: string, products: { type: string[] }) => {
+  const type = products.type.join(';'), material = materialsOf(r.material, r.openings).join(';');
+  const byRef = await search(token, 'deals', 'bp_enquiry_ref', r.ref);
+  if (byRef) return { id: byRef.id, note: !(await linked(token, 'deal', byRef.id, 'note', 1)).length };
+  const ids = await linked(token, 'contact', contactId, 'deal');
+  const open = ids.length ? pickOpenDeal((await hs(token, 'POST', '/crm/v3/objects/deals/batch/read', { properties: DEAL_PROPS, inputs: ids.map((id) => ({ id })) })).results ?? []) : null;
+  if (open) {
+    const p = open.properties;
+    await hs(token, 'PATCH', `/crm/v3/objects/deals/${open.id}`, { properties: props({
+      bp_enquiry_ref: r.ref, bp_product_type: p.bp_product_type ? null : type, bp_material: p.bp_material ? null : material, bp_source: p.bp_source ? null : 'website_form',
+    }) });
+    return { id: open.id, note: true };
+  }
+  const id = await create(token, 'deals', props({
+    dealname: dealName(r), pipeline: 'default', dealstage: 'appointmentscheduled', bp_enquiry_ref: r.ref, bp_source: 'website_form',
+    hubspot_owner_id: owner(), bp_product_type: type, bp_material: material,
+  }));
+  return { id, note: true };
 };
 
 // Minimal shape of the supabase-js client used here (the service-role client from contact-submit).
 // deno-lint-ignore no-explicit-any
 type Db = { from: (table: string) => any };
 
+// Retries (hubspot-retry, every 15 min): attempt 1 is the form itself, then 15, 30, 60 and 120 min after the
+// previous one. After the 5th failure the team gets one email. Test enquiries (name or company "TEST …") are skipped.
+export const MAX_ATTEMPTS = 5;
+const BACKOFF_MIN = [15, 30, 60, 120];
+type Attempts = { created_at: string; hubspot_attempts: number; hubspot_attempted_at: string | null };
+export const retryDue = (r: Attempts, now = Date.now()) => {
+  if (r.hubspot_attempts >= MAX_ATTEMPTS) return false;
+  // Never attempted (no token at the time, or the form's call died): wait 10 min so it can't race the form.
+  const wait = r.hubspot_attempts ? BACKOFF_MIN[r.hubspot_attempts - 1] : 10;
+  return now - Date.parse(r.hubspot_attempted_at ?? r.created_at) >= wait * 60e3;
+};
+export const isTestEnquiry = (r: { name?: string | null; company?: string | null }) => /^TEST\b/.test(r.name ?? '') || /^TEST\b/.test(r.company ?? '');
+
 export async function syncEnquiry(supabase: Db, id: string) {
   const token = Deno.env.get('HUBSPOT_TOKEN');
   if (!token) return;
-  const { data: r } = await supabase.from('contact_requests').select('*').eq('id', id).single() as { data: Enquiry | null };
+  const { data: r } = await supabase.from('contact_requests').select('*').eq('id', id).single() as { data: (Enquiry & Attempts) | null };
   if (!r || r.hubspot_deal_id || r.status === 'spam') return;
+  await supabase.from('contact_requests').update({ hubspot_attempts: (r.hubspot_attempts ?? 0) + 1, hubspot_attempted_at: new Date().toISOString() }).eq('id', id);
   try {
     const products = productsOf(r.systems, r.openings);
     const contactId = await contactOf(token, r, products.interest);
     const companyId = await companyOf(token, r);
     if (companyId) await associate(token, 'contact', contactId, 'company', companyId);
 
-    let dealId = (await search(token, 'deals', 'bp_enquiry_ref', r.ref))?.id;
-    if (!dealId) {
-      dealId = await create(token, 'deals', props({
-        dealname: dealName(r), pipeline: 'default', dealstage: 'appointmentscheduled', bp_enquiry_ref: r.ref,
-        bp_product_type: products.type.join(';'), bp_material: materialsOf(r.material, r.openings).join(';'),
-      }));
-      await associate(token, 'deal', dealId, 'contact', contactId);
-      if (companyId) await associate(token, 'deal', dealId, 'company', companyId);
-    }
+    // Associations are idempotent, so they are (re)made on every attempt.
+    const deal = await dealOf(token, r, contactId, products);
+    await associate(token, 'deal', deal.id, 'contact', contactId);
+    if (companyId) await associate(token, 'deal', deal.id, 'company', companyId);
+    const dealId = deal.id;
 
-    const noteId = await create(token, 'notes', { hs_timestamp: r.created_at, hs_note_body: noteBody(r) });
-    await associate(token, 'note', noteId, 'contact', contactId);
-    await associate(token, 'note', noteId, 'deal', dealId);
+    if (deal.note) {
+      const noteId = await create(token, 'notes', { hs_timestamp: r.created_at, hs_note_body: noteBody(r) });
+      await associate(token, 'note', noteId, 'contact', contactId);
+      await associate(token, 'note', noteId, 'deal', dealId);
+    }
 
     await supabase.from('contact_requests').update({
       hubspot_contact_id: contactId, hubspot_deal_id: dealId, hubspot_synced_at: new Date().toISOString(), hubspot_error: null,
