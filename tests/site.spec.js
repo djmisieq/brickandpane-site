@@ -253,6 +253,31 @@ test.describe('quote form', () => {
     await expect(page).toHaveURL(/thank-you\.html\?ref=BP-TEST$/);
   });
 
+  test('sends where the visit started, without cookies', async ({ page, context }) => {
+    const sent = [];
+    await page.route('**/functions/v1/contact-submit', (route) => {
+      sent.push(route.request().postData() || '');
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"ref":"BP-TEST"}' });
+    });
+    const cookies = await context.cookies();
+    await page.goto('/windows.html?utm_source=test&utm_medium=email&utm_campaign=x&code=secret');
+    await page.goto('/contact.html?utm_source=other');
+    await page.fill('#f-name', 'Anna Clarke');
+    await page.fill('#f-email', 'anna@practice.co.uk');
+    await page.locator('#step-1 [data-next]').click();
+    await page.fill('#f-loc', 'Hackney E5');
+    await page.locator('#step-2 [data-next]').click();
+    await page.check('input[name="consent"]');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/thank-you\.html/);
+    const field = (k) => sent[0].match(new RegExp(`name="${k}"\\r\\n\\r\\n([^\\r]*)`))?.[1];
+    expect(field('utm_source')).toBe('test');
+    expect(field('utm_medium')).toBe('email');
+    expect(field('utm_campaign')).toBe('x');
+    expect(field('landing_page')).toBe('/windows.html?utm_source=test&utm_medium=email&utm_campaign=x');
+    expect(await context.cookies()).toEqual(cookies);
+  });
+
   test('a list of openings built on product pages goes out with one enquiry, no account', async ({ page }) => {
     test.slow(); // several page loads in one flow
     const sent = [];

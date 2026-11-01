@@ -12,6 +12,23 @@ import { captcha } from './captcha.js';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
+  /* ---------- where the visit started (sent with an enquiry, see privacy notice) ---------- */
+  // First page of this tab's session only, kept in sessionStorage (no cookies). The landing page keeps just
+  // campaign tags and the product links' own parameters, so sign-in codes or references never leave the browser.
+  const ATTR = 'bp-attribution';
+  const KEEP = /^(utm_\w+|role|type|system|material|topic|config|glass|w|h)$/;
+  try {
+    if (!sessionStorage.getItem(ATTR)) {
+      const q = new URLSearchParams(location.search);
+      const kept = new URLSearchParams([...q].filter(([k]) => KEEP.test(k))).toString();
+      sessionStorage.setItem(ATTR, JSON.stringify({
+        utm_source: q.get('utm_source') || '', utm_medium: q.get('utm_medium') || '', utm_campaign: q.get('utm_campaign') || '',
+        landing_page: (location.pathname + (kept ? `?${kept}` : '')).slice(0, 500),
+      }));
+    }
+  } catch { /* storage blocked: the enquiry simply goes without it */ }
+  const attribution = () => { try { return JSON.parse(sessionStorage.getItem(ATTR) || '{}'); } catch { return {}; } };
+
   /* ---------- header & navigation ---------- */
   const header = $('.site-header');
   const nav = $('#primary-nav');
@@ -733,6 +750,7 @@ import { captcha } from './captcha.js';
         const body = new FormData(form);
         const token = await cap.token();
         if (token) body.set('cf-turnstile-response', token);
+        for (const [k, v] of Object.entries(attribution())) if (typeof v === 'string' && v) body.set(k, v.slice(0, k === 'landing_page' ? 500 : 200));
         const res = await fetch(endpoint, { method: 'POST', body, headers: { Accept: 'application/json' }, signal: ctrl.signal });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || String(res.status));

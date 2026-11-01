@@ -1,6 +1,6 @@
 // Mappings for the HubSpot sync. Run: deno test supabase/functions/_shared/hubspot.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { companyDomain, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
+import { attributionOf, companyDomain, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
 
 Deno.test('systems and openings map to product interest and deal type, without duplicates', () => {
   eq(productsOf(['lift-slide', 'windows'], [{ system: 'bifold' }, { system: 'hinged' }]), {
@@ -84,4 +84,9 @@ Deno.test('test enquiries are recognised by name or company', () => {
   eq(isTestEnquiry({ name: 'Daniel Zadroga (TEST)' }), true);
   eq(isTestEnquiry({ name: 'Testa Rossa' }), false);
   eq(isTestEnquiry({ name: 'Anna', company: null }), false);
+});
+
+Deno.test('attribution goes to the deal under bp_ names', () => {
+  eq(attributionOf({ utm_source: 'test', utm_medium: 'email', utm_campaign: 'x', landing_page: '/windows.html?utm_source=test' }),
+    { bp_utm_source: 'test', bp_utm_medium: 'email', bp_utm_campaign: 'x', bp_landing_page: '/windows.html?utm_source=test' });
 });

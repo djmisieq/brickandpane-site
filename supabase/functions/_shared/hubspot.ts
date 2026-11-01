@@ -3,7 +3,7 @@
 // so the form never waits for HubSpot and never fails because of it; hubspot-retry repeats failed ones.
 // Secret: HUBSPOT_TOKEN (private app token); without it nothing happens. Optional HUBSPOT_OWNER_ID (default Kate).
 // Properties it expects in HubSpot: contact bp_product_interest (multi-select), bp_segment; deal bp_enquiry_ref,
-// bp_product_type, bp_material, bp_source. Properties the leads script owns (bp_ball_*, bp_quote_*, bp_followup_*,
+// bp_product_type, bp_material, bp_source, bp_utm_source/medium/campaign, bp_landing_page. Properties the leads script owns (bp_ball_*, bp_quote_*, bp_followup_*,
 // bp_last_*, bp_overdue, bp_reply_task_id, bp_lost_reason) are never written here.
 // The result goes to hubspot_* columns (migrations 0015, 0016). Nothing personal is ever logged.
 
@@ -41,6 +41,7 @@ export type Enquiry = {
   location: string | null; riba_stage: string | null; building: string | null; units: string | null; start: string | null;
   message: string | null; files: string[] | null; files_link: string | null; consent_at: string; openings: Opening[] | null;
   hubspot_deal_id: string | null;
+  utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; landing_page: string | null;
 };
 
 const uniq = <T>(a: T[]) => [...new Set(a)];
@@ -174,7 +175,12 @@ export const pickOpenDeal = (deals: DealRow[], now = Date.now()) => deals
   .filter((d) => !d.properties.bp_enquiry_ref && d.properties.hs_is_closed !== 'true' && now - Date.parse(d.properties.createdate ?? '') <= 14 * 864e5)
   .sort((a, b) => Date.parse(b.properties.createdate!) - Date.parse(a.properties.createdate!))[0] ?? null;
 
-const DEAL_PROPS = ['bp_enquiry_ref', 'hs_is_closed', 'createdate', 'bp_product_type', 'bp_material', 'bp_source'];
+// Where the visitor came from (migration 0017, captured in sessionStorage by js/main.js); deal-only attribution.
+export const attributionOf = (r: Pick<Enquiry, 'utm_source' | 'utm_medium' | 'utm_campaign' | 'landing_page'>) => ({
+  bp_utm_source: r.utm_source, bp_utm_medium: r.utm_medium, bp_utm_campaign: r.utm_campaign, bp_landing_page: r.landing_page,
+});
+const ATTRIBUTION = ['bp_utm_source', 'bp_utm_medium', 'bp_utm_campaign', 'bp_landing_page'] as const;
+const DEAL_PROPS = ['bp_enquiry_ref', 'hs_is_closed', 'createdate', 'bp_product_type', 'bp_material', 'bp_source', ...ATTRIBUTION];
 const linked = async (token: string, from: string, id: string, to: string, limit = 100): Promise<string[]> =>
   ((await hs(token, 'GET', `/crm/v4/objects/${from}/${id}/associations/${to}?limit=${limit}`)).results ?? []).map((a: { toObjectId: number | string }) => String(a.toObjectId));
 
@@ -186,15 +192,16 @@ const dealOf = async (token: string, r: Enquiry, contactId: string, products: { 
   const ids = await linked(token, 'contact', contactId, 'deal');
   const open = ids.length ? pickOpenDeal((await hs(token, 'POST', '/crm/v3/objects/deals/batch/read', { properties: DEAL_PROPS, inputs: ids.map((id) => ({ id })) })).results ?? []) : null;
   if (open) {
-    const p = open.properties;
+    const p = open.properties, utm = attributionOf(r);
     await hs(token, 'PATCH', `/crm/v3/objects/deals/${open.id}`, { properties: props({
       bp_enquiry_ref: r.ref, bp_product_type: p.bp_product_type ? null : type, bp_material: p.bp_material ? null : material, bp_source: p.bp_source ? null : 'website_form',
+      ...Object.fromEntries(ATTRIBUTION.map((k) => [k, p[k] ? null : utm[k]])),
     }) });
     return { id: open.id, note: true };
   }
   const id = await create(token, 'deals', props({
     dealname: dealName(r), pipeline: 'default', dealstage: 'appointmentscheduled', bp_enquiry_ref: r.ref, bp_source: 'website_form',
-    hubspot_owner_id: owner(), bp_product_type: type, bp_material: material,
+    hubspot_owner_id: owner(), bp_product_type: type, bp_material: material, ...attributionOf(r),
   }));
   return { id, note: true };
 };
