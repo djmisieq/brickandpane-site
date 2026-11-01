@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -313,4 +313,23 @@ test('a project linked to a HubSpot deal takes its stage only from the sync', as
   await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, note, actor_id) values ($1, 'submitted', 'quote_issued', '', null)`, [P]);
   assert.equal((await db.query('select stage from public.projects where id = $1', [P])).rows[0].stage, 'quote_issued');
   assert.equal((await db.query(`select count(*)::int as n from public.notifications where project_id = $1 and type = 'stage'`, [P])).rows[0].n, 1);
+});
+
+test('portal events for HubSpot are queued once, for the service role only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.query(`insert into public.messages (project_id, author_id, body) values ($1, $2, 'Hello')`, [P, A]);
+  await db.query(`insert into public.documents (project_id, kind, title, uploaded_by) values ($1, 'client_upload', 'Photos', $2)`, [P, A]);
+  await fails('select * from public.hubspot_events');
+  await fails(`select public.hubspot_queue('message', $1, $1)`, [P]);
+  await as(S);
+  await db.query(`insert into public.messages (project_id, author_id, body) values ($1, $2, 'From staff')`, [P, S]);
+  await db.query(`insert into public.messages (project_id, author_id, body, internal) values ($1, $2, 'Internal', true)`, [P, S]);
+  const Q = (await db.query(`insert into public.documents (project_id, kind, title, approval, uploaded_by, amount) values ($1, 'quote', 'Q1', 'pending', $2, 23900) returning id`, [P, S])).rows[0].id;
+  await db.exec('reset role'); // decision rights are tested above; here only the queue matters
+  await db.query(`insert into public.approvals (document_id, project_id, decision, actor_id) values ($1, $2, 'approved', $3)`, [Q, P, A]);
+  await db.exec('reset role');
+  const kinds = (await db.query('select kind from public.hubspot_events where project_id = $1 order by created_at, kind', [P])).rows.map((x) => x.kind).sort();
+  assert.deepEqual(kinds, ['client_upload', 'document', 'message', 'quote_accepted']);
 });
