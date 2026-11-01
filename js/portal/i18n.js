@@ -568,6 +568,8 @@ const PL = {
   "Open the project": "Otwórz projekt",
   "Turn into a project": "Zamień w projekt",
   "Project created.": "Projekt założony.",
+  "Client invited: {email}": "Klient zaproszony: {email}",
+  "No client yet": "Brak klienta",
   "Email the client an invitation to the portal": "Wyślij klientowi zaproszenie do portalu",
   "Project created. The client’s account owns it.": "Projekt założony. Właścicielem jest konto klienta.",
   "Project created. Invitation emailed to the client.": "Projekt założony. Zaproszenie poszło do klienta e-mailem.",

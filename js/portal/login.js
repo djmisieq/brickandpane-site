@@ -6,7 +6,13 @@ import { captcha } from '../captcha.js';
 
 const next = new URLSearchParams(location.search).get('next') || 'portal.html';
 const safeNext = /^(portal|admin)\.html/.test(next) ? next : 'portal.html';
-const go = () => { location.href = safeNext; };
+// Without an explicit ?next=, staff land in the CRM and clients in their portal (leads bot test, 01.11.2026).
+const explicitNext = new URLSearchParams(location.search).has('next');
+const go = async () => {
+  let to = safeNext;
+  if (!explicitNext) { try { if ((await store.getUser())?.role === 'staff') to = 'admin.html'; } catch { /* portal then */ } }
+  location.href = to;
+};
 
 const root = $('#auth');
 const status = $('[data-auth-status]', root);

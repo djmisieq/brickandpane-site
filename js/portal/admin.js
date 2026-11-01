@@ -25,6 +25,16 @@ const CONVERTED = {
   invited: (r) => r.emailed ? 'Project created. Invitation emailed to the client.' : 'Project created. The client becomes its owner when they sign up with the enquiry’s email.',
   staff: () => 'Project created without a client: the enquiry’s email belongs to a staff account. Invite the client by hand in Team.',
 };
+// Until the client signs up, a converted enquiry's project is held by the staff member who converted it:
+// show the waiting client instead of that staff profile (leads bot test, 01.11.2026).
+const clientOf = (p) => (p.owner && p.owner.role !== 'staff' ? p.owner : null);
+const clientName = (p) => { const c = clientOf(p); return c ? c.company || c.full_name || '' : ''; };
+const headClient = (p, invites = []) => {
+  const c = clientOf(p);
+  if (c) return `${esc(c.full_name || '')}${c.company ? `, ${esc(c.company)}` : ''}${c.account_type ? ` · ${esc(tr(ACCOUNT_TYPES[c.account_type] || ''))}` : ''}`;
+  const inv = invites.find((i) => i.make_owner) || invites[0];
+  return inv ? esc(tr('Client invited: {email}', { email: inv.email })) : esc(tr('No client yet'));
+};
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 
@@ -50,7 +60,7 @@ async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
   const [all, requests] = await Promise.all([store.listProjects(), listRequests()]);
   const q = query.toLowerCase();
-  const projects = q ? all.filter((p) => [p.ref, p.name, p.location, p.owner?.full_name, p.owner?.company].join(' ').toLowerCase().includes(q)) : all;
+  const projects = q ? all.filter((p) => [p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company].join(' ').toLowerCase().includes(q)) : all;
   const open = all.filter((p) => !['completed', 'closed'].includes(p.stage));
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
   const sum = (arr, w = false) => arr.reduce((t, p) => t + (Number(p.internal?.value_gbp) || 0) * (w ? (p.internal?.probability ?? 0) / 100 : 1), 0);
@@ -58,7 +68,7 @@ async function board(asList) {
     <a class="kcard ${isOverdue(p) ? 'is-overdue' : ''}" href="#/p/${esc(p.id)}">
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
-      <span class="kcard-client">${esc(p.owner?.company || p.owner?.full_name || '')}${p.owner?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
+      <span class="kcard-client">${esc(clientName(p))}${clientOf(p)?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
       <span class="kcard-foot"><span>${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
     </a>`;
   app.innerHTML = `
@@ -80,7 +90,7 @@ async function board(asList) {
       </div>
       ${asList ? `
         <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Project')}</th><th scope="col">${tr('Client')}</th><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Owner')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Value')}</th><th scope="col">${tr('Updated')}</th></tr></thead><tbody>
-          ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(p.owner?.company || p.owner?.full_name || '')}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
+          ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(clientName(p))}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
@@ -199,7 +209,7 @@ async function detail(id) {
     <div class="container section-tight">
       <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
       <div class="detail-head">
-        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${esc(p.owner?.full_name || '')}${p.owner?.company ? `, ${esc(p.owner.company)}` : ''}${p.owner?.account_type ? ` · ${esc(tr(ACCOUNT_TYPES[p.owner.account_type] || ''))}` : ''}</p></div>
+        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${headClient(p, d.invites)}</p></div>
       </div>
       <div class="crm-grid">
         <div class="crm-main">
