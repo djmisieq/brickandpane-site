@@ -24,7 +24,7 @@ const listRequests = () => (store.listRequests ? store.listRequests().catch(() =
 
 async function render(fromStore = false) {
   user = await store.getUser();
-  if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + location.hash)}`; return; }
+  if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + (/^#\/[\w/-]*$/.test(location.hash) ? location.hash : ''))}`; return; }
   if (user.role !== 'staff') { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr('This area is for Brick & Pane staff.'))} <a href="portal.html">${tr('Go to your projects')}</a>.</p></div>`; await renderAppBar(bar, user, 'portal'); return; }
   // A live update redraws the page: fields the user has changed keep their values (lists too), others refill empty ones.
   const keep = {}, dirty = new Set(); if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); });

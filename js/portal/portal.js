@@ -28,7 +28,7 @@ const keepDrafts = () => {
 
 async function render(fromStore = false) {
   user = await store.getUser();
-  if (!user) { location.href = `login.html?next=${encodeURIComponent('portal.html' + location.hash)}`; return; }
+  if (!user) { location.href = `login.html?next=${encodeURIComponent('portal.html' + (/^#\/[\w/-]*$/.test(location.hash) ? location.hash : ''))}`; return; }
   // Once per visit, before the new-project form reads the list.
   await (listSynced ||= store.syncList ? store.syncList() : Promise.resolve(0));
   const r = route();
