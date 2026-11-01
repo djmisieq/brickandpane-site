@@ -261,7 +261,7 @@ test.describe('quote form', () => {
     });
     const cookies = await context.cookies();
     await page.goto('/windows.html?utm_source=test&utm_medium=email&utm_campaign=x&code=secret');
-    await page.goto('/contact.html?utm_source=other');
+    await page.goto('/contact.html?role=architect&utm_source=other');
     await page.fill('#f-name', 'Anna Clarke');
     await page.fill('#f-email', 'anna@practice.co.uk');
     await page.locator('#step-1 [data-next]').click();
