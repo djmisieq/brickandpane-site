@@ -1,6 +1,6 @@
 // Mappings for the HubSpot sync. Run: deno test supabase/functions/_shared/hubspot.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { attributionOf, companyDomain, dealForProject, STAGE_OF_DEAL, stageMove, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
+import { attributionOf, companyDomain, dealForProject, eventNote, noAmounts, STAGE_OF_DEAL, stageMove, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
 
 Deno.test('systems and openings map to product interest and deal type, without duplicates', () => {
   eq(productsOf(['lift-slide', 'windows'], [{ system: 'bifold' }, { system: 'hinged' }]), {
@@ -106,4 +106,16 @@ Deno.test('a project follows its deal stage only when the deal moves', () => {
   eq(stageMove('9999', 'contractsent', 'drawings'), { to: null, record: false }); // unknown stage: ignored
   eq(stageMove(null, null, 'submitted'), { to: null, record: false });
   eq(Object.keys(STAGE_OF_DEAL).length, 11);
+});
+
+Deno.test('portal event notes start with the fixed prefix and carry no amounts', () => {
+  const n = eventNote('message', { ref: 'BP-2026-0001', projectId: 'p1', who: 'Anna <b>' });
+  ok(n.startsWith('<p><strong>Portal message · BP-2026-0001</strong></p>'));
+  ok(n.includes('Anna &lt;b&gt; wrote in the portal'));
+  ok(n.includes('/admin.html#/p/p1'));
+  ok(eventNote('quote_accepted', { ref: 'BP-2026-0001', projectId: 'p1', title: 'Quotation Q1 £23,900' }).startsWith('<p><strong>Portal quote accepted · BP-2026-0001 · Quotation Q1</strong></p>'));
+  ok(eventNote('client_upload', { ref: 'BP-2026-0001', projectId: 'p1', title: 'Survey photos' }).startsWith('<p><strong>Portal file upload · BP-2026-0001 · Survey photos'));
+  ok(eventNote('document', { ref: 'BP-2026-0001', projectId: 'p1', title: 'Rev A', hidden: true }).includes('internal, not shown to the client'));
+  eq(noAmounts('Q2 £1.2k revised £ 900'), 'Q2 revised');
+  ok(!eventNote('quote_accepted', { ref: 'BP-1', projectId: 'p', title: '£5000 deal' }).includes('£'));
 });

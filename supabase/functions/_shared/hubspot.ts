@@ -382,3 +382,71 @@ export async function syncStages(supabase: Db, now = Date.now()) {
   return { deals: deals.length, moved, failed };
 }
 
+// ---------- portal events → deal notes (migrations 0021, 0022; function hubspot-events) ----------
+// The leads script recognises these by the fixed start of the note ("Portal message · <ref>" counts as the client
+// writing to us), so keep the prefixes as they are. Notes carry no message text and no amounts: the team reads the
+// rest in the CRM, which needs a sign-in. Switch: HUBSPOT_EVENTS=off.
+export type PortalEventKind = 'message' | 'quote_accepted' | 'client_upload' | 'document';
+const EVENT_PREFIX: Record<PortalEventKind, string> = {
+  message: 'Portal message',
+  quote_accepted: 'Portal quote accepted',
+  client_upload: 'Portal file upload',
+  document: 'Portal document added',
+};
+// Titles are typed by people; a "£23,900" in one must not reach HubSpot.
+export const noAmounts = (s: string) => s.replace(/£\s*[\d.,]+\s*[km]?\b/gi, '').replace(/£/g, '').replace(/\s{2,}/g, ' ').trim();
+
+export const eventNote = (kind: PortalEventKind, e: { ref: string; projectId: string; who?: string | null; title?: string | null; hidden?: boolean }) => {
+  const head = `${EVENT_PREFIX[kind]} · ${e.ref}${e.title ? ` · ${noAmounts(e.title)}` : ''}`;
+  const who = e.who ? escape(e.who) : 'The client';
+  const line = kind === 'message' ? `${who} wrote in the portal. Read and reply in the CRM.`
+    : kind === 'quote_accepted' ? `${who} accepted this quotation in the portal.`
+    : kind === 'client_upload' ? `${who} uploaded a file in the portal.`
+    : `Added by the team${e.hidden ? ' (internal, not shown to the client)' : ''}.`;
+  return `<p><strong>${escape(head)}</strong></p><p>${line}</p><p><a href="${SITE}/admin.html#/p/${encodeURIComponent(e.projectId)}">Open the project in the Brick &amp; Pane CRM</a> (sign-in needed)</p>`;
+};
+
+type QueuedEvent = { id: string; kind: PortalEventKind; project_id: string; source_id: string; created_at: string };
+
+// Reads what a note needs for one queued event; null when the source row is gone.
+const eventDetails = async (supabase: Db, ev: QueuedEvent) => {
+  const name = async (id: string | null) => id ? (await supabase.from('profiles').select('full_name').eq('id', id).maybeSingle()).data?.full_name ?? null : null;
+  const doc = async (id: string) => (await supabase.from('documents').select('title, version, visible_to_client, uploaded_by').eq('id', id).maybeSingle()).data;
+  const titled = (d: { title: string; version: string }) => [d.title, d.version].filter(Boolean).join(' ');
+  if (ev.kind === 'message') {
+    const { data: m } = await supabase.from('messages').select('author_id').eq('id', ev.source_id).maybeSingle();
+    return m ? { who: await name(m.author_id) } : null;
+  }
+  if (ev.kind === 'quote_accepted') {
+    const { data: a } = await supabase.from('approvals').select('document_id, actor_id, on_behalf').eq('id', ev.source_id).maybeSingle();
+    const d = a && await doc(a.document_id);
+    return d ? { who: a.on_behalf ? 'The team, on the client’s behalf,' : await name(a.actor_id), title: titled(d) } : null;
+  }
+  const d = await doc(ev.source_id);
+  return d ? { who: await name(d.uploaded_by), title: titled(d), hidden: !d.visible_to_client } : null;
+};
+
+// Sends queued events of the last 7 days whose project has a deal. Events of unlinked projects wait (the project may
+// still be linked) and drop out after 7 days. Returns counts only.
+export async function sendEvents(supabase: Db) {
+  const token = Deno.env.get('HUBSPOT_TOKEN');
+  if (!token) return { skipped: 'no token' };
+  if (Deno.env.get('HUBSPOT_EVENTS') === 'off') return { skipped: 'off' };
+  const { data } = await supabase.from('hubspot_events').select('id, kind, project_id, source_id, created_at')
+    .is('sent_at', null).gte('created_at', new Date(Date.now() - 7 * 864e5).toISOString()).order('created_at').limit(100);
+  let sent = 0, waiting = 0, failed = 0;
+  for (const ev of (data ?? []) as QueuedEvent[]) {
+    try {
+      const { data: internal } = await supabase.from('project_internal').select('hubspot_deal_id').eq('project_id', ev.project_id).maybeSingle();
+      if (!internal?.hubspot_deal_id) { waiting++; continue; }
+      const { data: p } = await supabase.from('projects').select('ref').eq('id', ev.project_id).single();
+      const details = await eventDetails(supabase, ev);
+      if (!details) { await supabase.from('hubspot_events').update({ sent_at: new Date().toISOString() }).eq('id', ev.id); continue; }
+      const noteId = await create(token, 'notes', { hs_timestamp: ev.created_at, hs_note_body: eventNote(ev.kind, { ref: p.ref, projectId: ev.project_id, ...details }) });
+      await associate(token, 'note', noteId, 'deal', internal.hubspot_deal_id);
+      await supabase.from('hubspot_events').update({ sent_at: new Date().toISOString(), note_id: noteId }).eq('id', ev.id);
+      sent++;
+    } catch { failed++; }
+  }
+  return { sent, waiting, failed };
+}
