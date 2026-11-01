@@ -19,6 +19,12 @@ const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review'
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
 // Linked projects take their stage from HubSpot (migration 0019); staff open the deal there.
 const HUBSPOT_DEAL = 'https://app-eu1.hubspot.com/contacts/149668825/record/0-3/';
+// What happened to the client on conversion (convert_enquiry, migration 0024).
+const CONVERTED = {
+  linked: () => 'Project created. The client’s account owns it.',
+  invited: (r) => r.emailed ? 'Project created. Invitation emailed to the client.' : 'Project created. The client becomes its owner when they sign up with the enquiry’s email.',
+  staff: () => 'Project created without a client: the enquiry’s email belongs to a staff account. Invite the client by hand in Team.',
+};
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 
@@ -130,7 +136,7 @@ async function enquiries() {
         ${r.message ? `<p class="enq-msg">${esc(r.message)}</p>` : ''}
         <p class="enq-convert">${r.project_id
           ? `<a class="btn btn-sm btn-ghost" href="#/p/${esc(r.project_id)}">${tr('Open the project')}</a>`
-          : `<button type="button" class="btn btn-sm" data-req-convert>${tr('Turn into a project')}</button> <span class="note">${tr('Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.')}</span>`}</p>
+          : `<button type="button" class="btn btn-sm" data-req-convert>${tr('Turn into a project')}</button> <label class="enq-invite"><input type="checkbox" data-req-invite checked> ${tr('Email the client an invitation to the portal')}</label> <span class="note">${tr('Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.')}</span>`}</p>
         ${r.files?.length || r.files_link ? `<p class="enq-files">${(r.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${r.files_link ? ` <a href="${esc(r.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
         <form class="ctl" data-req-form>
           <div class="field"><label for="rq-status-${esc(r.id)}">${tr('Status')}</label><select id="rq-status-${esc(r.id)}" name="status">${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
@@ -170,7 +176,12 @@ async function enquiries() {
   }));
   $$('[data-req-convert]', app).forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
-    try { const pid = await store.convertRequest(b.closest('[data-req]').dataset.req); toast(tr('Project created.')); location.hash = `#/p/${pid}`; } catch (err) { b.disabled = false; toast(tr(err.message)); }
+    const box = b.closest('[data-req]');
+    try {
+      const res = await store.convertRequest(box.dataset.req, { invite: !!$('[data-req-invite]', box)?.checked });
+      toast(tr(CONVERTED[res.client]?.(res) || 'Project created.'));
+      location.hash = `#/p/${res.project_id}`;
+    } catch (err) { b.disabled = false; toast(tr(err.message)); }
   }));
   $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
     try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }

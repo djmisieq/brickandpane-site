@@ -121,11 +121,12 @@ export const store = {
     ok(await sb.from('contact_requests').update({ status, staff_note }).eq('id', id));
     emit();
   },
-  // Staff only: creates the project with the enquiry's openings (migration 0008) and returns its id.
-  async convertRequest(id) {
-    const pid = ok(await sb.rpc('convert_request', { r: id }));
+  // Staff only: creates the project with the enquiry's openings and, if asked, emails the client an invitation
+  // (convert_enquiry, migration 0024). Returns { project_id, client: linked|invited|staff|none, emailed }.
+  async convertRequest(id, { invite = false } = {}) {
+    const res = ok(await sb.rpc('convert_enquiry', { r: id, send_invite: invite }));
     emit();
-    return pid;
+    return res;
   },
   async requestFileUrl(path) {
     const data = ok(await sb.storage.from('enquiries').createSignedUrl(path, 300));

@@ -38,7 +38,7 @@ const recent = async (minutes: number, col?: 'email' | 'ip_hash', value?: string
 // The list of openings arrives as one JSON field. Keep only known values and sizes the portal accepts.
 const SYSTEMS = ['lift-slide', 'sliding', 'bifold', 'hinged', 'windows', 'facades', 'rooflights'];
 const MATERIALS = ['alu', 'timber', 'pvc', 'alutimber'];
-type Opening = { ref: string; system: string; material: string; width_mm: number | null; height_mm: number | null; qty: number; note: string };
+type Opening = { ref: string; system: string; material: string; width_mm: number | null; height_mm: number | null; config: string; glazing: string; qty: number; note: string };
 const openingsOf = (f: FormData): Opening[] => {
   let raw: unknown;
   try { raw = JSON.parse(str(f, 'openings', 50000) ?? '[]'); } catch { return []; }
@@ -50,6 +50,7 @@ const openingsOf = (f: FormData): Opening[] => {
     system: SYSTEMS.includes(String(o.system)) ? String(o.system) : 'windows',
     material: MATERIALS.includes(String(o.material)) ? String(o.material) : '',
     width_mm: size(o.width_mm, 300, 30000), height_mm: size(o.height_mm, 300, 6000),
+    config: text(o.config, 10), glazing: text(o.glazing, 4),
     qty: size(o.qty, 1, 999) ?? 1, note: text(o.note, 200),
   })).filter((o) => o.width_mm || o.height_mm || o.note);
 };

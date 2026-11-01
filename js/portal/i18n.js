@@ -568,6 +568,11 @@ const PL = {
   "Open the project": "Otwórz projekt",
   "Turn into a project": "Zamień w projekt",
   "Project created.": "Projekt założony.",
+  "Email the client an invitation to the portal": "Wyślij klientowi zaproszenie do portalu",
+  "Project created. The client’s account owns it.": "Projekt założony. Właścicielem jest konto klienta.",
+  "Project created. Invitation emailed to the client.": "Projekt założony. Zaproszenie poszło do klienta e-mailem.",
+  "Project created. The client becomes its owner when they sign up with the enquiry’s email.": "Projekt założony. Klient zostanie właścicielem po rejestracji na e-mail z zapytania.",
+  "Project created without a client: the enquiry’s email belongs to a staff account. Invite the client by hand in Team.": "Projekt założony bez klienta: e-mail z zapytania należy do konta zespołu. Zaproś klienta ręcznie w zakładce Zespół.",
   "Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.": "Przenosi dane i otwory do projektu w panelu. Jeśli na ten e-mail nie ma konta, klient zostanie właścicielem projektu po rejestracji na ten adres.",
 };
 

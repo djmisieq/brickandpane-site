@@ -108,7 +108,9 @@ test('staff see website enquiries sent without an account and triage them', asyn
   // Turn it into a project: the openings come across, the enquiry links to the project.
   await page.locator('#rq-filter').selectOption('open');
   await page.locator('details.enq summary').first().click();
+  await expect(page.locator('[data-req-invite]')).toBeChecked(); // invitation email on by default (owner, 01.11.2026)
   await page.locator('[data-req-convert]').click();
+  await expect(page.locator('.toast').last()).toContainText('Project created.');
   await expect(page).toHaveURL(/admin\.html#\/p\//);
   await expect(page.locator('h1')).toHaveText('Jo Bennett, Walthamstow, E17');
   await page.locator('[data-tab="overview"]').click();

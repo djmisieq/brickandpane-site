@@ -172,24 +172,25 @@ export const store = {
     Object.assign((s.requests || []).find((r) => r.id === id), { status, staff_note }); save(s);
   },
   async requestFileUrl() { return null; }, // demo: files are not stored
-  // Mirrors convert_request() in migration 0008.
+  // Mirrors convert_request() / convert_enquiry() in migrations 0008 and 0024 (demo sends no email).
   async convertRequest(id) {
     const s = load(); const staff = needStaff(s);
     const r = (s.requests || []).find((x) => x.id === id);
     if (!r) throw new Error('Enquiry not found.');
-    if (r.project_id) return r.project_id;
+    if (r.project_id) return { project_id: r.project_id, client: 'linked', emailed: false };
     const client = s.users.find((u) => u.email.toLowerCase() === r.email.toLowerCase() && u.role !== 'staff');
+    const staffEmail = s.users.some((u) => u.email.toLowerCase() === r.email.toLowerCase() && u.role === 'staff');
     const pid = uid(); const t = now();
     s.projects.push({ id: pid, ref: `BP-2026-${String(s.projects.length + 1).padStart(4, '0')}`, name: `${r.company || r.name}${r.location ? `, ${r.location}` : ''}`, owner_id: client?.id || staff.id, assignee_id: staff.id, stage: 'submitted', stage_changed_at: t, created_at: t, updated_at: t, next_step: 'We’ll confirm receipt.', location: r.location || '', riba_stage: r.riba_stage || '', building_type: r.building || '', systems: (r.systems || []).filter((x) => x !== 'unsure'), start_window: r.start || '', brief: r.message || '' });
     if (client) s.members.push({ project_id: pid, user_id: client.id, role: 'owner' });
-    else s.invites.push({ id: uid(), project_id: pid, email: r.email.toLowerCase(), role: 'owner', invited_by: staff.id, created_at: t });
+    else if (!staffEmail) s.invites.push({ id: uid(), project_id: pid, email: r.email.toLowerCase(), role: 'owner', invited_by: staff.id, created_at: t });
     s.internal[pid] = { value_gbp: null, probability: null, notes: r.staff_note || '' };
     s.events.push({ id: uid(), project_id: pid, from_stage: null, to_stage: 'submitted', note: 'Project received.', visible_to_client: true, actor_id: staff.id, created_at: t });
     const list = r.openings?.length ? r.openings : r.opening_width_mm ? [{ ref: 'D01', system: (r.systems || []).find((x) => x !== 'unsure') || 'lift-slide', width_mm: r.opening_width_mm, height_mm: r.opening_height_mm }] : [];
     list.forEach((o) => s.openings.push({ id: uid(), project_id: pid, ref: o.ref || '', system: o.system || 'windows', material: ['alu', 'timber', 'pvc', 'alutimber'].includes(o.material) ? o.material : '', width_mm: o.width_mm ?? null, height_mm: o.height_mm ?? null, config: o.config || '', glazing: o.glazing || '', qty: o.qty || 1, notes: o.note || '' }));
     Object.assign(r, { status: 'converted', project_id: pid });
     save(s);
-    return pid;
+    return { project_id: pid, client: client ? 'linked' : staffEmail ? 'staff' : 'invited', emailed: false };
   },
   async listProjects() {
     const s = load(); const u = need(s);
