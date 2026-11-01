@@ -113,6 +113,7 @@ Deno.serve(async (req) => {
     location: str(f, 'location'), riba_stage: str(f, 'riba_stage'), building: str(f, 'building'), units: str(f, 'units'), start: str(f, 'start'),
     opening_width_mm: int(f, 'opening_width_mm'), opening_height_mm: int(f, 'opening_height_mm'),
     message: str(f, 'message', 10000), files_link: filesLink, consent_at: new Date().toISOString(), ip_hash,
+    utm_source: str(f, 'utm_source', 200), utm_medium: str(f, 'utm_medium', 200), utm_campaign: str(f, 'utm_campaign', 200), landing_page: str(f, 'landing_page', 500),
   }).select('id, ref').single();
   if (error || !row) return reply(500, { error: 'save' });
 
