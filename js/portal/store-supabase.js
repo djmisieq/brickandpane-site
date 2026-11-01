@@ -29,6 +29,26 @@ sb.auth.onAuthStateChange(() => emit());
 
 const PROFILE = 'id, full_name, company, role, account_type';
 const PENDING_TYPE = 'bp-oauth-account-type';
+// Supabase sends people back (OAuth, magic link, email confirmation) with the session in the URL fragment, so the
+// address it returns to must not have one: admin.html#/enquiries + #access_token=… is never read and the sign-in is lost.
+// The page's own fragment (its route) waits in localStorage and is put back once the session is in.
+const RETURN = 'bp-auth-return';
+const authUrl = (next) => {
+  const u = new URL(next, location.href);
+  try { if (u.hash.length > 1) localStorage.setItem(RETURN, JSON.stringify({ path: u.pathname, hash: u.hash, at: Date.now() })); else localStorage.removeItem(RETURN); } catch { /* ignore */ }
+  u.hash = '';
+  return u.href;
+};
+const restoreRoute = () => {
+  try {
+    const r = JSON.parse(localStorage.getItem(RETURN) || 'null');
+    if (!r) return;
+    if (Date.now() - r.at > 60 * 60e3) { localStorage.removeItem(RETURN); return; }
+    if (r.path !== location.pathname) return;
+    localStorage.removeItem(RETURN);
+    if (!location.hash && /^#\/[\w/-]*$/.test(r.hash)) history.replaceState(history.state, '', r.hash);
+  } catch { /* ignore */ }
+};
 const safeName = (n) => n.replace(/[^\w.\- ]+/g, '_').slice(-120);
 
 async function upload(pid, file) {
@@ -46,6 +66,7 @@ export const store = {
   async getUser() {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null;
+    restoreRoute();
     const p = ok(await sb.from('profiles').select('*').eq('id', user.id).single());
     // First sign-in through Google/Apple/Microsoft: apply the account type picked on the sign-up panel.
     let pending = null;
@@ -59,7 +80,7 @@ export const store = {
   // captchaToken: Turnstile token, required once captcha is switched on in Supabase (Auth → Attack Protection).
   async signIn(email, password, captchaToken) { ok(await sb.auth.signInWithPassword({ email, password, options: { captchaToken } })); },
   async signUp({ email, password, full_name, company, account_type = 'architect', next = 'portal.html', captchaToken }) {
-    const data = ok(await sb.auth.signUp({ email, password, options: { captchaToken, data: { full_name, company, account_type }, emailRedirectTo: new URL(next, location.href).href } }));
+    const data = ok(await sb.auth.signUp({ email, password, options: { captchaToken, data: { full_name, company, account_type }, emailRedirectTo: authUrl(next) } }));
     return { needsConfirmation: !data.session };
   },
   // Providers switched on in Supabase (Authentication → Sign In / Providers), read from the public auth settings.
@@ -71,9 +92,9 @@ export const store = {
   },
   async signInWithProvider(provider, redirectTo, accountType) {
     try { if (accountType) localStorage.setItem(PENDING_TYPE, accountType); else localStorage.removeItem(PENDING_TYPE); } catch { /* ignore */ }
-    ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo, ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
+    ok(await sb.auth.signInWithOAuth({ provider, options: { redirectTo: authUrl(redirectTo), ...(provider === 'azure' ? { scopes: 'email' } : {}) } }));
   },
-  async sendMagicLink(email, next = 'portal.html', captchaToken) { ok(await sb.auth.signInWithOtp({ email, options: { captchaToken, emailRedirectTo: new URL(next, location.href).href } })); },
+  async sendMagicLink(email, next = 'portal.html', captchaToken) { ok(await sb.auth.signInWithOtp({ email, options: { captchaToken, emailRedirectTo: authUrl(next) } })); },
   async signOut() { await leaveAccountList(); await sb.auth.signOut(); },
   // The list of openings kept on the account (migration 0012) meets the one in this browser.
   syncList: () => syncList().catch(() => 0),

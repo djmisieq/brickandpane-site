@@ -261,6 +261,26 @@ test('live mode offers only the sign-in providers switched on in Supabase', asyn
   expect(await page.evaluate(() => localStorage.getItem('bp-oauth-account-type'))).toBe('homeowner');
 });
 
+test('OAuth from a deep link returns to a URL without a fragment and keeps the route aside', async ({ page }) => {
+  // Supabase appends #access_token=… to redirect_to: a fragment already there (admin.html#/enquiries) breaks the sign-in.
+  await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://kgnjyyzjmyilorgaeabc.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
+  await page.route('https://kgnjyyzjmyilorgaeabc.supabase.co/**', (r) => {
+    const url = r.request().url();
+    if (url.endsWith('/auth/v1/settings')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ external: { google: true, azure: true } }) });
+    if (url.includes('/authorize')) return r.fulfill({ body: 'provider page' });
+    return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
+  });
+  for (const provider of ['google', 'azure']) {
+    await page.goto('/login.html?next=admin.html%23%2Fenquiries');
+    await page.locator(`[data-signin] [data-provider="${provider}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/auth/v1/authorize[?]provider=${provider}`));
+    const redirect = new URL(page.url()).searchParams.get('redirect_to');
+    expect(redirect).toBe('http://127.0.0.1:4173/admin.html');
+    await page.goto('/404.html');
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('bp-auth-return')))).toMatchObject({ path: '/admin.html', hash: '#/enquiries' });
+  }
+});
+
 test('Polish login labels the provider buttons in Polish', async ({ page }) => {
   await page.route('**/js/portal/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "export const SUPABASE_URL = 'https://kgnjyyzjmyilorgaeabc.supabase.co'; export const SUPABASE_ANON_KEY = 'anon';" }));
   await page.route('https://kgnjyyzjmyilorgaeabc.supabase.co/**', (r) => r.request().url().endsWith('/auth/v1/settings') ? r.fulfill({ contentType: 'application/json', body: '{"external":{"google":true}}' }) : r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
