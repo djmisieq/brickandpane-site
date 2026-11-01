@@ -81,6 +81,7 @@ Deno.test('retry backoff: 15, 30, 60, 120 min, at most 5 attempts', () => {
 Deno.test('test enquiries are recognised by name or company', () => {
   eq(isTestEnquiry({ name: 'TEST HubSpot sync' }), true);
   eq(isTestEnquiry({ name: 'Anna', company: 'TEST Studio' }), true);
+  eq(isTestEnquiry({ name: 'Daniel Zadroga (TEST)' }), true);
   eq(isTestEnquiry({ name: 'Testa Rossa' }), false);
   eq(isTestEnquiry({ name: 'Anna', company: null }), false);
 });
