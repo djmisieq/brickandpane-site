@@ -1,6 +1,6 @@
 // Mappings for the HubSpot sync. Run: deno test supabase/functions/_shared/hubspot.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { attributionOf, companyDomain, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
+import { attributionOf, companyDomain, dealForProject, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
 
 Deno.test('systems and openings map to product interest and deal type, without duplicates', () => {
   eq(productsOf(['lift-slide', 'windows'], [{ system: 'bifold' }, { system: 'hinged' }]), {
@@ -89,4 +89,11 @@ Deno.test('test enquiries are recognised by name or company', () => {
 Deno.test('attribution goes to the deal under bp_ names', () => {
   eq(attributionOf({ utm_source: 'test', utm_medium: 'email', utm_campaign: 'x', landing_page: '/windows.html?utm_source=test' }),
     { bp_utm_source: 'test', bp_utm_medium: 'email', bp_utm_campaign: 'x', bp_landing_page: '/windows.html?utm_source=test' });
+});
+
+Deno.test('a project links to the newest open deal for its enquiry, never to another enquiry deal', () => {
+  const d = (id: string, createdate: string, more: Record<string, string> = {}) => ({ id, properties: { createdate, hs_is_closed: 'false', ...more } });
+  eq(dealForProject([d('1', '2026-10-01'), d('2', '2026-10-20'), d('3', '2026-10-25', { hs_is_closed: 'true' })], 'BP-1')?.id, '2');
+  eq(dealForProject([d('1', '2026-10-01', { bp_enquiry_ref: 'BP-1' }), d('2', '2026-10-20', { bp_enquiry_ref: 'BP-2' })], 'BP-1')?.id, '1');
+  eq(dealForProject([d('2', '2026-10-20', { bp_enquiry_ref: 'BP-2' })], 'BP-1'), null);
 });

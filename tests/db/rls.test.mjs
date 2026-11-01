@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -271,4 +271,27 @@ test('prospects are for staff only', async () => {
   await db.exec('reset role');
   await as(S);
   assert.equal((await db.query('delete from public.prospects returning id')).rows.length, 1);
+});
+
+test('HubSpot ids are staff-only, and the link triggers never block a change', async () => {
+  const { db, as, fails } = await setup(); // no pg_net here, so every trigger call fails and must be swallowed
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.exec('reset role');
+  await db.query(`update public.project_internal set hubspot_deal_id = '123' where project_id = $1`, [P]);
+  await db.query(`insert into public.profile_internal (profile_id, hubspot_contact_id) values ($1, '456')`, [A]);
+  await as(A);
+  assert.equal((await db.query('select * from public.project_internal')).rows.length, 0);
+  assert.equal((await db.query('select * from public.profile_internal')).rows.length, 0);
+  await fails(`insert into public.profile_internal (profile_id, hubspot_contact_id) values ($1, '789')`, [C]);
+  await fails('select public.hubspot_link($1)', [JSON.stringify({ project_id: P })]);
+  await as(S);
+  assert.equal((await db.query('select hubspot_deal_id from public.project_internal where project_id = $1', [P])).rows[0].hubspot_deal_id, '123');
+  assert.equal((await db.query('select hubspot_contact_id from public.profile_internal')).rows[0].hubspot_contact_id, '456');
+  await fails(`update public.profile_internal set hubspot_contact_id = 'x'`);
+  await db.query(`update public.projects set stage = 'in_review' where id = $1`, [P]);
+  assert.equal((await db.query('select stage from public.projects where id = $1', [P])).rows[0].stage, 'in_review');
+  await db.exec('reset role');
+  await db.query(`insert into auth.users values ('77777777-7777-7777-7777-777777777777', 'new@x.com', '{}')`);
+  assert.equal((await db.query(`select count(*)::int as n from public.profiles where id = '77777777-7777-7777-7777-777777777777'`)).rows[0].n, 1);
 });
