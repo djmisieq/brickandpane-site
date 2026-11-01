@@ -1,6 +1,6 @@
 // Mappings for the HubSpot sync. Run: deno test supabase/functions/_shared/hubspot.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { companyDomain, dealName, materialsOf, mergeMulti, noteBody, placeOf, productsOf, splitName, type Enquiry } from './hubspot.ts';
+import { companyDomain, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
 
 Deno.test('systems and openings map to product interest and deal type, without duplicates', () => {
   eq(productsOf(['lift-slide', 'windows'], [{ system: 'bifold' }, { system: 'hinged' }]), {
@@ -51,4 +51,36 @@ Deno.test('deal name and note body', () => {
   ok(body.includes('4000 × 2400') && body.includes('Files uploaded: 1'));
   ok(!body.includes('secret-name'), 'file names stay out of HubSpot');
   ok(body.includes('https://brickandpane.co.uk/admin.html'));
+});
+
+Deno.test('an open deal without a ref from the last 14 days is reused, newest first', () => {
+  const now = Date.parse('2026-11-01T12:00:00Z');
+  const deal = (id: string, createdate: string, extra: Record<string, string | null> = {}) => ({ id, properties: { createdate, hs_is_closed: 'false', bp_enquiry_ref: null, ...extra } });
+  eq(pickOpenDeal([deal('1', '2026-10-25T00:00:00Z'), deal('2', '2026-10-30T00:00:00Z')], now)?.id, '2');
+  eq(pickOpenDeal([deal('1', '2026-10-01T00:00:00Z')], now), null, 'older than 14 days');
+  eq(pickOpenDeal([deal('1', '2026-10-30T00:00:00Z', { hs_is_closed: 'true' })], now), null, 'closed');
+  eq(pickOpenDeal([deal('1', '2026-10-30T00:00:00Z', { bp_enquiry_ref: 'BP-261020-AAAA' })], now), null, 'another enquiry');
+  eq(pickOpenDeal([], now), null);
+});
+
+Deno.test('retry backoff: 15, 30, 60, 120 min, at most 5 attempts', () => {
+  const at = (min: number) => new Date(Date.parse('2026-11-01T12:00:00Z') - min * 60e3).toISOString();
+  const now = Date.parse('2026-11-01T12:00:00Z');
+  const row = (attempts: number, minutesAgo: number) => ({ created_at: at(600), hubspot_attempts: attempts, hubspot_attempted_at: attempts ? at(minutesAgo) : null });
+  eq(retryDue(row(1, 14), now), false);
+  eq(retryDue(row(1, 15), now), true);
+  eq(retryDue(row(2, 29), now), false);
+  eq(retryDue(row(3, 60), now), true);
+  eq(retryDue(row(4, 119), now), false);
+  eq(retryDue(row(4, 120), now), true);
+  eq(retryDue(row(5, 9999), now), false);
+  eq(retryDue({ created_at: at(5), hubspot_attempts: 0, hubspot_attempted_at: null }, now), false, 'fresh row: the form may still be syncing');
+  eq(retryDue({ created_at: at(10), hubspot_attempts: 0, hubspot_attempted_at: null }, now), true);
+});
+
+Deno.test('test enquiries are recognised by name or company', () => {
+  eq(isTestEnquiry({ name: 'TEST HubSpot sync' }), true);
+  eq(isTestEnquiry({ name: 'Anna', company: 'TEST Studio' }), true);
+  eq(isTestEnquiry({ name: 'Testa Rossa' }), false);
+  eq(isTestEnquiry({ name: 'Anna', company: null }), false);
 });
