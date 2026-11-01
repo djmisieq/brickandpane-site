@@ -19,6 +19,8 @@ const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project',
 const REQ_ROLES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner', other: 'Other' };
 const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A quotation for a scheme', 'spec-pack': 'Technical files (old form)', samples: 'Samples', cpd: 'Training session (old form)', pqq: 'The pre-qualification pack', founding: 'A project for a case study', question: 'Just a question' };
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
+// Linked projects take their stage from HubSpot (migration 0019); staff open the deal there.
+const HUBSPOT_DEAL = 'https://app-eu1.hubspot.com/contacts/149668825/record/0-3/';
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 const listProspects = () => (store.listProspects ? store.listProspects().catch(() => []) : []);
@@ -204,7 +206,12 @@ async function detail(id) {
           </div>
         </div>
         <aside class="crm-side">
-          <form class="ctl" data-stage novalidate>
+          ${d.internal?.hubspot_deal_id ? `<form class="ctl" data-next-step novalidate>
+            <h2 class="panel-h">${tr('Stage')}</h2>
+            <p class="note">${tr('This project’s stage is set in HubSpot and updates here within 15 minutes.')} <a href="${HUBSPOT_DEAL}${encodeURIComponent(d.internal.hubspot_deal_id)}" target="_blank" rel="noopener">${tr('Open the deal in HubSpot')}</a></p>
+            <div class="field"><label for="ctl-next">${tr('Next step (shown to client)')}</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
+            <button class="btn btn-sm" type="submit">${tr('Save next step')}</button>
+          </form>` : `<form class="ctl" data-stage novalidate>
             <h2 class="panel-h">${tr('Move stage')}</h2>
             <div class="field"><label for="ctl-stage">${tr('New stage')}</label><select id="ctl-stage" name="stage" required><option value="">${tr('Choose the new stage…')}</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(tr(s.staffLabel || s.label))}${s.id === suggested ? ` ${tr('(next)')}` : ''}</option>`).join('')}</select><span class="hint">${tr('Current:')} ${esc(tr(stage(p.stage).staffLabel || stage(p.stage).label))}</span></div>
             <div class="field"><label for="ctl-note">${tr('Note to client')}</label><textarea id="ctl-note" name="note" rows="2" placeholder="${tr('e.g. Quotation Q1 is in Documents.')}"></textarea></div>
@@ -212,7 +219,7 @@ async function detail(id) {
             <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date"><span class="hint">${tr('Blank = no date.')}</span></div>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client and notify them')}</span></label>
             <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
-          </form>
+          </form>`}
 
           <form class="ctl" data-dates>
             <h2 class="panel-h">${tr('Delivery & fitting')}</h2>
@@ -267,7 +274,8 @@ async function detail(id) {
     </div>`;
 
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
-  $('[data-stage]', app).addEventListener('submit', async (e) => {
+  $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
+  $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     if (!f.stage.value) { f.stage.focus(); toast(tr('Choose the new stage first.')); return; }
     const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : null;

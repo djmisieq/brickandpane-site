@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -294,4 +294,23 @@ test('HubSpot ids are staff-only, and the link triggers never block a change', a
   await db.exec('reset role');
   await db.query(`insert into auth.users values ('77777777-7777-7777-7777-777777777777', 'new@x.com', '{}')`);
   assert.equal((await db.query(`select count(*)::int as n from public.profiles where id = '77777777-7777-7777-7777-777777777777'`)).rows[0].n, 1);
+});
+
+test('a project linked to a HubSpot deal takes its stage only from the sync', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const [P, Q] = (await db.query(`insert into public.projects (name, owner_id) values ('Linked', $1), ('Manual', $1) returning id`, [A])).rows.map((r) => r.id);
+  await db.exec('reset role');
+  await db.query(`update public.project_internal set hubspot_deal_id = '123' where project_id = $1`, [P]);
+  await as(S);
+  await fails(`insert into public.stage_events (project_id, from_stage, to_stage, actor_id) values ($1, 'submitted', 'accepted', $2)`, [P, S]);
+  await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, actor_id) values ($1, 'submitted', 'in_review', $2)`, [Q, S]);
+  assert.equal((await db.query('select stage from public.projects where id = $1', [Q])).rows[0].stage, 'in_review');
+  await fails('select * from public.hubspot_sync_state');
+  await fails(`insert into public.hubspot_sync_state values ('stage_sync', now())`);
+  // The sync runs without a signed-in user (service role).
+  await db.exec('reset role'); await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+  await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, note, actor_id) values ($1, 'submitted', 'quote_issued', '', null)`, [P]);
+  assert.equal((await db.query('select stage from public.projects where id = $1', [P])).rows[0].stage, 'quote_issued');
+  assert.equal((await db.query(`select count(*)::int as n from public.notifications where project_id = $1 and type = 'stage'`, [P])).rows[0].n, 1);
 });
