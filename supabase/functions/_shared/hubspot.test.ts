@@ -1,6 +1,6 @@
 // Mappings for the HubSpot sync. Run: deno test supabase/functions/_shared/hubspot.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { attributionOf, companyDomain, dealForProject, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
+import { attributionOf, companyDomain, dealForProject, STAGE_OF_DEAL, stageMove, dealName, isTestEnquiry, materialsOf, mergeMulti, noteBody, pickOpenDeal, placeOf, productsOf, retryDue, splitName, type Enquiry } from './hubspot.ts';
 
 Deno.test('systems and openings map to product interest and deal type, without duplicates', () => {
   eq(productsOf(['lift-slide', 'windows'], [{ system: 'bifold' }, { system: 'hinged' }]), {
@@ -96,4 +96,14 @@ Deno.test('a project links to the newest open deal for its enquiry, never to ano
   eq(dealForProject([d('1', '2026-10-01'), d('2', '2026-10-20'), d('3', '2026-10-25', { hs_is_closed: 'true' })], 'BP-1')?.id, '2');
   eq(dealForProject([d('1', '2026-10-01', { bp_enquiry_ref: 'BP-1' }), d('2', '2026-10-20', { bp_enquiry_ref: 'BP-2' })], 'BP-1')?.id, '1');
   eq(dealForProject([d('2', '2026-10-20', { bp_enquiry_ref: 'BP-2' })], 'BP-1'), null);
+});
+
+Deno.test('a project follows its deal stage only when the deal moves', () => {
+  eq(stageMove('presentationscheduled', null, 'submitted'), { to: 'quote_issued', record: true }); // first sight
+  eq(stageMove('presentationscheduled', 'presentationscheduled', 'on_hold'), { to: null, record: false }); // unchanged deal: manual on_hold stays
+  eq(stageMove('decisionmakerboughtin', 'presentationscheduled', 'quote_issued'), { to: null, record: true }); // same portal stage
+  eq(stageMove('closedwon', 'contractsent', 'drawings'), { to: 'completed', record: true });
+  eq(stageMove('9999', 'contractsent', 'drawings'), { to: null, record: false }); // unknown stage: ignored
+  eq(stageMove(null, null, 'submitted'), { to: null, record: false });
+  eq(Object.keys(STAGE_OF_DEAL).length, 11);
 });

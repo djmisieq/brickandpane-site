@@ -311,3 +311,74 @@ export async function linkProfile(supabase: DbAuth, profileId: string): Promise<
   await supabase.from('profile_internal').upsert({ profile_id: profileId, hubspot_contact_id: contact.id, updated_at: new Date().toISOString() });
   return 'linked';
 }
+
+// ---------- stage sync HubSpot → portal (migrations 0019, 0020; function hubspot-stage-sync) ----------
+// HubSpot is the only source of a linked project's stage. submitted, clarification, handover and on_hold have no
+// HubSpot stage: the portal sets them and HubSpot leaves them alone until the deal itself moves.
+export const STAGE_OF_DEAL: Record<string, string> = {
+  appointmentscheduled: 'in_review', // Enquiry
+  presentationscheduled: 'quote_issued', // Quote sent
+  decisionmakerboughtin: 'quote_issued', // Negotiation
+  '6335558846': 'accepted', // Quote accepted
+  '6334870758': 'survey', // Survey
+  contractsent: 'drawings', // Order placed
+  '6342532306': 'production', // Production
+  '6342584520': 'delivery', // Delivery
+  '6334870754': 'installation', // Installation
+  closedwon: 'completed',
+  closedlost: 'closed',
+};
+
+// What one deal means for its project: move it (to), and remember the dealstage (record) so it isn't re-applied.
+export const stageMove = (dealstage: string | null, lastSynced: string | null, current: string) => {
+  if (!dealstage || dealstage === lastSynced) return { to: null, record: false };
+  const to = STAGE_OF_DEAL[dealstage] ?? null;
+  return { to: to && to !== current ? to : null, record: !!to };
+};
+
+type SyncedDeal = { id: string; properties: { dealstage?: string | null; bp_portal_project_id?: string | null; hs_lastmodifieddate?: string } };
+const CURSOR = 'stage_sync';
+
+// Returns counts only. A deal is applied only to the project whose internal record points back at it.
+export async function syncStages(supabase: Db, now = Date.now()) {
+  const token = Deno.env.get('HUBSPOT_TOKEN');
+  if (!token) return { skipped: 'no token' };
+  const { data: state } = await supabase.from('hubspot_sync_state').select('at').eq('key', CURSOR).maybeSingle();
+  // 5 min overlap for HubSpot's search index lag; re-reading a deal is harmless (stageMove compares).
+  const since = state ? Date.parse(state.at) - 5 * 60e3 : 0;
+  const deals: SyncedDeal[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const page = await hs(token, 'POST', '/crm/v3/objects/deals/search', {
+      filterGroups: [{ filters: [{ propertyName: 'bp_portal_project_id', operator: 'HAS_PROPERTY' }, { propertyName: 'hs_lastmodifieddate', operator: 'GT', value: String(since) }] }],
+      properties: ['dealstage', 'bp_portal_project_id', 'hs_lastmodifieddate'], sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'ASCENDING' }], limit: 100, after,
+    });
+    deals.push(...(page.results ?? []));
+    after = page.paging?.next?.after;
+    if (!after || deals.length >= 1000) break;
+  }
+  let moved = 0, failed = 0;
+  for (const d of deals) {
+    const pid = d.properties.bp_portal_project_id;
+    try {
+      const { data: internal } = await supabase.from('project_internal').select('hubspot_deal_id, hubspot_dealstage').eq('project_id', pid).maybeSingle();
+      if (!internal || internal.hubspot_deal_id !== d.id) continue;
+      const { data: p } = await supabase.from('projects').select('stage').eq('id', pid).single();
+      const move = stageMove(d.properties.dealstage ?? null, internal.hubspot_dealstage, p.stage);
+      if (move.to) {
+        // The usual path: on_stage_event moves the project and notifies the client (stage name, no note, no date).
+        const { error } = await supabase.from('stage_events').insert({ project_id: pid, from_stage: p.stage, to_stage: move.to, note: '', visible_to_client: true, actor_id: null });
+        if (error) throw error;
+        await supabase.from('projects').update({ due_at: null }).eq('id', pid);
+        moved++;
+      }
+      if (move.record) await supabase.from('project_internal').update({ hubspot_dealstage: d.properties.dealstage }).eq('project_id', pid);
+    } catch { failed++; }
+  }
+  // Move the cursor only when every deal went through, so a failed one is read again next run. A capped run
+  // (over 1000 deals) continues from the last deal it read.
+  const at = after ? deals[deals.length - 1].properties.hs_lastmodifieddate! : new Date(now).toISOString();
+  if (!failed) await supabase.from('hubspot_sync_state').upsert({ key: CURSOR, at });
+  return { deals: deals.length, moved, failed };
+}
+
