@@ -93,6 +93,7 @@ test('search and AI output: private pages stay noindex, schema has no prices, ti
     }
     for (const p of PAGES.filter((x) => !PRIVATE.includes(x))) {
       const html = read(`${dir}${p}.html`);
+      if (!/<meta name="robots" content="index,follow">/.test(html)) hits.push(`${dir}${p}: public page not index,follow`);
       const title = html.match(/<title>([^<]*)<\/title>/)[1].replace(/&amp;/g, '&');
       const desc = html.match(/<meta name="description" content="([^"]*)">/)[1];
       if (title.length > 60) hits.push(`${dir}${p}: title ${title.length} chars`);

@@ -11,8 +11,8 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 
 //   "article": true for guides (Article schema, og:type article).
 
 const SITE = 'https://brickandpane.co.uk';
-// Pre-launch: false keeps every page noindex. At launch set true (docs: WDROZENIE.md §8).
-const INDEXABLE = false;
+// Live since launch (Nov 2026): public pages index,follow; pages with "private": true stay noindex.
+const INDEXABLE = true;
 // Portal pages (signed-in data): a Content-Security-Policy and a frame guard. GitHub Pages sends no security headers,
 // so both live in the page. supabase-js is served from js/vendor (no third-party script can reach the session).
 const APP_PAGES = ['portal.html', 'login.html', 'admin.html'];
@@ -176,7 +176,8 @@ for (const [loc, L] of Object.entries(LOCALES)) {
       if (meta.article) crumbs.push([L.guides, pageUrl(loc, 'guides.html')]);
       if (file !== 'index.html') crumbs.push([meta.crumb, canonical]);
       const graph = [
-        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', url: `${SITE}/`, email: 'contact@brickandpane.co.uk', founder: { '@type': 'Person', name: 'Christopher' }, telephone: '+44 7575 626 775',
+        { '@type': 'HomeAndConstructionBusiness', '@id': ORG, name: 'Brick & Pane', alternateName: 'Brick and Pane', legalName: 'Christopher Rozek trading as Brick and Pane', url: `${SITE}/`, email: 'contact@brickandpane.co.uk', founder: { '@type': 'Person', name: 'Christopher', jobTitle: 'Founder' },
+          contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', telephone: '+44 7575 626 775', email: 'contact@brickandpane.co.uk', availableLanguage: ['en', 'pl'] }, telephone: '+44 7575 626 775',
           address: { '@type': 'PostalAddress', streetAddress: '30 Pettman Close', addressLocality: 'Herne Bay', addressRegion: 'Kent', postalCode: 'CT6 5TJ', addressCountry: 'GB' },
           logo: `${SITE}/img/logo.svg`, image: `${SITE}/img/photos/og-image.jpg`, description: L.org,
           areaServed: { '@type': 'City', name: 'London' },
