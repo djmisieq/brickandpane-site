@@ -173,6 +173,7 @@ const PL = {
   'Order progress': 'Postęp zamówienia',
   'Stage {i} of {n}': 'Etap {i} z {n}',
   'Quote': 'Oferta',
+  'Quotes': 'Oferty',
   'Order': 'Zamówienie',
   'Made': 'Produkcja',
   'Delivered': 'Dostawa',

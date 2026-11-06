@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -351,4 +351,27 @@ test('portal events for HubSpot are queued once, for the service role only', asy
   await db.exec('reset role');
   const kinds = (await db.query('select kind from public.hubspot_events where project_id = $1 order by created_at, kind', [P])).rows.map((x) => x.kind).sort();
   assert.deepEqual(kinds, ['client_upload', 'document', 'message', 'quote_accepted']);
+});
+
+test('quotes and the firm details on them are for staff only', async () => {
+  const { db, as, fails } = await setup();
+  const q = { id: '66666666-6666-6666-6666-666666666666', reference: 'BP-2026-001', customerName: 'Jo' };
+  await as(S);
+  await db.query(`insert into public.quotes (id, reference, data) values ($1, $2, $3)`, [q.id, q.reference, JSON.stringify(q)]);
+  await db.query(`insert into public.quote_settings (data) values ('{"accountName":"Brick and Pane"}')`);
+  assert.equal((await db.query('select created_by from public.quotes')).rows[0].created_by, S);
+  await fails(`insert into public.quote_settings (id, data) values (false, '{}')`);
+  await fails(`insert into public.quotes (id, data) values (gen_random_uuid(), '[]')`);
+  for (const who of [A, C]) {
+    await as(who);
+    assert.equal((await db.query('select * from public.quotes')).rows.length, 0);
+    assert.equal((await db.query('select * from public.quote_settings')).rows.length, 0);
+    await fails(`insert into public.quotes (id, data) values (gen_random_uuid(), '{}')`);
+    await db.query(`update public.quotes set data = '{}'`); // RLS: touches nothing
+    await db.query(`delete from public.quotes`);
+  }
+  await as(S);
+  assert.equal((await db.query('select data->>\'customerName\' as n from public.quotes')).rows[0].n, 'Jo');
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.quotes');
 });

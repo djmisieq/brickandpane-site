@@ -123,6 +123,18 @@ test('portal texts make no promise the company has not confirmed', () => {
   expect(hits).toEqual([]);
 });
 
+test('the CRM quote builder makes no promise either, beyond the terms the team types into a quote', () => {
+  // js/portal/quotes.js prints the team's priced estimate (06.11.2026). A discount, a lead time and "installation
+  // included" are the team's own entries for one client there, not claims on the website; every other ban applies.
+  const QUOTE_TERMS = [/discount/i, /rabat/i, /czas realizacji/i, /w cenie/i];
+  const hits = [];
+  fs.readFileSync(new URL('../js/portal/quotes.js', import.meta.url), 'utf8').split('\n').forEach((line, i) => {
+    if (line.trim().startsWith('//')) return;
+    for (const re of BANNED) if (!QUOTE_TERMS.some((q) => q.source === re.source) && re.test(line)) hits.push(`js/portal/quotes.js:${i + 1} contains ${re}`);
+  });
+  expect(hits).toEqual([]);
+});
+
 test('headings never skip a level and each folded section keeps its layout', async ({ page }) => {
   for (const url of URLS) {
     await page.goto(url);
