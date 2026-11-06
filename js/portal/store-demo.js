@@ -20,6 +20,11 @@ const load = () => {
   const s = seed(); save(s); return s;
 };
 const save = (s) => { mem = s; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* memory only */ } emit(); };
+// Quotes from the CRM's quote builder: their own key and no emit(), so typing a quote never redraws other tabs.
+const QKEY = 'bp-portal-demo-quotes';
+let qmem = null;
+const qload = () => { try { const raw = localStorage.getItem(QKEY); if (raw) return JSON.parse(raw); } catch { if (qmem) return qmem; } return qmem || { quotes: [], firm: {} }; };
+const qsave = (d) => { qmem = d; try { localStorage.setItem(QKEY, JSON.stringify(d)); } catch { /* memory only */ } };
 // Session is per tab, so one tab can be the architect and another the staff CRM.
 let memSession = null;
 const sessionId = () => { try { return sessionStorage.getItem(SESSION); } catch { return memSession; } };
@@ -150,7 +155,7 @@ export const store = {
   async sendMagicLink() { throw new Error('Magic links are not available in demo mode.'); },
   async signOut() { setSession(null); },
   async setPassword() { need(load()); },
-  async resetDemo() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } mem = null; load(); emit(); },
+  async resetDemo() { try { localStorage.removeItem(KEY); localStorage.removeItem(QKEY); } catch { /* ignore */ } mem = null; qmem = null; load(); emit(); },
 
   async updateProfile(patch) {
     const s = load(); const u = need(s);
@@ -163,6 +168,14 @@ export const store = {
     if (u?.account_type !== 'homeowner') return [];
     return [{ id: 'demo-enquiry', ref: 'BP-261013-7A3C', created_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'replied', topic: 'quote', systems: ['lift-slide'], project_id: null }];
   },
+  async listQuotes() { needStaff(load()); return [...qload().quotes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); },
+  async saveQuote(q) {
+    needStaff(load()); const d = qload(); const i = d.quotes.findIndex((x) => x.id === q.id);
+    if (i < 0) d.quotes.push(q); else d.quotes[i] = q; qsave(d);
+  },
+  async deleteQuote(id) { needStaff(load()); const d = qload(); d.quotes = d.quotes.filter((x) => x.id !== id); qsave(d); },
+  async getQuoteSettings() { needStaff(load()); return qload().firm || {}; },
+  async saveQuoteSettings(firm) { needStaff(load()); const d = qload(); d.firm = firm; qsave(d); },
   async listRequests() {
     const s = load(); needStaff(s);
     return [...(s.requests || [])].sort((a, b) => b.created_at.localeCompare(a.created_at));

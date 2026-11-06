@@ -85,8 +85,69 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Board/, /List/, /Enquiries/]);
+  await expect(page.locator('.seg a')).toHaveText([/Board/, /List/, /Enquiries/, /Quotes/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
+});
+
+test('staff build a quote in five steps and get a printable estimate', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.seg a[href="#/quotes"]').click();
+  await expect(page.locator('h1')).toHaveText('Quotes');
+  await expect(page.locator('#app')).toContainText('Nothing yet.');
+  await page.locator('[data-act="new"]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  // 01 client
+  await page.locator('[data-act="audience"][data-v="architect"]').click();
+  await page.locator('[data-b="q:customerName"]').fill('Jo Bennett');
+  await page.locator('[data-b="q:billingAddress"]').fill('12 Orford Road\nLondon');
+  await page.locator('[data-b="q:postcode"]').fill('E17 9NJ');
+  await page.locator('[data-b="q:internalNote"]').fill('Call after 5');
+  await expect(page.locator('#q-crumb')).toHaveText('Jo Bennett');
+  // 02 products: 2 × £1,000 and 1 × £2,500.50
+  await page.locator('[data-act="next"]').click();
+  await page.locator('[data-act="add-item"]').click();
+  await page.locator('[data-b$=":qty"]').fill('2');
+  await page.locator('[data-b$=":unitPrice"]').fill('1000');
+  await page.locator('[data-act="add-item"]').click();
+  await page.locator('[data-b$=":kind"]').nth(1).selectOption('bifold');
+  await page.locator('[data-b$=":unitPrice"]').nth(1).fill('2500,50');
+  await expect(page.locator('#q-sum')).toContainText('£4,500.50');
+  // 03 installation, priced separately: not part of the main total
+  await page.locator('[data-act="next"]').click();
+  await page.locator('[data-act="mode"][data-v="separate"]').click();
+  await page.locator('[data-b="il:windows:amount"]').fill('800');
+  await expect(page.locator('#q-total')).toHaveText('£4,500.50');
+  // 04 terms: VAT on, stages must add up to 100%
+  await page.locator('[data-act="next"]').click();
+  await page.locator('[data-act="vat"]').check();
+  await expect(page.locator('#q-total')).toHaveText('£5,400.60');
+  await page.locator('[data-b$=":percent"]').first().fill('30');
+  await expect(page.locator('#q-paysum')).toContainText('90%');
+  await page.locator('[data-b$=":percent"]').first().fill('40');
+  await expect(page.locator('#q-paysum')).toContainText('100%');
+  // 05 the estimate, in Polish
+  await page.locator('[data-act="lang"][data-v="pl"]').click();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const offer = page.locator('#offer');
+  await expect(offer).toContainText('Jo Bennett');
+  await expect(offer).toContainText('E17 9NJ');
+  await expect(offer).toContainText('Dla projektanta · Dostawa, montaż osobno');
+  await expect(offer).toContainText('Harmonijkowe');
+  await expect(offer).toContainText('Razem z VAT');
+  await expect(offer).toContainText('Montaż — osobna wycena');
+  await expect(offer).not.toContainText('Call after 5'); // the note stays with the team
+  // Saved for the team: back on the list after a reload.
+  await page.waitForTimeout(800);
+  await page.goto('/admin.html#/quotes');
+  const item = page.locator('.q-item', { hasText: 'Jo Bennett' });
+  await expect(item).toContainText(`BP-${new Date().getFullYear()}-001`);
+  await expect(item).toContainText('5400,60'); // amounts follow the quote's language (PL here)
+  await item.locator('[data-act="dup"]').click();
+  await expect(page.locator('.q-item')).toHaveCount(2);
+  await page.locator('.q-item').first().locator('[data-act="del-ask"]').click();
+  await page.locator('[data-act="del-yes"]').click();
+  await expect(page.locator('.q-item')).toHaveCount(1);
 });
 
 test('staff see website enquiries sent without an account and triage them', async ({ page }) => {

@@ -113,6 +113,17 @@ export const store = {
     if (error?.code === 'PGRST202') return []; // function not deployed
     return ok({ data: data || [], error }); // any other failure shows as an error, not as "no enquiries"
   },
+  // Quote builder (admin.html#/quotes, migration 0025, staff-only RLS). The quote is one JSON document; the builder
+  // saves it a moment after typing stops. No emit(): nothing else on the page depends on quotes.
+  async listQuotes() {
+    return ok(await sb.from('quotes').select('data').order('updated_at', { ascending: false }).limit(500)).map((r) => r.data);
+  },
+  async saveQuote(q) {
+    ok(await sb.from('quotes').upsert({ id: q.id, reference: q.reference, data: q, updated_at: new Date(q.updatedAt || Date.now()).toISOString() }));
+  },
+  async deleteQuote(id) { ok(await sb.from('quotes').delete().eq('id', id)); },
+  async getQuoteSettings() { return ok(await sb.from('quote_settings').select('data').maybeSingle())?.data || {}; },
+  async saveQuoteSettings(data) { ok(await sb.from('quote_settings').upsert({ id: true, data, updated_at: new Date().toISOString() })); },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
   async listRequests() {
     return ok(await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(200));

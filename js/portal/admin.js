@@ -3,6 +3,7 @@ import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
+import { quotesView } from './quotes.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -47,8 +48,11 @@ async function render(fromStore = false) {
   const focused = document.activeElement?.id;
   await renderAppBar(bar, user, 'admin');
   const r = route();
+  // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
+  if (fromStore && r.name === 'quotes') return;
   try {
     if (r.name === 'p' && r.id) await detail(r.id);
+    else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
     else await board(r.name === 'list');
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
@@ -104,7 +108,7 @@ async function board(asList) {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}</div>`;
 }
 
 async function enquiries() {
