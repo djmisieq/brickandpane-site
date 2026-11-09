@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -374,4 +374,50 @@ test('quotes and the firm details on them are for staff only', async () => {
   assert.equal((await db.query('select data->>\'customerName\' as n from public.quotes')).rows[0].n, 'Jo');
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.quotes');
+});
+
+test('quote sends: staff record them, the quote turns sent, the deal is pinned, sent quotes stay', async () => {
+  const { db, as, fails } = await setup();
+  const Q = '77777777-7777-7777-7777-777777777777', Q2 = '88888888-8888-8888-8888-888888888888';
+  const send = (quote, rev, kind) => db.query(`insert into public.quote_sends (quote_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot)
+    values ($1::uuid, '501', 'BP-2026-001', $2, $3, 1200, 20, $4, 'x.pdf', '{"reference":"BP-2026-001"}') returning id, sent_by`, [quote, rev, kind, `${quote}/x.pdf`]);
+  await as(S);
+  await db.query(`insert into public.quotes (id, reference, data) values ($1, 'BP-2026-001', '{}'), ($2, 'BP-2026-002', '{}')`, [Q, Q2]);
+  assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'draft');
+  const first = (await send(Q, '00', 'new')).rows[0];
+  assert.equal(first.sent_by, S);
+  let row = (await db.query('select status, status_source, hubspot_deal_id from public.quotes where id = $1', [Q])).rows[0];
+  assert.deepEqual(row, { status: 'sent', status_source: 'crm', hubspot_deal_id: '501' });
+  // A revision, and a second independent quote on the same deal.
+  await send(Q, '01', 'revision');
+  await send(Q2, '00', 'new');
+  assert.equal((await db.query(`select count(*)::int as n from public.quote_sends where hubspot_deal_id = '501'`)).rows[0].n, 3);
+  // Accepted stays accepted when the quote is sent again.
+  await db.query(`update public.quotes set status = 'accepted', status_source = 'crm' where id = $1`, [Q]);
+  await send(Q, '01', 'resend');
+  assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'accepted');
+  // Staff cannot write HubSpot results, change or delete a send, or delete a sent quote.
+  await fails(`insert into public.quote_sends (quote_id, hubspot_deal_id, reference, kind, total, pdf_path, snapshot, hubspot_note_id) values ($1, '501', 'x', 'new', 1, 'p', '{}', '1')`, [Q]);
+  await fails(`update public.quote_sends set hubspot_note_id = '1'`);
+  await fails(`delete from public.quote_sends`);
+  await fails(`delete from public.quotes where id = $1`, [Q]);
+  await fails(`insert into public.quote_sends (quote_id, hubspot_deal_id, reference, kind, total, pdf_path, snapshot) values ($1, 'abc', 'x', 'new', 1, 'p', '{}')`, [Q]);
+  await fails(`select public.claim_quote_send($1)`, [first.id]);
+  await fails(`update public.quotes set status = 'lost' where id = $1`, [Q]);
+  for (const who of [A, C]) {
+    await as(who);
+    assert.equal((await db.query('select * from public.quote_sends')).rows.length, 0);
+    await fails(`insert into public.quote_sends (quote_id, hubspot_deal_id, reference, kind, total, pdf_path, snapshot) values ($1, '501', 'x', 'new', 1, 'p', '{}')`, [Q]);
+  }
+  // The function's claim: one caller gets the row; a failed attempt can be retried at once; a sent one never again.
+  await db.exec('reset role'); await db.exec('grant usage on schema public, storage to service_role; grant all on public.quote_sends to service_role; grant select on storage.buckets to service_role; set role service_role');
+  assert.equal((await db.query('select * from public.claim_quote_send($1)', [first.id])).rows.length, 1);
+  assert.equal((await db.query('select * from public.claim_quote_send($1)', [first.id])).rows.length, 0);
+  await db.query(`update public.quote_sends set hubspot_error = '500 down' where id = $1`, [first.id]);
+  const retry = (await db.query('select * from public.claim_quote_send($1)', [first.id])).rows[0];
+  assert.equal(retry.hubspot_attempts, 2);
+  assert.equal(retry.hubspot_error, null);
+  await db.query(`update public.quote_sends set hubspot_note_id = '9', hubspot_error = 'pdf not attached' where id = $1`, [first.id]);
+  assert.equal((await db.query('select * from public.claim_quote_send($1)', [first.id])).rows.length, 0);
+  assert.equal((await db.query(`select * from storage.buckets where id = 'quote-pdfs'`)).rows[0].public, false);
 });

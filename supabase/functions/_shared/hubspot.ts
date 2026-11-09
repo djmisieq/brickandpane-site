@@ -13,7 +13,7 @@ declare global {
 }
 
 const API = 'https://api.hubapi.com';
-const SITE = 'https://brickandpane.co.uk';
+export const SITE = 'https://brickandpane.co.uk';
 // Website deals belong to Kate (owner decision 01.11.2026); a new contact gets her only if it has no owner yet.
 const owner = () => Deno.env.get('HUBSPOT_OWNER_ID') ?? '39646197';
 
@@ -45,7 +45,7 @@ export type Enquiry = {
 };
 
 const uniq = <T>(a: T[]) => [...new Set(a)];
-const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+export const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 // Drops empty values: HubSpot rejects "" for dropdowns and there is no point in sending blanks.
 const props = (o: Record<string, string | null | undefined>) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== '')) as Record<string, string>;
@@ -96,7 +96,7 @@ export class HubSpotError extends Error {
 }
 
 // One retry on 429 and 5xx, after Retry-After (max 5 s) or 1 s.
-const hs = async (token: string, method: string, path: string, body?: unknown) => {
+export const hs = async (token: string, method: string, path: string, body?: unknown) => {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(API + path, {
       method,
@@ -122,9 +122,9 @@ const hs = async (token: string, method: string, path: string, body?: unknown) =
 type Found = { id: string; properties: Record<string, string | null> } | null;
 const search = async (token: string, object: string, propertyName: string, value: string, properties: string[] = []): Promise<Found> =>
   (await hs(token, 'POST', `/crm/v3/objects/${object}/search`, { filterGroups: [{ filters: [{ propertyName, operator: 'EQ', value }] }], properties, limit: 1 })).results?.[0] ?? null;
-const create = async (token: string, object: string, properties: Record<string, string>) =>
+export const create = async (token: string, object: string, properties: Record<string, string>) =>
   String((await hs(token, 'POST', `/crm/v3/objects/${object}`, { properties })).id);
-const associate = (token: string, from: string, fromId: string, to: string, toId: string) =>
+export const associate = (token: string, from: string, fromId: string, to: string, toId: string) =>
   hs(token, 'PUT', `/crm/v4/objects/${from}/${fromId}/associations/default/${to}/${toId}`);
 
 const contactOf = async (token: string, r: Enquiry, interest: string[]) => {
@@ -181,7 +181,7 @@ export const attributionOf = (r: Pick<Enquiry, 'utm_source' | 'utm_medium' | 'ut
 });
 const ATTRIBUTION = ['bp_utm_source', 'bp_utm_medium', 'bp_utm_campaign', 'bp_landing_page'] as const;
 const DEAL_PROPS = ['bp_enquiry_ref', 'hs_is_closed', 'createdate', 'bp_product_type', 'bp_material', 'bp_source', ...ATTRIBUTION];
-const linked = async (token: string, from: string, id: string, to: string, limit = 100): Promise<string[]> =>
+export const linked = async (token: string, from: string, id: string, to: string, limit = 100): Promise<string[]> =>
   ((await hs(token, 'GET', `/crm/v4/objects/${from}/${id}/associations/${to}?limit=${limit}`)).results ?? []).map((a: { toObjectId: number | string }) => String(a.toObjectId));
 
 // Returns the deal and whether it still needs the enquiry note, so a retry never adds a second one.

@@ -124,6 +124,41 @@ export const store = {
   async deleteQuote(id) { ok(await sb.from('quotes').delete().eq('id', id)); },
   async getQuoteSettings() { return ok(await sb.from('quote_settings').select('data').maybeSingle())?.data || {}; },
   async saveQuoteSettings(data) { ok(await sb.from('quote_settings').upsert({ id: true, data, updated_at: new Date().toISOString() })); },
+  // Quotes ↔ HubSpot (migration 0026, function hubspot-quotes). Server fields sit beside the builder's JSON; without
+  // the migration the Quotes tab works as before (hubspot: false).
+  async quoteHub() {
+    const [m, s] = await Promise.all([
+      sb.from('quotes').select('id, hubspot_deal_id, hubspot_deal_name, hubspot_dealstage, status, status_source, status_at').limit(500),
+      sb.from('quote_sends').select('id, quote_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot, sent_on, created_at, hubspot_note_id, hubspot_error, hubspot_stage_moved, hubspot_attempts').order('created_at', { ascending: false }).limit(1000),
+    ]);
+    if (m.error || s.error) return { hubspot: false, meta: [], sends: [] };
+    return { hubspot: true, meta: m.data || [], sends: s.data || [] };
+  },
+  async linkQuoteDeal(id, deal) {
+    ok(await sb.from('quotes').update({ hubspot_deal_id: deal?.id ?? null, hubspot_deal_name: deal?.name ?? null, hubspot_dealstage: deal?.stage ?? null }).eq('id', id));
+  },
+  async setQuoteStatus(id, status) {
+    ok(await sb.from('quotes').update({ status, status_source: 'crm', status_at: new Date().toISOString() }).eq('id', id));
+  },
+  async hubspot(action, body = {}) {
+    const { data, error } = await sb.functions.invoke('hubspot-quotes', { body: { action, ...body } });
+    if (error) throw new Error(error.message || 'HubSpot is not reachable.');
+    if (data?.error) throw Object.assign(new Error(data.error), { code: data.error });
+    return data;
+  },
+  // Stores the PDF, records the send (the trigger marks the quote sent) and asks HubSpot right away; if that call
+  // fails, the cron retries within 15 minutes.
+  async sendQuote({ quoteId, dealId, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
+    const id = crypto.randomUUID();
+    const path = `${quoteId}/${id}.pdf`;
+    ok(await sb.storage.from('quote-pdfs').upload(path, file, { contentType: 'application/pdf' }));
+    const row = ok(await sb.from('quote_sends').insert({ id, quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: path, pdf_name: file.name.slice(0, 200), snapshot, sent_on: sentOn }).select().single());
+    let hub;
+    try { hub = await this.hubspot('send', { send_id: id }); } catch (e) { hub = { result: 'error', hubspot_error: e.message }; }
+    return { ...row, ...hub };
+  },
+  async retryQuoteSend(id) { return this.hubspot('send', { send_id: id }); },
+  async quotePdfUrl(path) { return ok(await sb.storage.from('quote-pdfs').createSignedUrl(path, 300))?.signedUrl; },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
   async listRequests() {
     return ok(await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(200));

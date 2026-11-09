@@ -1,7 +1,10 @@
 // Quote builder for staff (admin.html#/quotes, 06.11.2026): a copy of the team's offer desk built in Grok
 // (wind-jolly-fern-cobalt.grok.me). Five steps — client, products, installation, terms — and the printable estimate.
 // Quotes and the firm details shared by all quotes live in Supabase (migration 0025, staff only); in demo mode they
-// stay in this browser. Nothing is sent anywhere: the team prints the estimate (or saves it as PDF) and sends it.
+// stay in this browser. The team prints the estimate (or saves it as PDF) and emails it; then "Send to the client"
+// records that send with the PDF and copies it to the quote's HubSpot deal (migration 0026, function hubspot-quotes):
+// a note with the total and the PDF, and Enquiry → Quote sent. The deal is picked in the Client step; its stage sets
+// the quote's status (accepted / declined). One deal may carry several quotes; each quote keeps its revisions.
 // The estimate is a priced document whose amounts, discount and lead time the team types in itself, so
 // tests/audit.spec.js lets this file (and only this file) use those words.
 import { store } from './store.js';
@@ -209,6 +212,55 @@ function normQuote(raw, f) {
 }
 const normFirm = (raw) => ({ ...FIRM_DEFAULT, ...(raw || {}), vatRegistered: raw?.vatRegistered === true });
 
+// ---------- HubSpot: deal, sends, status (migration 0026) ----------
+// Same ids as ACCEPTED_STAGES in supabase/functions/_shared/hubspot-quotes.ts.
+const ACCEPTED_STAGES = ['6335558846', '6334870758', 'contractsent', '6342532306', '6342584520', '6334870754', 'closedwon'];
+const STAGE_LABEL = { appointmentscheduled: 'Enquiry', presentationscheduled: 'Quote sent', decisionmakerboughtin: 'Negotiation', '6335558846': 'Quote accepted', '6334870758': 'Survey', contractsent: 'Order placed', '6342532306': 'Production', '6342584520': 'Delivery', '6334870754': 'Installation', closedwon: 'Closed won', closedlost: 'Closed lost' };
+const STATUS = {
+  draft: { en: 'Draft', pl: 'Szkic' }, sent: { en: 'Sent', pl: 'Wysłana' },
+  accepted: { en: 'Accepted', pl: 'Zaakceptowana' }, declined: { en: 'Declined', pl: 'Odrzucona' },
+};
+const KIND = { new: { en: 'new quote', pl: 'nowa oferta' }, revision: { en: 'revision', pl: 'rewizja' }, resend: { en: 'sent again, no changes', pl: 'ponownie, bez zmian' } };
+const MAX_PDF = 10 * 1024 * 1024;
+let hub = { on: false, demo: false, meta: new Map(), sends: [] };
+let search = { q: '', results: null, busy: false, error: '' };
+const deals = new Map(); // deal id → { deal, files, missing, error }
+let sendForm = null; // { quoteId, file, error, busy }
+
+const metaOf = (q) => hub.meta.get(q.id) || { id: q.id, status: 'draft', status_source: null, hubspot_deal_id: null, hubspot_deal_name: null, hubspot_dealstage: null };
+const sendsOf = (q) => hub.sends.filter((s) => s.quote_id === q.id).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+const setMeta = (id, patch) => hub.meta.set(id, { ...metaOf({ id }), ...patch });
+const statusName = (s) => t(STATUS[s]?.en ?? s, STATUS[s]?.pl ?? s);
+const statusTag = (q) => { const m = metaOf(q), last = sendsOf(q)[0]; return `<span class="tag q-st q-st-${esc(m.status)}">${esc(statusName(m.status))}${m.status !== 'draft' && last ? ` · rev ${esc(last.revision)}` : ''}</span>`; };
+// What the client sees, so the CRM can tell a changed quote from the one sent: no timestamps, private note or UI flags.
+const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
+const content = (q) => { const { updatedAt, revision, internalNote, ...rest } = q; void updatedAt; void revision; void internalNote; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, ...p }) => { void showSpec; return p; }) }); };
+export const nextRevision = (r) => {
+  const s = String(r ?? '').trim();
+  if (/^\d+$/.test(s)) return String(Number(s) + 1).padStart(Math.max(2, s.length), '0');
+  if (/^[A-Ya-y]$/.test(s)) return String.fromCharCode(s.charCodeAt(0) + 1);
+  return s ? `${s}.1` : '01';
+};
+// new: never sent. revision: the content (or the number) changed since the last send. resend: the same thing again.
+// bump: the content changed but the number did not, so it must change before the PDF is saved.
+function sendPlan(q) {
+  const last = sendsOf(q)[0];
+  if (!last) return { kind: 'new', last: null, bump: false };
+  const changed = content(q) !== content(last.snapshot || {});
+  if (changed) return { kind: 'revision', last, bump: q.revision.trim() === last.revision };
+  return { kind: q.revision.trim() === last.revision ? 'resend' : 'revision', last, bump: false };
+}
+const pdfBase = (q) => `Brick-and-Pane-${q.reference}-rev${q.revision.trim() || '00'}`.replace(/[^\w.-]+/g, '-');
+const onDeal = (dealId) => (quotes || []).filter((x) => metaOf(x).hubspot_deal_id === dealId);
+// HubSpot says the client accepted, but two or more quotes on the deal are live: staff say which.
+function needsChoice(q) {
+  const m = metaOf(q);
+  if (!m.hubspot_deal_id || !ACCEPTED_STAGES.includes(m.hubspot_dealstage) || m.status !== 'sent') return false;
+  const live = onDeal(m.hubspot_deal_id).map(metaOf).filter((x) => x.status !== 'draft');
+  return !live.some((x) => x.status === 'accepted' && x.status_source === 'crm') && live.filter((x) => x.status === 'sent' || x.status_source === 'hubspot').length > 1;
+}
+const stageText = (s) => STAGE_LABEL[s] || s || '';
+
 // ---------- state and saving ----------
 let quotes = null; // loaded once, refreshed whenever the list is shown
 let firm = { ...FIRM_DEFAULT };
@@ -223,9 +275,10 @@ let chain = Promise.resolve();
 
 const current = () => quotes?.find((q) => q.id === openId) || null;
 async function load() {
-  const [list, settings] = await Promise.all([store.listQuotes(), store.getQuoteSettings()]);
+  const [list, settings, h] = await Promise.all([store.listQuotes(), store.getQuoteSettings(), store.quoteHub ? store.quoteHub().catch(() => null) : null]);
   firm = normFirm(settings);
   quotes = list.flatMap((r) => { const q = normQuote(r, firm); return q ? [q] : []; });
+  hub = { on: !!h?.hubspot, demo: !!h?.demo, meta: new Map((h?.meta || []).map((m) => [m.id, m])), sends: h?.sends || [] };
 }
 function flush() {
   clearTimeout(saveTimer);
@@ -402,10 +455,108 @@ function estimate(q) {
   </article>`;
 }
 
+// ---------- HubSpot panels ----------
+const fmtDay = (s) => longDate(String(s || '').slice(0, 10), LANG);
+function dealResults() {
+  if (search.busy) return `<p class="hint q-gap">${t('Searching HubSpot…', 'Szukam w HubSpocie…')}</p>`;
+  if (search.error) return `<p class="q-warn q-gap">${esc(search.error)}</p>`;
+  if (!search.results) return '';
+  if (!search.results.length) return `<p class="hint q-gap">${t('No deal found. Check the spelling, or create the deal in HubSpot first.', 'Nie ma takiego deala. Sprawdź pisownię albo najpierw załóż deal w HubSpocie.')}</p>`;
+  return `<ul class="q-deals">${search.results.map((d) => `<li>
+    <div><strong>${esc(d.name || t('(no name)', '(bez nazwy)'))}</strong>
+      <span class="q-item-meta">${esc([stageText(d.stage), d.contact?.name, d.contact?.email].filter(Boolean).join(' · '))}${d.closed ? ` · ${t('closed', 'zamknięty')}` : ''}</span></div>
+    <button type="button" class="btn btn-sm" data-act="deal-pick" data-v="${esc(d.id)}">${t('Use this deal', 'Przypisz')}</button></li>`).join('')}</ul>`;
+}
+function dealFilesBlock(m) {
+  const info = deals.get(m.hubspot_deal_id);
+  if (!info?.files) return `<button type="button" class="btn btn-sm btn-ghost q-gap" data-act="deal-files">${t('Show quotes already in HubSpot (PDF, Word)', 'Pokaż oferty, które są już w HubSpocie (PDF, Word)')}</button>${info?.error ? `<p class="q-warn">${esc(info.error)}</p>` : ''}`;
+  const miss = info.missing?.length ? `<p class="hint">${t('HubSpot did not allow reading', 'HubSpot nie pozwolił odczytać')}: ${esc(info.missing.join(', '))} ${t('(the private app needs that scope).', '(aplikacja prywatna potrzebuje tego uprawnienia).')}</p>` : '';
+  if (!info.files.length) return `<p class="hint q-gap">${t('No PDF or Word files on this deal in HubSpot apart from the CRM’s own.', 'Na tym dealu w HubSpocie nie ma plików PDF ani Word poza wysłanymi z CRM.')}</p>${miss}`;
+  return `<h4 class="q-h4">${t('Files on the deal in HubSpot', 'Pliki na dealu w HubSpocie')}</h4>
+    <ul class="q-files">${info.files.map((f) => `<li><button type="button" class="q-link" data-act="deal-file" data-v="${esc(f.id)}">${esc(f.name)}</button>
+      <span class="q-item-meta">${esc([fmtDay(f.at), f.source === 'email' ? t('email', 'mail') : t('note', 'notatka'), f.title].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>${miss}`;
+}
+function dealPanel(q) {
+  const m = metaOf(q), sent = sendsOf(q).length > 0;
+  const top = `<div class="q-subrow"><h3 class="q-sub">${t('HubSpot deal', 'Deal w HubSpocie')}</h3>${statusTag(q)}</div>`;
+  if (!hub.on) return `<section class="q-box q-deal" id="q-deal">${top}<p class="hint">${t('The HubSpot link is not switched on yet (migration 0026). You can still prepare and print the quote.', 'Połączenie z HubSpotem nie jest jeszcze włączone (migracja 0026). Ofertę dalej można przygotować i wydrukować.')}</p></section>`;
+  if (m.hubspot_deal_id) {
+    const info = deals.get(m.hubspot_deal_id), deal = info?.deal;
+    const others = onDeal(m.hubspot_deal_id).filter((x) => x.id !== q.id);
+    return `<section class="q-box q-deal" id="q-deal">${top}
+      <p class="q-deal-name"><strong>${esc(deal?.name || m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}</strong>${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}</p>
+      ${deal?.contact ? `<p class="q-item-meta">${esc([deal.contact.name, deal.contact.email, deal.contact.phone].filter(Boolean).join(' · '))}</p>` : ''}
+      <div class="btn-row q-gap">
+        <button type="button" class="btn btn-sm btn-ghost" data-act="deal-fill">${t('Fill client details from HubSpot', 'Wpisz dane klienta z HubSpota')}</button>
+        ${deal?.url ? `<a class="btn btn-sm btn-ghost" href="${esc(deal.url)}" target="_blank" rel="noopener">${t('Open in HubSpot', 'Otwórz w HubSpocie')}</a>` : ''}
+        ${sent ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-act="deal-unlink">${t('Change deal', 'Zmień deal')}</button>`}
+      </div>
+      ${sent ? `<p class="hint">${t('This quote has been sent to this deal, so the deal stays. For another deal, duplicate the quote.', 'Ta oferta poszła już na ten deal, więc deal zostaje. Na inny deal zduplikuj ofertę.')}</p>` : ''}
+      ${others.length ? `<h4 class="q-h4">${t('Other quotes on this deal', 'Inne oferty na tym dealu')}</h4><ul class="q-files">${others.map((o) => `<li><a href="#/quotes/${esc(o.id)}">${esc(o.reference)}</a> <span class="q-item-meta">${esc([statusName(metaOf(o).status), money(o.vatRate > 0 ? totals(o).gross : totals(o).net, o.docLang), scopeShort(o)].join(' · '))}</span></li>`).join('')}</ul>` : ''}
+      ${dealFilesBlock(m)}
+    </section>`;
+  }
+  return `<section class="q-box q-deal" id="q-deal">${top}
+    <p class="hint">${t('Pin the quote to the client’s deal: it fills the client details, and sending the quote writes it to that deal.', 'Przypnij ofertę do deala klienta: dane klienta wpiszą się same, a wysłana oferta trafi na ten deal.')}</p>
+    <div class="q-deal-search q-gap"><input type="search" id="q-deal-q" value="${esc(search.q)}" placeholder="${esc(t('Name, email, phone or deal name', 'Nazwisko, e-mail, telefon albo nazwa deala'))}" aria-label="${esc(t('Search HubSpot deals', 'Szukaj deala w HubSpocie'))}">
+      <button type="button" class="btn btn-sm" data-act="deal-search">${t('Search', 'Szukaj')}</button></div>
+    ${dealResults()}
+  </section>`;
+}
+
+function sendPanel(q) {
+  const m = metaOf(q), sends = sendsOf(q), plan = sendPlan(q);
+  const hist = sends.length ? `<ol class="q-sends">${sends.map((s, i) => {
+    const hubLine = s.hubspot_note_id
+      ? (s.hubspot_error ? `<span class="q-warn">${t('In HubSpot, with a problem', 'W HubSpocie, z problemem')}: ${esc(s.hubspot_error)}</span>` : `<span class="q-ok">${t('In HubSpot', 'W HubSpocie')}${s.hubspot_stage_moved ? ` · ${t('deal moved to Quote sent', 'deal przeszedł na Quote sent')}` : ''}</span>`)
+      : `<span class="q-warn">${t('Not in HubSpot yet', 'Jeszcze nie w HubSpocie')}${s.hubspot_error ? `: ${esc(s.hubspot_error)}` : ''}</span> <button type="button" class="btn btn-sm btn-ghost" data-act="send-retry" data-v="${esc(s.id)}">${t('Retry', 'Ponów')}</button>`;
+    return `<li${i ? ' class="is-old"' : ''}><div><strong>rev ${esc(s.revision)}</strong> · ${esc(fmtDay(s.sent_on))} · ${esc(money(Number(s.total) || 0, q.docLang))} · ${esc(t(KIND[s.kind]?.en ?? s.kind, KIND[s.kind]?.pl ?? s.kind))}${i ? ` · ${t('replaced', 'zastąpiona')}` : ''}</div>
+      <div class="q-item-meta">${hubLine}${s.pdf_path ? ` · <button type="button" class="q-link" data-act="send-pdf" data-v="${esc(s.id)}">PDF</button>` : ''}</div></li>`;
+  }).join('')}</ol>` : '';
+  const choice = needsChoice(q) ? `<div class="callout q-gap"><p>${t(`In HubSpot the deal is at “${stageText(m.hubspot_dealstage)}”, and it has more than one quote sent. Did the client accept this one?`, `W HubSpocie deal jest na etapie „${stageText(m.hubspot_dealstage)}”, a ma kilka wysłanych ofert. Czy klient przyjął tę?`)}</p>
+    <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="st-accepted">${t('Yes, this one', 'Tak, tę')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('No, another one', 'Nie, inną')}</button></div></div>` : '';
+  const statusBtns = m.status === 'draft' ? '' : `<div class="btn-row q-gap">${m.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-accepted">${t('Mark accepted', 'Oznacz: przyjęta')}</button>` : ''}${m.status !== 'declined' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('Mark declined', 'Oznacz: odrzucona')}</button>` : ''}${m.status !== 'sent' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-sent">${t('Back to sent', 'Wróć do: wysłana')}</button>` : ''}</div>
+    <p class="hint">${m.status_source === 'hubspot' ? t('Status taken from the deal stage in HubSpot.', 'Status wzięty z etapu deala w HubSpocie.') : t('The status follows the HubSpot deal (every 15 min) unless you set it here.', 'Status idzie za dealem w HubSpocie (co 15 min), chyba że ustawisz go tutaj.')}</p>`;
+  const what = plan.kind === 'new' ? t('New quote', 'Nowa oferta')
+    : plan.kind === 'resend' ? t(`The same revision ${q.revision} again, with no changes`, `Ta sama rewizja ${q.revision} jeszcze raz, bez zmian`)
+    : t(`Revision ${q.revision}, replacing revision ${plan.last.revision} of ${fmtDay(plan.last.sent_on)}`, `Rewizja ${q.revision} w miejsce rewizji ${plan.last.revision} z ${fmtDay(plan.last.sent_on)}`);
+  let form = '';
+  if (sendForm?.quoteId === q.id) {
+    const f = sendForm.file, nameOk = !f || f.name.toLowerCase().includes(q.reference.toLowerCase());
+    form = `<div class="q-sendform q-gap">
+      <p><strong>${esc(what)}</strong> · ${esc(money(q.vatRate > 0 ? totals(q).gross : totals(q).net, q.docLang))}</p>
+      <ol class="q-steps-list">
+        <li>${t('Save the PDF the client gets:', 'Zapisz PDF, który dostaje klient:')} <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print → Save as PDF', 'Drukuj → Zapisz jako PDF')}</button><span class="hint">${t('File name', 'Nazwa pliku')}: ${esc(pdfBase(q))}.pdf</span></li>
+        <li><label class="field q-field"><span class="q-lab">${t('The PDF sent to the client', 'PDF wysłany do klienta')}</span><input type="file" id="q-send-file" accept="application/pdf,.pdf"></label>
+          ${f ? `<span class="hint">${t('Chosen', 'Wybrany')}: ${esc(f.name)} (${Math.round(f.size / 1024)} KB)</span>` : ''}
+          ${nameOk ? '' : `<label class="q-check"><input type="checkbox" id="q-send-sure"><span>${t(`The file name has no ${q.reference}. It is the PDF of this quote.`, `W nazwie pliku nie ma ${q.reference}. To jest PDF tej oferty.`)}</span></label>`}</li>
+        <li><label class="field q-field"><span class="q-lab">${t('Sent to the client on', 'Wysłana do klienta dnia')}</span><input type="date" id="q-send-date" value="${today()}" max="${today()}"></label></li>
+      </ol>
+      ${sendForm.error ? `<p class="q-warn">${esc(sendForm.error)}</p>` : ''}
+      <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-go" ${sendForm.busy ? 'disabled' : ''}>${sendForm.busy ? t('Sending…', 'Wysyłam…') : t('Save and add to HubSpot', 'Zapisz i dodaj do HubSpota')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="send-cancel">${t('Cancel', 'Anuluj')}</button></div>
+    </div>`;
+  }
+  const canSend = hub.on && m.hubspot_deal_id;
+  const openBtn = sendForm?.quoteId === q.id ? '' : `<div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-open" ${canSend ? '' : 'disabled'}>${sends.length ? t('Send again or send a revision…', 'Wyślij ponownie albo rewizję…') : t('Send to the client…', 'Wyślij do klienta…')}</button></div>
+    ${canSend ? '' : `<p class="hint">${hub.on ? t('Pin the quote to a HubSpot deal first (step 01, Client).', 'Najpierw przypnij ofertę do deala w HubSpocie (krok 01, Klient).') : t('The HubSpot link is not switched on yet.', 'Połączenie z HubSpotem nie jest jeszcze włączone.')}</p>`}`;
+  return `<section class="q-box q-send no-print" id="q-send">
+    <div class="q-subrow"><h3 class="q-sub">${t('Sending and HubSpot', 'Wysyłka i HubSpot')}</h3>${statusTag(q)}</div>
+    <p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>
+    ${choice}${hist}${statusBtns}${openBtn}${form}
+  </section>`;
+}
+// Above the steps: a sent quote that has changed since must go out as a new revision.
+function changedNote(q) {
+  const last = sendsOf(q)[0];
+  if (!last || content(q) === content(last.snapshot || {})) return '';
+  return `<p class="callout q-changed no-print">${t(`You are changing a quote sent as revision ${last.revision} on ${fmtDay(last.sent_on)}. When you send it, it goes as a new revision.`, `Zmieniasz ofertę wysłaną jako rewizja ${last.revision} dnia ${fmtDay(last.sent_on)}. Przy wysłaniu pójdzie jako nowa rewizja.`)}</p>`;
+}
+
 // ---------- the five steps ----------
 function stepClient(q) {
   const pl = q.docLang === 'pl';
   return `${head(t('01 / client', '01 / klient'), t('Who this quote is for', 'Dla kogo jest ta oferta'), t('Home, designer or site — the same as on the website. Then the address and the date. The language at the top is the language of the document.', 'Dom, projektant albo budowa — tak samo jak na stronie. Potem adres i termin. Język u góry jest językiem dokumentu.'))}
+    ${dealPanel(q)}
     ${cards('audience', q.audience, [
       ['home', t('Home', 'Dom'), t('The owner. Survey of the openings, and installation if they want it.', 'Właściciel. Pomiar otworów i montaż, jeśli go chce.')],
       ['architect', t('Design', 'Projekt'), t('Drawings, performance figures and a review before production.', 'Rysunki, parametry i przegląd przed produkcją.')],
@@ -561,8 +712,9 @@ function listPage(nav) {
     <h2 class="q-sub">${t('Saved', 'Zapisane')}</h2>
     ${sorted.length ? `<ul class="q-list">${sorted.map((q) => { const tot = totals(q); return `<li class="q-item" data-qid="${esc(q.id)}">
       <a class="q-item-open" href="#/quotes/${esc(q.id)}"><span class="q-item-head"><span class="q-item-name">${esc(q.customerName.trim() || t('Untitled', 'Bez nazwy'))}</span><span class="q-item-total">${esc(money(q.vatRate > 0 ? tot.gross : tot.net, q.docLang))}</span></span>
-      <span class="q-item-meta">${esc(q.reference)} · ${esc(longDate(q.date, LANG))} · ${esc(scopeShort(q))} · ${q.docLang === 'pl' ? 'PL' : 'EN'}</span></a>
-      <div class="btn-row q-gap"><button type="button" class="btn btn-sm btn-ghost" data-act="dup">${t('Duplicate', 'Duplikuj')}</button>${pendingDelete === q.id
+      <span class="q-item-meta">${esc(q.reference)} · ${esc(longDate(q.date, LANG))} · ${esc(scopeShort(q))} · ${q.docLang === 'pl' ? 'PL' : 'EN'}</span>
+      <span class="q-item-meta q-item-hub">${statusTag(q)}${metaOf(q).hubspot_deal_id ? ` ${esc(metaOf(q).hubspot_deal_name || `#${metaOf(q).hubspot_deal_id}`)}` : ''}${needsChoice(q) ? ` · <span class="q-warn">${t('HubSpot: accepted — which quote?', 'HubSpot: przyjęta — która oferta?')}</span>` : ''}</span></a>
+      <div class="btn-row q-gap"><button type="button" class="btn btn-sm btn-ghost" data-act="dup">${t('Duplicate', 'Duplikuj')}</button>${sendsOf(q).length ? `<span class="hint">${t('Sent quotes are kept.', 'Wysłanych ofert się nie usuwa.')}</span>` : pendingDelete === q.id
         ? `<button type="button" class="btn btn-sm" data-act="del-yes">${t('Delete for good', 'Usuń na pewno')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="del-no">${t('Keep it', 'Zostaw')}</button>`
         : `<button type="button" class="btn btn-sm btn-ghost" data-act="del-ask">${t('Delete', 'Usuń')}</button>`}</div>
     </li>`; }).join('')}</ul>` : `<p class="callout">${t('Nothing yet. A new quote, or the example of an extension in London.', 'Jeszcze nic. Nowa oferta albo przykład rozbudowy w Londynie.')}</p>`}
@@ -572,7 +724,7 @@ function listPage(nav) {
 function editorPage(q) {
   const i = STEPS.findIndex((s) => s.id === step);
   const tot = totals(q);
-  const body = { client: stepClient, products: stepProducts, install: stepInstall, terms: stepTerms, offer: estimate }[step](q);
+  const body = { client: stepClient, products: stepProducts, install: stepInstall, terms: stepTerms, offer: (x) => sendPanel(x) + estimate(x) }[step](q);
   return `<div class="container-wide section-tight q-desk">
     <div class="q-top no-print">
       <nav class="breadcrumb" aria-label="${t('Breadcrumb', 'Ścieżka')}"><ol><li><a href="#/">${t('Pipeline', 'Lejek')}</a></li><li><a href="#/quotes">${t('Quotes', 'Oferty')}</a></li><li aria-current="page" id="q-crumb">${esc(q.customerName.trim() || t('New quote', 'Nowa oferta'))}</li></ol></nav>
@@ -581,6 +733,7 @@ function editorPage(q) {
         <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print', 'Drukuj')}</button>
       </div>
     </div>
+    ${changedNote(q)}
     <div class="q-frame${step === 'offer' ? ' is-offer' : ''}">
       <nav class="q-steps no-print" aria-label="${t('Quote steps', 'Kroki oferty')}">${STEPS.map((s, n) => `<button type="button" class="q-step" data-act="step" data-v="${s.id}" ${s.id === step ? 'aria-current="step"' : ''}><span>${String(n + 1).padStart(2, '0')}</span>${t(s.en, s.pl)}</button>`).join('')}</nav>
       <div class="q-main">${body}</div>
@@ -641,13 +794,20 @@ async function act(btn) {
   const a = btn.dataset.act, v = btn.dataset.v;
   if (['new', 'sample', 'dup', 'del-ask', 'del-yes', 'del-no'].includes(a)) return listAct(a, btn);
   const q = current(); if (!q) return;
+  if (/^(deal|send|st)-/.test(a)) return hubAct(a, v, q);
   const pid = btn.closest('[data-pid]')?.dataset.pid, sid = btn.closest('[data-sid]')?.dataset.sid;
   const i = STEPS.findIndex((s) => s.id === step);
   switch (a) {
     case 'step': step = v; break;
     case 'prev': step = STEPS[i - 1]?.id || 'client'; break;
     case 'next': step = STEPS[i + 1]?.id || 'offer'; break;
-    case 'print': step = 'offer'; draw(); await flush(); setTimeout(() => print(), 60); return;
+    case 'print': {
+      // The browser names the PDF after the page title: Brick-and-Pane-<reference>-rev<nn>.pdf
+      step = 'offer'; draw(); await flush();
+      const title = document.title; document.title = pdfBase(q);
+      addEventListener('afterprint', () => { document.title = title; }, { once: true });
+      setTimeout(() => print(), 60); return;
+    }
     case 'lang': q.docLang = v; break;
     case 'audience': q.audience = v; break;
     case 'mode': q.installMode = v; break;
@@ -669,6 +829,115 @@ async function act(btn) {
   if (['step', 'prev', 'next'].includes(a)) scrollTo(0, 0); else scrollTo(0, y);
 }
 
+// Fills only empty fields: what the team typed stays.
+function fillFromContact(q, c) {
+  if (!c) return [];
+  const pairs = [['customerName', c.name], ['email', c.email], ['phone', c.phone], ['billingAddress', c.address], ['postcode', c.postcode]];
+  const done = pairs.filter(([k, v]) => v && !String(q[k] ?? '').trim()).map(([k, v]) => { q[k] = v; return k; });
+  if (done.length) touch(q);
+  return done;
+}
+const filledMsg = (done) => (done.length ? t(`Filled from HubSpot: ${done.length} empty field(s).`, `Uzupełniono z HubSpota puste pola: ${done.length}.`) : t('The client details were already filled in.', 'Dane klienta były już wpisane.'));
+const hubError = (e) => (e?.code === 'scope' ? t('HubSpot refused: the private app is missing a permission (scope).', 'HubSpot odmówił: aplikacji prywatnej brakuje uprawnienia (scope).')
+  : e?.code === 'no token' ? t('HubSpot is not configured (no token).', 'HubSpot nie jest skonfigurowany (brak tokenu).')
+  : e?.code === 'staff only' ? t('Sign in again as staff.', 'Zaloguj się ponownie jako zespół.')
+  : t(`HubSpot: ${e?.message || 'error'}`, `HubSpot: ${e?.message || 'błąd'}`));
+
+async function hubAct(a, v, q) {
+  const m = metaOf(q), redraw = () => { const y = scrollY; draw(); scrollTo(0, y); };
+  try {
+    if (a === 'deal-search') {
+      search = { q: root.querySelector('#q-deal-q')?.value ?? '', results: null, busy: true, error: '' }; redraw();
+      try { search.results = (await store.hubspot('search', { q: search.q })).deals || []; } catch (e) { search.error = hubError(e); }
+      search.busy = false; redraw(); root.querySelector('#q-deal-q')?.focus(); return;
+    }
+    if (a === 'deal-pick') {
+      const deal = search.results?.find((d) => d.id === v); if (!deal) return;
+      await store.linkQuoteDeal(q.id, deal);
+      setMeta(q.id, { hubspot_deal_id: deal.id, hubspot_deal_name: deal.name, hubspot_dealstage: deal.stage });
+      deals.set(deal.id, { ...(deals.get(deal.id) || {}), deal });
+      search = { q: '', results: null, busy: false, error: '' };
+      toast(`${t('Pinned to the deal.', 'Przypięto do deala.')} ${filledMsg(fillFromContact(q, deal.contact))}`); redraw(); return;
+    }
+    if (a === 'deal-unlink') {
+      if (sendsOf(q).length) return;
+      await store.linkQuoteDeal(q.id, null); setMeta(q.id, { hubspot_deal_id: null, hubspot_deal_name: null, hubspot_dealstage: null }); redraw(); return;
+    }
+    if (a === 'deal-fill' || a === 'deal-files') {
+      let info = deals.get(m.hubspot_deal_id);
+      if (!info?.files || (a === 'deal-fill' && !info.deal)) {
+        try { const r = await store.hubspot('deal', { deal_id: m.hubspot_deal_id }); info = { deal: r.deal, files: r.files || [], missing: r.missing || [] }; }
+        catch (e) { info = { ...(info || {}), error: hubError(e) }; }
+        deals.set(m.hubspot_deal_id, info);
+        if (info.deal) { setMeta(q.id, { hubspot_deal_name: info.deal.name, hubspot_dealstage: info.deal.stage }); await store.linkQuoteDeal(q.id, info.deal); }
+      }
+      if (a === 'deal-fill') toast(info.deal ? filledMsg(fillFromContact(q, info.deal.contact)) : info.error);
+      redraw(); return;
+    }
+    if (a === 'deal-file') {
+      const { url } = await store.hubspot('file', { file_id: v });
+      if (url) open(url, '_blank', 'noopener'); else toast(t('No file in demo mode.', 'W trybie demo nie ma pliku.'));
+      return;
+    }
+    if (a === 'send-pdf') {
+      const s = hub.sends.find((x) => x.id === v);
+      const url = s?.pdf_path ? await store.quotePdfUrl(s.pdf_path) : null;
+      if (url) open(url, '_blank', 'noopener'); else toast(t('No file in demo mode.', 'W trybie demo nie ma pliku.'));
+      return;
+    }
+    if (a === 'st-accepted' || a === 'st-declined' || a === 'st-sent') {
+      const status = a.slice(3);
+      await store.setQuoteStatus(q.id, status); setMeta(q.id, { status, status_source: 'crm' });
+      toast(t(`Status: ${statusName(status)}.`, `Status: ${statusName(status)}.`)); redraw(); return;
+    }
+    if (a === 'send-open') {
+      const plan = sendPlan(q);
+      if (plan.bump) {
+        q.revision = nextRevision(plan.last.revision); touch(q);
+        toast(t(`The quote changed since it was sent, so it is now revision ${q.revision}. Save the PDF with this number.`, `Oferta zmieniła się od wysłania, więc teraz to rewizja ${q.revision}. Zapisz PDF z tym numerem.`));
+      }
+      sendForm = { quoteId: q.id, file: null, error: '', busy: false }; redraw(); return;
+    }
+    if (a === 'send-cancel') { sendForm = null; redraw(); return; }
+    if (a === 'send-retry') {
+      const r = await store.retryQuoteSend(v);
+      const s = hub.sends.find((x) => x.id === v);
+      if (s) Object.assign(s, { hubspot_note_id: r.hubspot_note_id ?? s.hubspot_note_id, hubspot_error: r.hubspot_error ?? null, hubspot_stage_moved: r.hubspot_stage_moved ?? s.hubspot_stage_moved });
+      toast(r.hubspot_note_id ? t('Added to HubSpot.', 'Dodano do HubSpota.') : r.result === 'skipped' ? t('Already being sent. Check again in a minute.', 'Już się wysyła. Sprawdź za minutę.') : hubError({ message: r.hubspot_error }));
+      redraw(); return;
+    }
+    if (a === 'send-go') return await sendGo(q, redraw);
+  } catch (e) { toast(hubError(e)); }
+}
+
+async function sendGo(q, redraw) {
+  const f = sendForm; if (!f || f.busy) return;
+  const m = metaOf(q), plan = sendPlan(q);
+  const fail = (msg) => { f.error = msg; redraw(); };
+  if (!m.hubspot_deal_id) return fail(t('Pin the quote to a HubSpot deal first.', 'Najpierw przypnij ofertę do deala w HubSpocie.'));
+  // Changed after the form opened: the number must move first, and the PDF be saved again with it.
+  if (plan.bump) { q.revision = nextRevision(plan.last.revision); touch(q); return fail(t(`The quote changed, so it is now revision ${q.revision}. Save the PDF again with this number and choose it.`, `Oferta się zmieniła, więc teraz to rewizja ${q.revision}. Zapisz PDF jeszcze raz z tym numerem i wybierz go.`)); }
+  if (!f.file) return fail(t('Choose the PDF you sent to the client.', 'Wybierz PDF wysłany do klienta.'));
+  if (!/\.pdf$/i.test(f.file.name) && f.file.type !== 'application/pdf') return fail(t('This is not a PDF.', 'To nie jest PDF.'));
+  if (f.file.size > MAX_PDF) return fail(t('The PDF is over 10 MB.', 'PDF ma ponad 10 MB.'));
+  if (!f.file.name.toLowerCase().includes(q.reference.toLowerCase()) && !root.querySelector('#q-send-sure')?.checked) return fail(t(`Tick that this is the PDF of ${q.reference}.`, `Zaznacz, że to PDF oferty ${q.reference}.`));
+  const sentOn = root.querySelector('#q-send-date')?.value || today();
+  f.busy = true; f.error = ''; redraw();
+  try {
+    await flush();
+    const tot = totals(q);
+    const res = await store.sendQuote({ quoteId: q.id, dealId: m.hubspot_deal_id, reference: q.reference, revision: q.revision.trim() || '00', kind: plan.kind, total: q.vatRate > 0 ? tot.gross : tot.net, vatRate: q.vatRate, file: f.file, sentOn, snapshot: JSON.parse(JSON.stringify(q)) });
+    hub.sends.unshift(res);
+    const keep = ['accepted', 'declined'].includes(m.status);
+    setMeta(q.id, { status: keep ? m.status : 'sent', status_source: keep ? m.status_source : 'crm', hubspot_dealstage: res.hubspot_stage_moved ? 'presentationscheduled' : m.hubspot_dealstage });
+    sendForm = null;
+    toast(res.hubspot_note_id
+      ? (res.hubspot_error ? t(`Saved and in HubSpot, but: ${res.hubspot_error}`, `Zapisane i w HubSpocie, ale: ${res.hubspot_error}`) : t('Saved. The note with the PDF is on the HubSpot deal.', 'Zapisane. Notatka z PDF jest na dealu w HubSpocie.'))
+      : t('Saved. HubSpot did not answer; it will be retried within 15 minutes.', 'Zapisane. HubSpot nie odpowiedział; ponowimy w ciągu 15 minut.'));
+    redraw();
+  } catch (e) { f.busy = false; fail(hubError(e)); }
+}
+
 async function listAct(a, btn) {
   const id = btn.closest('[data-qid]')?.dataset.qid;
   try {
@@ -682,10 +951,19 @@ async function listAct(a, btn) {
     if (a === 'dup') {
       const src = quotes.find((q) => q.id === id); if (!src) return;
       const copy = JSON.parse(JSON.stringify(src));
-      Object.assign(copy, { id: uid(), reference: nextRef(quotes), updatedAt: Date.now() });
+      Object.assign(copy, { id: uid(), reference: nextRef(quotes), revision: '00', updatedAt: Date.now() });
       copy.products.forEach((p) => { p.id = uid(); }); copy.payments.forEach((s) => { s.id = uid(); });
       await store.saveQuote(copy); quotes.unshift(copy);
-      toast(t(`Copied as ${copy.reference}.`, `Skopiowano jako ${copy.reference}.`));
+      // A copy is a separate quote (say, timber beside aluminium): it stays on the same deal, with its own number.
+      const m = metaOf(src);
+      if (hub.on && m.hubspot_deal_id) {
+        const deal = { id: m.hubspot_deal_id, name: m.hubspot_deal_name, stage: m.hubspot_dealstage };
+        await store.linkQuoteDeal(copy.id, deal);
+        setMeta(copy.id, { hubspot_deal_id: deal.id, hubspot_deal_name: deal.name, hubspot_dealstage: deal.stage });
+      }
+      toast(m.hubspot_deal_id && hub.on
+        ? t(`Copied as ${copy.reference}, on the same HubSpot deal.`, `Skopiowano jako ${copy.reference}, na ten sam deal w HubSpocie.`)
+        : t(`Copied as ${copy.reference}.`, `Skopiowano jako ${copy.reference}.`));
     }
     if (a === 'del-ask') pendingDelete = id;
     if (a === 'del-no') pendingDelete = null;
@@ -704,8 +982,12 @@ function bind(app) {
   app.dataset.quotesBound = '1';
   const inDesk = (el) => el.closest('.q-desk, .q-list-page');
   app.addEventListener('input', (e) => { const el = e.target; if (el.dataset?.b && inDesk(el) && el.type !== 'checkbox' && el.tagName !== 'SELECT') { setValue(el); live(); } });
+  app.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'q-deal-q') { e.preventDefault(); const q = current(); if (q) hubAct('deal-search', '', q); }
+  });
   app.addEventListener('change', (e) => {
     const el = e.target; if (!inDesk(el)) return;
+    if (el.id === 'q-send-file') { if (sendForm) { sendForm.file = el.files?.[0] || null; sendForm.error = ''; const y = scrollY; draw(); scrollTo(0, y); } return; }
     if (el.dataset.act === 'vat') {
       const q = current(); firm.vatRegistered = el.checked; firmDirty = true;
       if (q) { q.vatRate = el.checked ? (q.vatRate > 0 ? q.vatRate : 20) : 0; touch(q); } else later();
@@ -734,6 +1016,6 @@ export async function quotesView(app, id, nav = '') {
   const q = quotes.find((x) => x.id === id);
   if (!q) { app.innerHTML = `<div class="container section-tight"><p class="callout">${t('This quote no longer exists.', 'Tej oferty już nie ma.')} <a href="#/quotes">${t('Back to quotes', 'Wróć do ofert')}</a></p></div>`; return; }
   // Opening a quote: a finished one shows the estimate, anything else starts at the client step (as in the Grok desk).
-  if (openId !== id) { openId = id; step = q.customerName.trim() && q.products.length ? 'offer' : 'client'; }
+  if (openId !== id) { openId = id; step = q.customerName.trim() && q.products.length ? 'offer' : 'client'; search = { q: '', results: null, busy: false, error: '' }; sendForm = null; }
   draw();
 }
