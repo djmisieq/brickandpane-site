@@ -70,7 +70,7 @@ const INSTALL = {
 };
 const PAY = {
   deposit: { en: 'Deposit', pl: 'Zaliczka', triggerEn: 'On acceptance of this quote', triggerPl: 'Po akceptacji tej oferty' },
-  interim: { en: 'On delivery', pl: 'Przy dostawie', triggerEn: 'When the order is delivered to site', triggerPl: 'Gdy zamówienie jest na budowie' },
+  interim: { en: 'Before delivery', pl: 'Przed dostawą', triggerEn: 'When the order is manufactured, before delivery', triggerPl: 'Gdy zamówienie jest wyprodukowane, przed dostawą' },
   balance: { en: 'Balance', pl: 'Reszta', triggerEn: 'After installation, or with delivery if supply only', triggerPl: 'Po montażu, a przy samej dostawie razem z dostawą' },
 };
 const STEPS = [
