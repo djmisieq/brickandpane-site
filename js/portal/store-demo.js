@@ -128,6 +128,14 @@ const me = (s) => s.users.find((u) => u.id === sessionId()) || null;
 const canSee = (s, u, pid) => u && (u.role === 'staff' || s.members.some((m) => m.project_id === pid && m.user_id === u.id));
 const need = (s) => { const u = me(s); if (!u) throw new Error('Please sign in.'); return u; };
 const needStaff = (s) => { const u = need(s); if (u.role !== 'staff') throw new Error('Staff only.'); return u; };
+const demoDeals = () => [
+  { id: '9001', name: 'BP-261018-3F2A · Jo Bennett · Walthamstow, E17', stage: 'appointmentscheduled', stageLabel: 'Enquiry', closed: false, ref: 'BP-261018-3F2A', created: daysAgo(20), url: null,
+    contact: { name: 'Jo Bennett', email: 'jo@example.com', phone: '07700 900123', company: '', address: '12 Orford Road\nLondon', postcode: 'E17 9NJ' } },
+  { id: '9002', name: 'Example Homes · Hackney flats', stage: 'decisionmakerboughtin', stageLabel: 'Negotiation', closed: false, ref: null, created: daysAgo(40), url: null,
+    contact: { name: 'Ravi Patel', email: 'ravi@example-homes.co.uk', phone: '', company: 'Example Homes (demo)', address: '', postcode: '' } },
+  { id: '9003', name: 'Sam Taylor · sash windows', stage: 'closedlost', stageLabel: 'Closed lost', closed: true, ref: null, created: daysAgo(90), url: null,
+    contact: { name: 'Sam Taylor', email: 'sam@example.com', phone: '', company: '', address: '', postcode: '' } },
+];
 
 export const store = {
   mode: 'demo',
@@ -176,6 +184,40 @@ export const store = {
   async deleteQuote(id) { needStaff(load()); const d = qload(); d.quotes = d.quotes.filter((x) => x.id !== id); qsave(d); },
   async getQuoteSettings() { needStaff(load()); return qload().firm || {}; },
   async saveQuoteSettings(firm) { needStaff(load()); const d = qload(); d.firm = firm; qsave(d); },
+  // HubSpot in demo mode: three made-up deals, files on one of them, sends kept in this browser (no PDF stored).
+  async quoteHub() { needStaff(load()); const d = qload(); return { hubspot: true, demo: true, meta: Object.values(d.meta || {}), sends: [...(d.sends || [])].reverse() }; },
+  async linkQuoteDeal(id, deal) {
+    needStaff(load()); const d = qload(); d.meta ||= {};
+    d.meta[id] = { status: 'draft', status_source: null, ...(d.meta[id] || {}), id, hubspot_deal_id: deal?.id ?? null, hubspot_deal_name: deal?.name ?? null, hubspot_dealstage: deal?.stage ?? null };
+    qsave(d);
+  },
+  async setQuoteStatus(id, status) { needStaff(load()); const d = qload(); d.meta ||= {}; d.meta[id] = { ...(d.meta[id] || { id }), status, status_source: 'crm' }; qsave(d); },
+  async hubspot(action, body = {}) {
+    needStaff(load());
+    const deals = demoDeals();
+    if (action === 'search') { const q = String(body.q || '').toLowerCase().trim(); return { deals: deals.filter((x) => !q || `${x.name} ${x.contact?.name} ${x.contact?.email}`.toLowerCase().includes(q)) }; }
+    if (action === 'deal') {
+      const deal = deals.find((x) => x.id === body.deal_id) || null;
+      return { deal, missing: [], files: deal?.id === '9001' ? [{ id: 'f-demo', name: 'Bennett-estimate-Grok.pdf', ext: 'pdf', size: 182000, at: daysAgo(12), source: 'email', title: 'Your estimate from Brick & Pane' }] : [] };
+    }
+    if (action === 'file') return { url: null };
+    if (action === 'send') return { result: 'sent', hubspot_note_id: 'demo-note', hubspot_error: null };
+    throw new Error('action');
+  },
+  async sendQuote({ quoteId, dealId, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
+    needStaff(load()); const d = qload(); d.sends ||= []; d.meta ||= {};
+    const row = { id: uid(), quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: '', pdf_name: file.name, snapshot, sent_on: sentOn, created_at: now(), hubspot_note_id: 'demo-note', hubspot_error: null, hubspot_stage_moved: false, hubspot_attempts: 1 };
+    d.sends.push(row);
+    const m = d.meta[quoteId] || { id: quoteId };
+    const deal = demoDeals().find((x) => x.id === dealId);
+    const moved = (m.hubspot_dealstage ?? deal?.stage) === 'appointmentscheduled';
+    row.hubspot_stage_moved = moved;
+    d.meta[quoteId] = { ...m, hubspot_deal_id: dealId, hubspot_dealstage: moved ? 'presentationscheduled' : (m.hubspot_dealstage ?? deal?.stage ?? null), status: ['accepted', 'declined'].includes(m.status) ? m.status : 'sent', status_source: ['accepted', 'declined'].includes(m.status) ? m.status_source : 'crm' };
+    qsave(d);
+    return { ...row, result: 'sent' };
+  },
+  async retryQuoteSend() { return { result: 'sent', hubspot_note_id: 'demo-note', hubspot_error: null }; },
+  async quotePdfUrl() { return null; },
   async listRequests() {
     const s = load(); needStaff(s);
     return [...(s.requests || [])].sort((a, b) => b.created_at.localeCompare(a.created_at));

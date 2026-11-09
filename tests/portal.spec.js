@@ -150,6 +150,84 @@ test('staff build a quote in five steps and get a printable estimate', async ({ 
   await expect(page.locator('.q-item')).toHaveCount(1);
 });
 
+test('a quote goes to its HubSpot deal: new, then a revision; a copy stays on the same deal', async ({ page }) => {
+  const ref = `BP-${new Date().getFullYear()}-001`;
+  const pdf = (name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%demo\n') });
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="new"]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  // 01 client: pick the deal; its contact fills the empty fields.
+  const deal = page.locator('#q-deal');
+  await expect(deal).toContainText('HubSpot deal');
+  await expect(deal.locator('.q-st')).toHaveText('Draft');
+  await page.locator('#q-deal-q').fill('bennett');
+  await page.locator('#q-deal-q').press('Enter');
+  await expect(deal.locator('.q-deals li')).toHaveCount(1);
+  await deal.locator('[data-act="deal-pick"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Filled from HubSpot: 5 empty field(s).');
+  await expect(page.locator('[data-b="q:customerName"]')).toHaveValue('Jo Bennett');
+  await expect(page.locator('[data-b="q:email"]')).toHaveValue('jo@example.com');
+  await expect(deal).toContainText('BP-261018-3F2A · Jo Bennett');
+  await deal.locator('[data-act="deal-files"]').click();
+  await expect(deal.locator('.q-files')).toContainText('Bennett-estimate-Grok.pdf');
+  // 05: send the first time.
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const send = page.locator('#q-send');
+  await send.locator('[data-act="send-open"]').click();
+  await expect(send).toContainText('New quote');
+  await expect(send).toContainText(`Brick-and-Pane-${ref}-rev00.pdf`);
+  await send.locator('[data-act="send-go"]').click();
+  await expect(send).toContainText('Choose the PDF you sent to the client.');
+  await page.locator('#q-send-file').setInputFiles(pdf(`Brick-and-Pane-${ref}-rev00.pdf`));
+  await send.locator('[data-act="send-go"]').click();
+  await expect(page.locator('.toast').last()).toContainText('The note with the PDF is on the HubSpot deal.');
+  await expect(send.locator('.q-sends li')).toHaveCount(1);
+  await expect(send.locator('.q-sends li')).toContainText('rev 00');
+  await expect(send.locator('.q-sends li')).toContainText('deal moved to Quote sent');
+  await expect(send.locator('.q-st')).toHaveText('Sent · rev 00');
+  // Change the quote: it is flagged, and the next send is revision 01.
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  await page.locator('[data-b="q:phone"]').fill('07700 900999');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.q-changed')).toContainText('sent as revision 00');
+  await send.locator('[data-act="send-open"]').click();
+  await expect(page.locator('.toast').last()).toContainText('it is now revision 01');
+  await expect(send).toContainText('Revision 01, replacing revision 00');
+  await page.locator('#q-send-file').setInputFiles(pdf('estimate.pdf'));
+  await send.locator('[data-act="send-go"]').click();
+  await expect(send).toContainText(`Tick that this is the PDF of ${ref}.`);
+  await page.locator('#q-send-sure').check();
+  await send.locator('[data-act="send-go"]').click();
+  await expect(send.locator('.q-sends li')).toHaveCount(2);
+  await expect(send.locator('.q-sends li').first()).toContainText('rev 01');
+  await expect(send.locator('.q-sends li').nth(1)).toContainText('replaced');
+  await expect(page.locator('.q-changed')).toHaveCount(0);
+  // The same quote again, unchanged: a resend of revision 01.
+  await send.locator('[data-act="send-open"]').click();
+  await expect(send).toContainText('The same revision 01 again, with no changes');
+  await send.locator('[data-act="send-cancel"]').click();
+  // Staff can set the status themselves.
+  await send.locator('[data-act="st-accepted"]').click();
+  await expect(send.locator('.q-st')).toHaveText('Accepted · rev 01');
+  // The list: status and deal; a sent quote cannot be deleted; a copy is a second quote on the same deal.
+  await page.waitForTimeout(800);
+  await page.goto('/admin.html#/quotes');
+  const item = page.locator('.q-item', { hasText: 'Jo Bennett' });
+  await expect(item).toContainText('Accepted · rev 01');
+  await expect(item).toContainText('BP-261018-3F2A · Jo Bennett');
+  await expect(item.locator('[data-act="del-ask"]')).toHaveCount(0);
+  await item.locator('[data-act="dup"]').click();
+  await expect(page.locator('.toast').last()).toContainText('on the same HubSpot deal');
+  const copy = page.locator('.q-item', { hasText: `BP-${new Date().getFullYear()}-002` });
+  await expect(copy).toContainText('Draft');
+  await copy.locator('.q-item-open').click();
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  await expect(page.locator('#q-deal')).toContainText('Other quotes on this deal');
+  await expect(page.locator('#q-deal')).toContainText(ref);
+  await expect(page.locator('[data-b="q:revision"]')).toHaveValue('00');
+});
+
 test('staff see website enquiries sent without an account and triage them', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html');
