@@ -149,12 +149,14 @@ export const store = {
   // Stores the PDF, records the send (the trigger marks the quote sent) and asks HubSpot right away; if that call
   // fails, the cron retries within 15 minutes.
   async sendQuote({ quoteId, dealId, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
-    const id = crypto.randomUUID();
-    const path = `${quoteId}/${id}.pdf`;
+    // The row's id is the database's to give: staff may insert only the columns granted in migration 0026,
+    // so the PDF gets a name of its own instead of borrowing the id.
+    const path = `${quoteId}/${crypto.randomUUID()}.pdf`;
+    const name = file.name.slice(0, 200);
     ok(await sb.storage.from('quote-pdfs').upload(path, file, { contentType: 'application/pdf' }));
-    const row = ok(await sb.from('quote_sends').insert({ id, quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: path, pdf_name: file.name.slice(0, 200), snapshot, sent_on: sentOn }).select().single());
+    const row = ok(await sb.from('quote_sends').insert({ quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: path, pdf_name: name, snapshot, sent_on: sentOn }).select().single());
     let hub;
-    try { hub = await this.hubspot('send', { send_id: id }); } catch (e) { hub = { result: 'error', hubspot_error: e.message }; }
+    try { hub = await this.hubspot('send', { send_id: row.id }); } catch (e) { hub = { result: 'error', hubspot_error: e.message }; }
     return { ...row, ...hub };
   },
   async retryQuoteSend(id) { return this.hubspot('send', { send_id: id }); },
