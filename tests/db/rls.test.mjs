@@ -376,6 +376,38 @@ test('quotes and the firm details on them are for staff only', async () => {
   await fails('select * from public.quotes');
 });
 
+// The portal writes quote_sends from the browser as `authenticated`, and migration 0026 grants INSERT on named
+// columns only. A column the client sends but the grant omits makes Postgres refuse the whole table
+// ("permission denied for table quote_sends"), which is what happened live on 10.11.2026 with an explicit id.
+// So take the column list from the client itself rather than repeating it here.
+test('quote sends: staff may insert exactly the columns the portal client sends', async () => {
+  const { db, as } = await setup();
+  const src = readFileSync(new URL('../../js/portal/store-supabase.js', import.meta.url), 'utf8');
+  const at = src.indexOf(".from('quote_sends').insert({");
+  assert.notEqual(at, -1, 'no insert into quote_sends in store-supabase.js');
+  const open = src.indexOf('{', at);
+  let depth = 0, end = open;
+  while (end < src.length) { const c = src[end]; if (c === '{') depth++; else if (c === '}' && --depth === 0) break; end++; }
+  const body = src.slice(open + 1, end);
+  const cols = [];
+  for (let i = 0, d = 0, key = ''; i <= body.length; i++) {
+    const c = body[i];
+    if (c === '(' || c === '[' || c === '{') d++;
+    else if (c === ')' || c === ']' || c === '}') d--;
+    if (d === 0 && (c === ',' || i === body.length)) { const k = key.split(':')[0].trim(); if (k) cols.push(k); key = ''; }
+    else key += c ?? '';
+  }
+  assert.ok(cols.length >= 10, `parsed too few columns: ${cols}`);
+  const Q = '99999999-9999-9999-9999-999999999999';
+  await as(S);
+  await db.query(`insert into public.quotes (id, reference, data) values ($1, 'BP-2026-114', '{}')`, [Q]);
+  const value = { quote_id: `'${Q}'::uuid`, hubspot_deal_id: "'538396856520'", reference: "'BP-2026-114'", revision: "'00'",
+    kind: "'new'", total: '100', vat_rate: '0', pdf_path: `'${Q}/x.pdf'`, pdf_name: "'q.pdf'", snapshot: `'{}'::jsonb`, sent_on: 'current_date' };
+  for (const c of cols) assert.ok(value[c] !== undefined, `client sends column "${c}", which migration 0026 does not grant to staff`);
+  await db.query(`insert into public.quote_sends (${cols.join(', ')}) values (${cols.map((c) => value[c]).join(', ')})`);
+  assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'sent');
+});
+
 test('quote sends: staff record them, the quote turns sent, the deal is pinned, sent quotes stay', async () => {
   const { db, as, fails } = await setup();
   const Q = '77777777-7777-7777-7777-777777777777', Q2 = '88888888-8888-8888-8888-888888888888';
