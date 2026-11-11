@@ -483,7 +483,7 @@ test('portal pages: CSP, frame guard, password settings and size checks', async 
   expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([]);
 });
 
-test('costs: staff add a supplier quote in PLN, accept it and see the margin; the client sees none of it', async ({ page, context }) => {
+test('costs: staff add a supplier quote in £, accept it and see the margin; the client sees none of it', async ({ page, context }) => {
   await page.goto('/admin.html');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
@@ -493,15 +493,12 @@ test('costs: staff add a supplier quote in PLN, accept it and see the margin; th
   await expect(box).toContainText('No supplier quotes yet.');
   await box.locator('#cost-sup').fill('Okna Polska (demo)');
   await box.locator('#cost-ref').fill('OP/2026/114');
-  await box.locator('#cost-amt').fill('40000');
-  await box.locator('#cost-cur').selectOption('PLN');
-  await box.locator('[data-cost-add] button[type="submit"]').click();
-  await expect(page.locator('.toast').last()).toContainText('rate to £');
-  await box.locator('#cost-fx').fill('0.195');
+  await expect(box.locator('#cost-cur, #cost-fx')).toHaveCount(0); // costs are in £ only
+  await box.locator('#cost-amt').fill('7800');
   await box.locator('[data-cost-add] button[type="submit"]').click();
   await expect(page.locator('.toast').last()).toContainText('Supplier quote added.');
   const row = page.locator('[data-costs] [data-cost]', { hasText: 'Okna Polska (demo)' });
-  await expect(row).toContainText('40,000.00 zł ≈ £7,800.00');
+  await expect(row).toContainText('£7,800.00');
   await expect(row).toContainText('Received');
   await row.locator('[data-cost-set="accepted"]').click();
   await expect(page.locator('[data-costs] [data-cost]', { hasText: 'Okna Polska (demo)' })).toContainText('Accepted');

@@ -54,9 +54,7 @@ export function costsPanel({ costs, margin }) {
         <div class="field"><label for="cost-cat">${tr('Category')}</label><select id="cost-cat" name="category">${Object.entries(CATEGORIES).map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select></div>
       </div>
       <div class="field-row">
-        <div class="field"><label for="cost-amt">${tr('Amount (net)')}</label><input id="cost-amt" name="amount" type="number" min="0" step="0.01" required></div>
-        <div class="field"><label for="cost-cur">${tr('Currency')}</label><select id="cost-cur" name="currency"><option>GBP</option><option>PLN</option><option>EUR</option></select></div>
-        <div class="field" data-cost-fx hidden><label for="cost-fx">${tr('Rate to £')}</label><input id="cost-fx" name="fx" type="number" min="0" step="0.000001" placeholder="0.195"></div>
+        <div class="field"><label for="cost-amt">${tr('Amount (net, £)')}</label><input id="cost-amt" name="amount" type="number" min="0" step="0.01" required></div>
       </div>
       <div class="field"><label for="cost-pdf">${tr('Quote PDF')}</label><input id="cost-pdf" name="file" type="file" accept="application/pdf"></div>
       <div class="field"><label for="cost-note">${tr('Note')}</label><input id="cost-note" name="note" maxlength="2000"></div>
@@ -68,18 +66,15 @@ export function costsPanel({ costs, margin }) {
 export function bindCosts(root, pid) {
   const box = $('[data-costs]', root); if (!box) return;
   const form = $('[data-cost-add]', box);
-  const fx = $('[data-cost-fx]', box);
-  form?.currency.addEventListener('change', () => { fx.hidden = form.currency.value === 'GBP'; });
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const supplier = form.supplier.value.trim(), amount = form.amount.value, currency = form.currency.value;
+    const supplier = form.supplier.value.trim(), amount = form.amount.value;
     if (!supplier) { form.supplier.focus(); toast(tr('Enter the supplier.')); return; }
     if (amount === '' || Number(amount) < 0) { form.amount.focus(); toast(tr('Enter the amount.')); return; }
-    if (currency !== 'GBP' && !(Number(form.fx.value) > 0)) { form.fx.focus(); toast(tr('Enter the rate to £ for PLN or EUR.')); return; }
     const file = form.file.files[0] || null;
     if (file && file.type !== 'application/pdf') { toast(tr('The quote file must be a PDF.')); return; }
     try {
-      await store.addCost(pid, { supplier, reference: form.reference.value.trim(), category: form.category.value, amount, currency, fx: form.fx.value, note: form.note.value.trim(), file });
+      await store.addCost(pid, { supplier, reference: form.reference.value.trim(), category: form.category.value, amount, note: form.note.value.trim(), file });
       toast(tr('Supplier quote added.'));
     } catch (err) { toast(tr(err.message)); }
   });
