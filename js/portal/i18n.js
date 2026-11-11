@@ -479,6 +479,8 @@ const PL = {
   "Upload & notify": "Wyślij i powiadom",
   "Commercial": "Handlowe",
   "Costs & margin": "Koszty i marża",
+  "Purchase deal in HubSpot": "Deal zakupowy w HubSpocie",
+  "Not in HubSpot yet": "Jeszcze nie w HubSpocie",
   "No sale yet: send a quote on the deal, or enter the value in Commercial.": "Brak sprzedaży: wyślij ofertę na dealu albo wpisz wartość w panelu Handlowe.",
   "accepted quote {refs}": "zaakceptowana oferta {refs}",
   "latest quote sent {refs}": "ostatnia wysłana oferta {refs}",

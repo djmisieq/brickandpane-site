@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -553,4 +553,22 @@ test('costs: supplier quotes and the margin are for staff only', async () => {
   }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.supplier_quotes');
+});
+
+// 0032: the HubSpot sync writing its own columns must not look like the team changing the quote, or every run would
+// push it again; a change the team makes does.
+test('costs: only edits by the team mark a supplier quote changed for HubSpot', async () => {
+  const { db, as } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const id = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Fitters Ltd', 900) returning id`, [P])).rows[0].id;
+  const at = async () => (await db.query('select updated_at from public.supplier_quotes where id = $1', [id])).rows[0].updated_at.getTime();
+  const t0 = await at();
+  await db.exec('reset role');
+  await db.query(`update public.supplier_quotes set hubspot_deal_id = '777', hubspot_status = 'received', hubspot_stage = '6408989925', hubspot_synced_at = now() + interval '1 second' where id = $1`, [id]);
+  assert.equal(await at(), t0, 'sync columns leave updated_at alone');
+  await as(S);
+  await db.query(`update public.supplier_quotes set status = 'accepted' where id = $1`, [id]);
+  assert.ok(await at() > t0, 'a status the team sets marks it changed');
 });

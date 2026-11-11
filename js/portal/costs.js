@@ -5,6 +5,7 @@ import { store } from './store.js';
 import { esc, fmtMoney, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 
+const HUBSPOT_DEAL = 'https://app-eu1.hubspot.com/contacts/149668825/record/0-3/';
 const CATEGORIES = { production: 'Production', transport: 'Transport', installation: 'Installation', other: 'Other' };
 const STATUS = { received: 'Received', accepted: 'Accepted', rejected: 'Rejected', superseded: 'Superseded' };
 const money = (n, cur) => {
@@ -37,7 +38,8 @@ export function costsPanel({ costs, margin }) {
   const rows = costs.length ? `<ul class="cost-list">${costs.map((c) => `<li data-cost="${esc(c.id)}">
       <div><strong>${esc(c.supplier)}</strong>${c.reference ? ` · ${esc(c.reference)}` : ''} <span class="tag${c.status === 'accepted' ? ' tag-accent' : ''}">${esc(tr(STATUS[c.status] || c.status))}</span>
         <span class="note">${esc(tr(CATEGORIES[c.category] || c.category))} · ${esc(money(c.amount, c.currency))}${c.currency === 'GBP' ? '' : ` ≈ ${esc(money(c.amount * c.fx_to_gbp, 'GBP'))}`}${c.pdf_name ? ` · ${c.pdf_path ? `<button type="button" class="q-link" data-cost-pdf="${esc(c.pdf_path)}">${esc(c.pdf_name)}</button>` : esc(c.pdf_name)}` : ''}</span>
-        ${c.note ? `<span class="note">${esc(c.note)}</span>` : ''}</div>
+        ${c.note ? `<span class="note">${esc(c.note)}</span>` : ''}
+        ${c.hubspot_deal_id ? `<a class="note" href="${HUBSPOT_DEAL}${encodeURIComponent(c.hubspot_deal_id)}" target="_blank" rel="noopener">${tr('Purchase deal in HubSpot')}</a>` : c.hubspot_error ? `<span class="note q-warn">${tr('Not in HubSpot yet')}: ${esc(c.hubspot_error)}</span>` : ''}</div>
       <div class="cost-acts">${c.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="accepted">${tr('Accept')}</button>` : ''}${c.status !== 'rejected' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('Reject')}</button>` : ''}</div>
     </li>`).join('')}</ul>` : `<p class="hint">${tr('No supplier quotes yet.')}</p>`;
   return `<section class="ctl" data-costs>
