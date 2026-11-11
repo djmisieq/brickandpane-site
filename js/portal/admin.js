@@ -4,6 +4,7 @@ import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, sta
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 import { quotesView } from './quotes.js';
+import { loadCosts, costsPanel, bindCosts } from './costs.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -206,7 +207,7 @@ async function enquiries() {
 
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff] = await Promise.all([store.getProject(id), store.listStaff()]);
+  const [d, staff, costs] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id)]);
   const p = d.project;
   document.title = `${p.ref} · ${p.name} | CRM`;
   const nextIdx = STAGES.findIndex((s) => s.id === p.stage) + 1;
@@ -290,11 +291,14 @@ async function detail(id) {
             <div class="field"><label for="ctl-notes">${tr('Notes')}</label><textarea id="ctl-notes" name="notes" rows="3">${esc(d.internal?.notes || '')}</textarea></div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
           </form>
+
+          ${costsPanel(costs)}
         </aside>
       </div>
     </div>`;
 
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
+  bindCosts(app, id);
   $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;

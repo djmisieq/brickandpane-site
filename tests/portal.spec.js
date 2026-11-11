@@ -482,3 +482,38 @@ test('portal pages: CSP, frame guard, password settings and size checks', async 
   await expect(page.locator('[name="height_mm"]').first()).toHaveAttribute('aria-invalid', 'true');
   expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([]);
 });
+
+test('costs: staff add a supplier quote in PLN, accept it and see the margin; the client sees none of it', async ({ page, context }) => {
+  await page.goto('/admin.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  const box = page.locator('[data-costs]');
+  await expect(box).toContainText('Costs & margin');
+  await expect(box).toContainText('£23,900'); // the Commercial value, until a quote goes out on a deal
+  await expect(box).toContainText('No supplier quotes yet.');
+  await box.locator('#cost-sup').fill('Okna Polska (demo)');
+  await box.locator('#cost-ref').fill('OP/2026/114');
+  await box.locator('#cost-amt').fill('40000');
+  await box.locator('#cost-cur').selectOption('PLN');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('rate to £');
+  await box.locator('#cost-fx').fill('0.195');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Supplier quote added.');
+  const row = page.locator('[data-costs] [data-cost]', { hasText: 'Okna Polska (demo)' });
+  await expect(row).toContainText('40,000.00 zł ≈ £7,800.00');
+  await expect(row).toContainText('Received');
+  await row.locator('[data-cost-set="accepted"]').click();
+  await expect(page.locator('[data-costs] [data-cost]', { hasText: 'Okna Polska (demo)' })).toContainText('Accepted');
+  await expect(page.locator('[data-costs] .cost-sum')).toContainText('£7,800');
+  await expect(page.locator('[data-costs] .cost-sum')).toContainText('£16,100 (67.4%)');
+
+  // The architect on the same project: no costs, no supplier, no margin.
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html');
+  await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await expect(client.locator('.now-card')).toBeVisible();
+  for (const text of ['Costs & margin', 'Okna Polska', 'Margin', '7,800']) await expect(client.locator('body')).not.toContainText(text);
+});

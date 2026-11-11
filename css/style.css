@@ -740,6 +740,8 @@ body.app .list-btn{display:none}
 .q-deal-name{margin-top:var(--s-s)}
 .q-deal-search{display:flex;gap:var(--s-s)}
 .q-deal-search input{flex:1;min-width:0}
+.cost-sum{display:grid;gap:var(--s-xs);margin:0 0 var(--s-s)}.cost-sum div{display:flex;justify-content:space-between;gap:var(--s-s)}.cost-sum dt{color:var(--ink-2)}.cost-sum dd{margin:0;text-align:right}
+.cost-list{list-style:none;padding:0;margin:0 0 var(--s-m);display:grid;gap:var(--s-xs)}.cost-list li{display:grid;gap:var(--s-xs);padding:var(--s-s) 0;border-top:1px solid var(--line)}.cost-list .note{display:block}.cost-acts{display:flex;gap:var(--s-xs);flex-wrap:wrap}
 .q-deals,.q-files,.q-sends{list-style:none;padding:0;display:grid;gap:var(--s-xs);margin-top:var(--s-s)}
 .q-deals li{display:flex;justify-content:space-between;align-items:center;gap:var(--s-s);padding:var(--s-s) 0;border-top:1px solid var(--line)}
 .q-deals li>div{min-width:0}
