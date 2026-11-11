@@ -119,3 +119,25 @@ Deno.test('portal event notes start with the fixed prefix and carry no amounts',
   eq(noAmounts('Q2 £1.2k revised £ 900'), 'Q2 revised');
   ok(!eventNote('quote_accepted', { ref: 'BP-1', projectId: 'p', title: '£5000 deal' }).includes('£'));
 });
+
+// Migration 0029: the rest of the CRM. Payment notes are the one place an amount may appear (owner, 11.11.2026).
+Deno.test('payment, change, openings and team notes', () => {
+  const due = eventNote('payment_due', { ref: 'BP-2026-0001', projectId: 'p1', title: 'Deposit', amount: '£5,400.60' });
+  ok(due.startsWith('<p><strong>Portal payment due · BP-2026-0001 · Deposit · £5,400.60</strong></p>'), due);
+  ok(due.includes('Not a request to the client'));
+  ok(eventNote('payment_paid', { ref: 'BP-1', projectId: 'p', title: 'Balance', amount: '£1,000.00' }).includes('£1,000.00'));
+
+  // Every other kind still loses amounts, and an amount passed by mistake is not printed either.
+  ok(!eventNote('change_raised', { ref: 'BP-1', projectId: 'p', title: 'Wider opening £900', who: 'Anna' }).includes('£'));
+  ok(!eventNote('openings', { ref: 'BP-1', projectId: 'p', title: '5 in total', amount: '£99' }).includes('£'));
+
+  ok(eventNote('change_raised', { ref: 'BP-1', projectId: 'p', title: 'Wider opening', who: 'Anna' }).includes('Anna raised this in the change register'));
+  ok(eventNote('change_decided', { ref: 'BP-1', projectId: 'p', title: 'Wider opening', who: 'Tom', detail: 'approved' }).includes('Decided in the change register: approved'));
+  const op = eventNote('openings', { ref: 'BP-1', projectId: 'p', title: '5 in total', detail: '2× lift & slide doors, 3× casement windows' });
+  ok(op.startsWith('<p><strong>Portal openings · BP-1 · 5 in total</strong></p>'), op);
+  ok(op.includes('rewritten when the list changes'));
+  ok(eventNote('team_member', { ref: 'BP-1', projectId: 'p', who: 'Jo' }).includes('Jo now has access'));
+  ok(eventNote('team_invite', { ref: 'BP-1', projectId: 'p', who: 'eng@x.com' }).includes('eng@x.com was invited'));
+  // Names and addresses are escaped like everywhere else.
+  ok(eventNote('team_invite', { ref: 'BP-1', projectId: 'p', who: '<b>x</b>@x.com' }).includes('&lt;b&gt;'));
+});
