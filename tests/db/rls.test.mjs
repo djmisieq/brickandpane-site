@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -505,4 +505,70 @@ test('quote sends: staff record them, the quote turns sent, the deal is pinned, 
   await db.query(`update public.quote_sends set hubspot_note_id = '9', hubspot_error = 'pdf not attached' where id = $1`, [first.id]);
   assert.equal((await db.query('select * from public.claim_quote_send($1)', [first.id])).rows.length, 0);
   assert.equal((await db.query(`select * from storage.buckets where id = 'quote-pdfs'`)).rows[0].public, false);
+});
+
+// Costs (migration 0031): supplier quotes and the margin are the team's alone, and the sale behind the margin follows
+// accepted quote > latest sent quote > the value typed in Commercial.
+test('costs: supplier quotes and the margin are for staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.query(`select public.invite_member($1, 'client@x.com', 'client')`, [P]);
+  await as(S);
+  const add = (supplier, amount, currency, fx, status = 'received') => db.query(
+    `insert into public.supplier_quotes (project_id, supplier, category, amount, currency, fx_to_gbp, status) values ($1, $2, 'production', $3, $4, $5, $6) returning id`,
+    [P, supplier, amount, currency, fx, status]);
+  const w = (await add('Okna Polska', 40000, 'PLN', 0.195, 'accepted')).rows[0].id; // £7,800
+  await add('Fitters Ltd', 1500, 'GBP', 1, 'accepted');
+  await add('Other works', 3000, 'EUR', 0.85); // received: not counted
+  await fails(`insert into public.supplier_quotes (project_id, supplier, amount, currency, fx_to_gbp) values ($1, 'x', 1, 'GBP', 1.2)`, [P]); // GBP rate is 1
+  await fails(`insert into public.supplier_quotes (project_id, supplier, amount, currency) values ($1, 'x', 1, 'USD')`, [P]);
+  await fails(`insert into public.supplier_quotes (project_id, supplier, amount, hubspot_deal_id) values ($1, 'x', 1, '501')`, [P]); // sync's column
+  await fails(`update public.supplier_quotes set hubspot_deal_id = '501' where id = $1`, [w]);
+  const margin = async () => (await db.query('select public.project_margin($1) m', [P])).rows[0].m;
+  // No deal, no value: costs only, no margin.
+  let m = await margin();
+  assert.equal(Number(m.cost_gbp), 9300); assert.equal(m.accepted, 2); assert.equal(m.sale_gbp, null); assert.equal(m.margin_gbp, null);
+  // The value typed in Commercial.
+  await db.query('update public.project_internal set value_gbp = 12000 where project_id = $1', [P]);
+  m = await margin();
+  assert.equal(m.sale_source, 'value'); assert.equal(Number(m.margin_gbp), 2700); assert.equal(Number(m.margin_pct), 22.5);
+  // A quote sent on the project's deal wins over the typed value, net of VAT.
+  await db.query(`update public.project_internal set hubspot_deal_id = '501' where project_id = $1`, [P]);
+  const Q = '12121212-1212-1212-1212-121212121212';
+  await db.query(`insert into public.quotes (id, reference, data) values ($1, 'BP-2026-009', '{}')`, [Q]);
+  await db.query(`insert into public.quote_sends (quote_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot)
+    values ($1, '501', 'BP-2026-009', '00', 'new', 18000, 20, 'p', 'x.pdf', '{}')`, [Q]); // £15,000 net
+  m = await margin();
+  assert.equal(m.sale_source, 'sent'); assert.equal(Number(m.sale_gbp), 15000); assert.equal(Number(m.margin_gbp), 5700);
+  await db.query(`update public.quotes set status = 'accepted', status_source = 'crm' where id = $1`, [Q]);
+  m = await margin();
+  assert.equal(m.sale_source, 'accepted'); assert.equal(m.sale_refs, 'BP-2026-009');
+  // Nobody else on the project sees a cost or the margin; anon not even the table.
+  for (const who of [A, C, O]) {
+    await as(who);
+    assert.equal((await db.query('select * from public.supplier_quotes')).rows.length, 0);
+    await fails(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'x', 1)`, [P]);
+    await fails('select public.project_margin($1)', [P]);
+  }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.supplier_quotes');
+});
+
+// 0032: the HubSpot sync writing its own columns must not look like the team changing the quote, or every run would
+// push it again; a change the team makes does.
+test('costs: only edits by the team mark a supplier quote changed for HubSpot', async () => {
+  const { db, as } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const id = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Fitters Ltd', 900) returning id`, [P])).rows[0].id;
+  const at = async () => (await db.query('select updated_at from public.supplier_quotes where id = $1', [id])).rows[0].updated_at.getTime();
+  const t0 = await at();
+  await db.exec('reset role');
+  await db.query(`update public.supplier_quotes set hubspot_deal_id = '777', hubspot_status = 'received', hubspot_stage = '6408989925', hubspot_synced_at = now() + interval '1 second' where id = $1`, [id]);
+  assert.equal(await at(), t0, 'sync columns leave updated_at alone');
+  await as(S);
+  await db.query(`update public.supplier_quotes set status = 'accepted' where id = $1`, [id]);
+  assert.ok(await at() > t0, 'a status the team sets marks it changed');
 });

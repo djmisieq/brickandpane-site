@@ -15,7 +15,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # The runners' apt mirror can be unreachable (11.11.2026: DNS failures for over an hour); the runner image
+      # already has what Chromium needs, so fall back to the browser alone instead of failing before any test runs.
+      # apt retries an unreachable mirror for ~10 minutes, which ran the job into its 20-minute limit: cap it at 3.
+      - run: timeout 180 npx playwright install --with-deps chromium || npx playwright install chromium
       - run: node build.mjs
       # The built pages are committed for GitHub Pages; fail if someone edited src/ and forgot to rebuild.
       - run: git diff --exit-code -- '*.html'
