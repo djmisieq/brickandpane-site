@@ -1,6 +1,6 @@
 // Quotes ↔ HubSpot, pure parts. Run: deno test supabase/functions/_shared/hubspot-quotes.test.ts
 import { deepStrictEqual as eq, ok } from 'node:assert/strict';
-import { contactCard, noteTitle, pdfName, quoteNote, sortDeals, stageAfterSend, statusesFromStage, stripHtml, type Send } from './hubspot-quotes.ts';
+import { contactCard, dealSource, isTestDeal, noteTitle, pdfName, quoteNote, sortDeals, stageAfterSend, statusesFromStage, stripHtml, type Send } from './hubspot-quotes.ts';
 import { STAGE_OF_DEAL } from './hubspot.ts';
 import { ACCEPTED_STAGES, DEAL_STAGE_LABEL } from './hubspot-quotes.ts';
 
@@ -74,10 +74,17 @@ Deno.test('the PDF name is safe for HubSpot', () => {
   eq(pdfName(send({ reference: 'BP 2026/7', revision: 'A' })), 'Brick-and-Pane-BP-2026-7-revA.pdf');
 });
 
+Deno.test('deal cards: where the deal came from, and test deals', () => {
+  eq(['website_form', 'cold_email', 'email', 'referral', '', null, undefined].map(dealSource), ['website', 'cold', 'email', 'other', null, null, null]);
+  eq(['Okna (TEST) – test ofert portalu', 'TEST Jo', 'BP-261111-E786 · Portal Notes (TEST) · Hackney E5', 'Testing Ltd – enquiry', 'Contest windows'].map(isTestDeal), [true, true, true, false, false]);
+});
+
 Deno.test('deal cards: contact details and order', () => {
   eq(contactCard({ firstname: 'Jo', lastname: 'Bennett', email: 'jo@x.com', phone: null, mobilephone: '07700', company: null, address: '12 Orford Road', city: 'London', zip: 'E17 9NJ' }),
     { name: 'Jo Bennett', email: 'jo@x.com', phone: '07700', company: '', address: '12 Orford Road\nLondon', postcode: 'E17 9NJ' });
   const d = sortDeals([{ id: 'old', closed: false, created: '2026-01-01' }, { id: 'won', closed: true, created: '2026-11-01' }, { id: 'new', closed: false, created: '2026-11-02' }]);
   eq(d.map((x) => x.id), ['new', 'old', 'won']);
+  // A test deal goes below the real open ones, even when it is newer.
+  eq(sortDeals([{ id: 'test', closed: false, created: '2026-11-11', test: true }, { id: 'real', closed: false, created: '2026-11-01' }]).map((x) => x.id), ['real', 'test']);
   eq(stripHtml('<p><strong>Quote</strong>&nbsp;sent &amp; signed</p>'), 'Quote sent & signed');
 });

@@ -129,11 +129,11 @@ const canSee = (s, u, pid) => u && (u.role === 'staff' || s.members.some((m) => 
 const need = (s) => { const u = me(s); if (!u) throw new Error('Please sign in.'); return u; };
 const needStaff = (s) => { const u = need(s); if (u.role !== 'staff') throw new Error('Staff only.'); return u; };
 const demoDeals = () => [
-  { id: '9001', name: 'BP-261018-3F2A · Jo Bennett · Walthamstow, E17', stage: 'appointmentscheduled', stageLabel: 'Enquiry', closed: false, ref: 'BP-261018-3F2A', created: daysAgo(20), url: null,
+  { id: '9001', name: 'BP-261018-3F2A · Jo Bennett · Walthamstow, E17', stage: 'appointmentscheduled', stageLabel: 'Enquiry', closed: false, ref: 'BP-261018-3F2A', created: daysAgo(20), url: null, source: 'website', portal: 'BP-2026-0001', test: false,
     contact: { name: 'Jo Bennett', email: 'jo@example.com', phone: '07700 900123', company: '', address: '12 Orford Road\nLondon', postcode: 'E17 9NJ' } },
-  { id: '9002', name: 'Example Homes · Hackney flats', stage: 'decisionmakerboughtin', stageLabel: 'Negotiation', closed: false, ref: null, created: daysAgo(40), url: null,
+  { id: '9002', name: 'Example Homes · Hackney flats', stage: 'decisionmakerboughtin', stageLabel: 'Negotiation', closed: false, ref: null, created: daysAgo(40), url: null, source: 'cold', portal: null, test: false,
     contact: { name: 'Ravi Patel', email: 'ravi@example-homes.co.uk', phone: '', company: 'Example Homes (demo)', address: '', postcode: '' } },
-  { id: '9003', name: 'Sam Taylor · sash windows', stage: 'closedlost', stageLabel: 'Closed lost', closed: true, ref: null, created: daysAgo(90), url: null,
+  { id: '9003', name: 'Sam Taylor · sash windows', stage: 'closedlost', stageLabel: 'Closed lost', closed: true, ref: null, created: daysAgo(90), url: null, source: 'email', portal: null, test: false,
     contact: { name: 'Sam Taylor', email: 'sam@example.com', phone: '', company: '', address: '', postcode: '' } },
 ];
 

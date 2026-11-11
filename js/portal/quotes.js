@@ -456,14 +456,31 @@ function estimate(q) {
 }
 
 // ---------- HubSpot panels ----------
+// bp_source as the leads bot writes it, read by hubspot-quotes (dealSource); test deals get their own bucket.
+const SOURCES = [['all', 'All', 'Wszystkie'], ['website', 'Website', 'Strona'], ['cold', 'Cold email', 'Cold mailing'], ['email', 'Email', 'Mail'], ['other', 'Other', 'Inne'], ['test', 'Test', 'Testowe']];
+const srcKey = (d) => (d.test ? 'test' : d.source || 'other');
+const dealTags = (d) => {
+  const k = srcKey(d), label = SOURCES.find(([x]) => x === k);
+  const tags = [label && (d.source || d.test) ? `<span class="tag${k === 'website' ? ' tag-accent' : ''}">${esc(t(label[1], label[2]))}</span>` : ''];
+  if (d.portal) tags.push(`<span class="tag tag-accent">${esc(t('Portal', 'Portal'))} ${esc(d.portal)}</span>`);
+  return tags.filter(Boolean).join(' ');
+};
 const fmtDay = (s) => longDate(String(s || '').slice(0, 10), LANG);
 function dealResults() {
   if (search.busy) return `<p class="hint q-gap">${t('Searching HubSpot…', 'Szukam w HubSpocie…')}</p>`;
   if (search.error) return `<p class="q-warn q-gap">${esc(search.error)}</p>`;
   if (!search.results) return '';
   if (!search.results.length) return `<p class="hint q-gap">${t('No deal found. Check the spelling, or create the deal in HubSpot first.', 'Nie ma takiego deala. Sprawdź pisownię albo najpierw załóż deal w HubSpocie.')}</p>`;
-  return `<ul class="q-deals">${search.results.map((d) => `<li>
-    <div><strong>${esc(d.name || t('(no name)', '(bez nazwy)'))}</strong>
+  // Source filter over what HubSpot returned: enquiries from the site, cold-email replies and emails look alike by name.
+  const kinds = SOURCES.filter(([k]) => k === 'all' || search.results.some((d) => srcKey(d) === k));
+  const src = kinds.some(([k]) => k === search.src) ? search.src : 'all';
+  const shown = search.results.filter((d) => src === 'all' || srcKey(d) === src);
+  const seg = kinds.length > 2 ? `<div class="seg q-gap" role="group" aria-label="${esc(t('Where the deal came from', 'Skąd jest deal'))}">${kinds.map(([k, en, pl]) => {
+    const n = k === 'all' ? search.results.length : search.results.filter((d) => srcKey(d) === k).length;
+    return `<button type="button" data-act="deal-src" data-v="${k}" aria-pressed="${src === k}" class="${src === k ? 'is-on' : ''}">${esc(t(en, pl))} (${n})</button>`;
+  }).join('')}</div>` : '';
+  return `${seg}<ul class="q-deals">${shown.map((d) => `<li>
+    <div><strong>${esc(d.name || t('(no name)', '(bez nazwy)'))}</strong> ${dealTags(d)}
       <span class="q-item-meta">${esc([stageText(d.stage), d.contact?.name, d.contact?.email].filter(Boolean).join(' · '))}${d.closed ? ` · ${t('closed', 'zamknięty')}` : ''}</span></div>
     <button type="button" class="btn btn-sm" data-act="deal-pick" data-v="${esc(d.id)}">${t('Use this deal', 'Przypisz')}</button></li>`).join('')}</ul>`;
 }
@@ -851,6 +868,7 @@ async function hubAct(a, v, q) {
       try { search.results = (await store.hubspot('search', { q: search.q })).deals || []; } catch (e) { search.error = hubError(e); }
       search.busy = false; redraw(); root.querySelector('#q-deal-q')?.focus(); return;
     }
+    if (a === 'deal-src') { search.src = v; redraw(); return; }
     if (a === 'deal-pick') {
       const deal = search.results?.find((d) => d.id === v); if (!deal) return;
       await store.linkQuoteDeal(q.id, deal);
