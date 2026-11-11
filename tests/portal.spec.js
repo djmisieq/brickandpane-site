@@ -161,6 +161,14 @@ test('a quote goes to its HubSpot deal: new, then a revision; a copy stays on th
   const deal = page.locator('#q-deal');
   await expect(deal).toContainText('HubSpot deal');
   await expect(deal.locator('.q-st')).toHaveText('Draft');
+  // An empty search lists the open deals with where each came from; the source filter narrows them.
+  await deal.locator('[data-act="deal-search"]').click();
+  await expect(deal.locator('.q-deals li')).toHaveCount(3);
+  await expect(deal.locator('.q-deals li').first()).toContainText('Website');
+  await expect(deal.locator('.q-deals li').first()).toContainText('Portal BP-2026-0001');
+  await deal.locator('[data-act="deal-src"][data-v="cold"]').click();
+  await expect(deal.locator('.q-deals li')).toHaveCount(1);
+  await expect(deal.locator('.q-deals li')).toContainText('Example Homes');
   await page.locator('#q-deal-q').fill('bennett');
   await page.locator('#q-deal-q').press('Enter');
   await expect(deal.locator('.q-deals li')).toHaveCount(1);

@@ -90,7 +90,7 @@ export function quoteNote(s: Send, e: { previous?: Pick<Send, 'revision' | 'sent
 // deno-lint-ignore no-explicit-any
 type Db = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => any; storage: any };
 type Row = { id: string; properties: Record<string, string | null> };
-const DEAL_FIELDS = ['dealname', 'dealstage', 'pipeline', 'hs_is_closed', 'createdate', 'hs_lastmodifieddate', 'bp_enquiry_ref'];
+const DEAL_FIELDS = ['dealname', 'dealstage', 'pipeline', 'hs_is_closed', 'createdate', 'hs_lastmodifieddate', 'bp_enquiry_ref', 'bp_source', 'bp_portal_project_ref'];
 const CONTACT_FIELDS = ['firstname', 'lastname', 'email', 'phone', 'mobilephone', 'company', 'address', 'city', 'zip'];
 
 const batchRead = async (token: string, object: string, ids: string[], properties: string[]): Promise<Row[]> => {
@@ -121,15 +121,23 @@ export const dealUrl = (a: { portalId: number; uiDomain: string } | null, id: st
 
 export type DealCard = {
   id: string; name: string; stage: string | null; stageLabel: string; closed: boolean; ref: string | null; created: string | null; url: string | null;
+  source: DealSource; portal: string | null; test: boolean;
   contact: { name: string; email: string; phone: string; company: string; address: string; postcode: string } | null;
 };
 export const contactCard = (p: Record<string, string | null>) => ({
   name: [p.firstname, p.lastname].filter(Boolean).join(' ').trim(), email: p.email ?? '', phone: p.phone || p.mobilephone || '',
   company: p.company ?? '', address: [p.address, p.city].filter(Boolean).join('\n'), postcode: p.zip ?? '',
 });
-// Open deals first, then the newest.
-export const sortDeals = <T extends { closed: boolean; created: string | null }>(deals: T[]) =>
-  [...deals].sort((a, b) => Number(a.closed) - Number(b.closed) || Date.parse(b.created ?? '') - Date.parse(a.created ?? ''));
+// Where the deal came from, as the leads bot writes bp_source (owner report 11.11.2026: the picker mixed cold-email
+// deals with enquiries and nothing on the card told them apart).
+export type DealSource = 'website' | 'cold' | 'email' | 'other' | null;
+export const dealSource = (s: string | null | undefined): DealSource =>
+  s === 'website_form' ? 'website' : s === 'cold_email' ? 'cold' : s === 'email' ? 'email' : s ? 'other' : null;
+// The marker the leads script and hubspot-retry skip: a name starting with "TEST" or "(TEST)" anywhere.
+export const isTestDeal = (name: string | null | undefined) => /^TEST\b|\(TEST\)/.test(name ?? '');
+// Open deals first, test deals after real ones, then the newest.
+export const sortDeals = <T extends { closed: boolean; created: string | null; test?: boolean }>(deals: T[]) =>
+  [...deals].sort((a, b) => Number(a.closed) - Number(b.closed) || Number(!!a.test) - Number(!!b.test) || Date.parse(b.created ?? '') - Date.parse(a.created ?? ''));
 
 async function cards(token: string, deals: Row[]): Promise<DealCard[]> {
   const ids = deals.map((d) => d.id);
@@ -142,17 +150,18 @@ async function cards(token: string, deals: Row[]): Promise<DealCard[]> {
       id: d.id, name: p.dealname ?? '', stage: p.dealstage ?? null, stageLabel: DEAL_STAGE_LABEL[p.dealstage ?? ''] ?? (p.dealstage ?? ''),
       closed: p.hs_is_closed === 'true', ref: p.bp_enquiry_ref ?? null, created: p.createdate ?? null, url: dealUrl(a, d.id),
       contact: c ? contactCard(c) : null,
+      source: dealSource(p.bp_source), portal: p.bp_portal_project_ref ?? null, test: isTestDeal(p.dealname),
     };
   }));
 }
 
-// Free text: deal names, and contacts by name, email or phone (their deals). Empty: the 10 most recently changed open deals.
+// Free text: deal names, and contacts by name, email or phone (their deals). Empty: the 20 most recently changed open deals.
 export async function searchDeals(token: string, q: string) {
   const text = q.trim().slice(0, 100);
   if (!text) {
     const res = await hs(token, 'POST', '/crm/v3/objects/deals/search', {
       filterGroups: [{ filters: [{ propertyName: 'hs_is_closed', operator: 'EQ', value: 'false' }] }],
-      properties: DEAL_FIELDS, sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }], limit: 10,
+      properties: DEAL_FIELDS, sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }], limit: 20,
     });
     return cards(token, res?.results ?? []);
   }
