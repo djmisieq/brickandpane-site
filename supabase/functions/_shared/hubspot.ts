@@ -208,7 +208,7 @@ const dealOf = async (token: string, r: Enquiry, contactId: string, products: { 
 
 // Minimal shape of the supabase-js client used here (the service-role client from contact-submit).
 // deno-lint-ignore no-explicit-any
-type Db = { from: (table: string) => any };
+type Db = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: any }> };
 
 // Retries (hubspot-retry, every 15 min): attempt 1 is the form itself, then 15, 30, 60 and 120 min after the
 // previous one. After the 5th failure the team gets one email. Test enquiries are skipped: name or company starting
@@ -234,6 +234,7 @@ export async function syncEnquiry(supabase: Db, id: string) {
   try {
     const products = productsOf(r.systems, r.openings);
     const contactId = await contactOf(token, r, products.interest);
+    await markPortalAccount(supabase, token, contactId, r.email);
     const companyId = await companyOf(token, r);
     if (companyId) await associate(token, 'contact', contactId, 'company', companyId);
 
@@ -294,6 +295,18 @@ export async function linkProject(supabase: Db, projectId: string): Promise<stri
   await hs(token, 'PATCH', `/crm/v3/objects/deals/${dealId}`, { properties: { bp_portal_project_id: p.id, bp_portal_project_ref: p.ref, bp_portal_stage: p.stage } });
   if (internal?.hubspot_deal_id !== dealId) await supabase.from('project_internal').update({ hubspot_deal_id: dealId }).eq('project_id', projectId);
   return 'linked';
+}
+
+// A confirmed portal account may predate its HubSpot contact, in which case linkProfile (below) found no contact
+// to mark. Called once the enquiry's contact exists, this closes that gap. It never creates or changes a person's
+// own fields, only the two portal flags, and a failure must not fail the enquiry sync.
+async function markPortalAccount(supabase: Db, token: string, contactId: string, email: string) {
+  try {
+    const { data: profileId } = await supabase.rpc('profile_for_confirmed_email', { addr: email });
+    if (!profileId) return;
+    await hs(token, 'PATCH', `/crm/v3/objects/contacts/${contactId}`, { properties: { bp_portal_user_id: profileId, bp_portal_account: 'true' } });
+    await supabase.from('profile_internal').upsert({ profile_id: profileId, hubspot_contact_id: contactId, updated_at: new Date().toISOString() });
+  } catch { /* the enquiry matters more than the flag; the next enquiry retries it */ }
 }
 
 // deno-lint-ignore no-explicit-any
