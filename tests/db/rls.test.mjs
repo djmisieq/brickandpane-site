@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -571,4 +571,9 @@ test('costs: only edits by the team mark a supplier quote changed for HubSpot', 
   await as(S);
   await db.query(`update public.supplier_quotes set status = 'accepted' where id = $1`, [id]);
   assert.ok(await at() > t0, 'a status the team sets marks it changed');
+  // 0034: a status pulled from HubSpot (the sync sets it with synced_at) is not "changed since HubSpot saw it".
+  await db.exec('reset role');
+  await db.query(`update public.supplier_quotes set status = 'rejected', hubspot_status = 'rejected', hubspot_synced_at = now() - interval '1 minute' where id = $1`, [id]);
+  const r = (await db.query('select updated_at, hubspot_synced_at from public.supplier_quotes where id = $1', [id])).rows[0];
+  assert.equal(r.hubspot_synced_at.getTime(), r.updated_at.getTime(), 'a pull is synced as of the same instant');
 });

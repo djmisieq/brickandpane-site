@@ -1,6 +1,7 @@
 // Costs ↔ HubSpot (migrations 0031–0033; plan: brickandpane-docs/docs/PLAN-KOSZTY.md). Both ways, every 15 minutes:
 //   CRM → HubSpot  a supplier quote on a project with a client deal becomes a deal in the "Purchasing" pipeline,
-//                  associated with the client deal (label "Purchase for sale") and the supplier's company; its PDF
+//                  associated with the client deal (label "Purchase for sale") and the supplier's company (found by
+//                  exact name, or made); its PDF
 //                  goes on as a note; a status set in the CRM moves the deal's stage.
 //   HubSpot → CRM  a stage moved in HubSpot sets the CRM status; a Purchasing deal the team made by hand on a client
 //                  deal turns up in the CRM as a supplier quote.
@@ -23,7 +24,7 @@ export type Cost = {
   currency: string; fx_to_gbp: number | string; status: CostStatus; pdf_path: string | null; pdf_name: string;
   note: string; created_at: string; updated_at: string;
   hubspot_deal_id: string | null; hubspot_synced_at: string | null; hubspot_status: string | null; hubspot_stage: string | null;
-  hubspot_note_id: string | null; hubspot_attempts: number;
+  hubspot_note_id: string | null; hubspot_attempts: number; hubspot_company_id: string | null;
 };
 
 // The CRM has four statuses, HubSpot six stages. Ordered and Delivered are steps after Accepted that the CRM does
@@ -105,10 +106,18 @@ const batchRead = async (token: string, ids: string[], properties: string[]): Pr
 };
 const assoc = (token: string, fromType: string, from: string, toType: string, to: string, spec: unknown) =>
   hs(token, 'PUT', `/crm/v4/objects/${fromType}/${from}/associations/${toType}/${to}`, [spec]);
-const companyByName = async (token: string, name: string) => {
-  const res = await hs(token, 'POST', '/crm/v3/objects/companies/search', { filterGroups: [{ filters: [{ propertyName: 'name', operator: 'EQ', value: name }] }], properties: ['name'], limit: 2 });
-  return res?.results?.length === 1 ? String(res.results[0].id) : null; // only an unambiguous match
+// The supplier's company: the oldest one with exactly this name, or a new one. A deal without its supplier's company
+// was the one gap in the live test (11.11.2026).
+const supplierCompany = async (token: string, name: string) => {
+  const res = await hs(token, 'POST', '/crm/v3/objects/companies/search', { filterGroups: [{ filters: [{ propertyName: 'name', operator: 'EQ', value: name }] }], properties: ['name'], sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }], limit: 1 });
+  if (res?.results?.length) return String(res.results[0].id);
+  return String((await hs(token, 'POST', '/crm/v3/objects/companies', { properties: { name } })).id);
 };
+async function linkCompany(supabase: Db, token: string, c: Cost, dealId: string) {
+  const company = await supplierCompany(token, c.supplier);
+  await assoc(token, 'deals', dealId, 'companies', company, DEAL_TO_COMPANY);
+  await supabase.from('supplier_quotes').update({ hubspot_company_id: company }).eq('id', c.id);
+}
 const uploadPdf = async (token: string, pdf: Blob, name: string) => {
   const form = new FormData();
   form.append('file', pdf, name);
@@ -161,8 +170,10 @@ export async function syncCosts(supabase: Db) {
   for (const c of costs) {
     const sale = saleOf.get(c.project_id);
     if (!sale) { if (!c.hubspot_deal_id) counts.waiting++; continue; }
+    // hubspot_synced_at holds the version HubSpot has (its updated_at), so an edit made while this run is busy with the
+    // quote is newer than it and goes out next run instead of being lost.
     const dirty = !c.hubspot_deal_id || !c.hubspot_synced_at || c.updated_at > c.hubspot_synced_at;
-    if (!dirty) continue;
+    if (!dirty && c.hubspot_company_id) continue;
     const ref = refs.get(c.project_id) ?? '';
     try {
       const props = costProperties(c, ref);
@@ -172,12 +183,14 @@ export async function syncCosts(supabase: Db) {
         // Saved before the rest, so a failure below never makes a second deal.
         await supabase.from('supplier_quotes').update({ hubspot_deal_id: id, hubspot_status: c.status, hubspot_stage: stage }).eq('id', c.id);
         await assoc(token, 'deals', id, 'deals', sale, PURCHASE_FOR_SALE);
-        const company = await companyByName(token, c.supplier);
-        if (company) await assoc(token, 'deals', id, 'companies', company, DEAL_TO_COMPANY);
+        await linkCompany(supabase, token, c, id);
         const noteId = await addNote(supabase, token, c, id, ref);
-        await supabase.from('supplier_quotes').update({ hubspot_note_id: noteId, hubspot_synced_at: new Date().toISOString(), hubspot_error: null, hubspot_attempts: 0 }).eq('id', c.id);
+        await supabase.from('supplier_quotes').update({ hubspot_note_id: noteId, hubspot_synced_at: c.updated_at, hubspot_error: null, hubspot_attempts: 0 }).eq('id', c.id);
         counts.created++;
+      } else if (!dirty) {
+        await linkCompany(supabase, token, c, c.hubspot_deal_id); // a deal from before the company link
       } else {
+        if (!c.hubspot_company_id) await linkCompany(supabase, token, c, c.hubspot_deal_id);
         const [deal] = await batchRead(token, [c.hubspot_deal_id], ['dealstage']);
         const step = stageStep(c, deal?.properties.dealstage ?? null);
         const patch: Record<string, string> = { ...props };
@@ -185,7 +198,7 @@ export async function syncCosts(supabase: Db) {
         await hs(token, 'PATCH', `/crm/v3/objects/deals/${c.hubspot_deal_id}`, { properties: patch });
         // A stage HubSpot moved is left unseen here, so step 2 below still pulls it into the CRM.
         const stage = step && 'push' in step ? step.push : step && 'seen' in step ? step.seen : c.hubspot_stage;
-        await supabase.from('supplier_quotes').update({ hubspot_status: c.status, hubspot_stage: stage, hubspot_synced_at: new Date().toISOString(), hubspot_error: null, hubspot_attempts: 0 }).eq('id', c.id);
+        await supabase.from('supplier_quotes').update({ hubspot_status: c.status, hubspot_stage: stage, hubspot_synced_at: c.updated_at, hubspot_error: null, hubspot_attempts: 0 }).eq('id', c.id);
         counts.updated++; if (step && 'push' in step) counts.pushed++;
       }
     } catch (e) {
@@ -203,7 +216,7 @@ export async function syncCosts(supabase: Db) {
       const now = fresh.get(c.id) as Cost | undefined; if (!now) continue;
       const step = stageStep(now, stages.get(c.hubspot_deal_id!) ?? null);
       if (!step || 'push' in step) continue; // a CRM change is pushed by the next run's step 1
-      const at = new Date().toISOString();
+      const at = new Date().toISOString(); // the database sets it to the same instant as updated_at (0034)
       if ('pull' in step) {
         await supabase.from('supplier_quotes').update({ status: step.pull, hubspot_status: step.pull, hubspot_stage: stages.get(c.hubspot_deal_id!), hubspot_synced_at: at }).eq('id', c.id);
         counts.pulled++;
@@ -226,7 +239,7 @@ export async function syncCosts(supabase: Db) {
         const company = companies.length ? (await hs(token, 'GET', `/crm/v3/objects/companies/${companies[0]}?properties=name`))?.properties?.name ?? null : null;
         const status = statusOf(d.properties.dealstage) ?? 'received';
         const at = new Date().toISOString();
-        const { data: row } = await supabase.from('supplier_quotes').insert({ project_id: projectId, ...costFromDeal(d.properties, company), status, hubspot_deal_id: d.id, hubspot_status: status, hubspot_stage: d.properties.dealstage, hubspot_synced_at: at }).select('id').single();
+        const { data: row } = await supabase.from('supplier_quotes').insert({ project_id: projectId, ...costFromDeal(d.properties, company), status, hubspot_deal_id: d.id, hubspot_status: status, hubspot_stage: d.properties.dealstage, hubspot_company_id: companies[0] ?? null, hubspot_synced_at: at }).select('id').single();
         if (!row) continue;
         await hs(token, 'PATCH', `/crm/v3/objects/deals/${d.id}`, { properties: { bp_portal_supplier_quote_id: row.id } });
         counts.imported++;
