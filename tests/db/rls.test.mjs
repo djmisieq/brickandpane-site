@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -351,6 +351,50 @@ test('portal events for HubSpot are queued once, for the service role only', asy
   await db.exec('reset role');
   const kinds = (await db.query('select kind from public.hubspot_events where project_id = $1 order by created_at, kind', [P])).rows.map((x) => x.kind).sort();
   assert.deepEqual(kinds, ['client_upload', 'document', 'message', 'quote_accepted']);
+});
+
+// Migration 0029: the rest of the CRM reaches the deal the same way messages do. The openings event is the odd
+// one out — one per project, reopened on every edit, so the note can be rewritten instead of repeated.
+test('payments, changes, openings and team queue HubSpot events', async () => {
+  const { db, as } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const pay = (await db.query(`insert into public.payments (project_id, label, amount) values ($1, 'Deposit', 5400.60) returning id`, [P])).rows[0].id;
+  const chg = (await db.query(`insert into public.changes (project_id, title, raised_by) values ($1, 'Wider opening', $2) returning id`, [P, S])).rows[0].id;
+  await db.query(`insert into public.openings (project_id, ref, system, qty) values ($1, 'W1', 'lift-slide', 2), ($1, 'W2', 'casement', 3)`, [P]);
+  // Invites have no INSERT policy: they are written by a security-definer function, so the test writes as it does.
+  await db.exec('reset role');
+  await db.query(`insert into public.project_invites (project_id, email, role) values ($1, 'eng@x.com', 'engineer')`, [P]);
+  await as(S);
+  // The queue is service-role only (0021), so every read of it steps out of the staff session and back in.
+  const kinds = async () => {
+    await db.exec('reset role');
+    const r = (await db.query('select kind from public.hubspot_events where project_id = $1', [P])).rows.map((x) => x.kind).sort();
+    await as(S);
+    return r;
+  };
+  assert.deepEqual(await kinds(), ['change_raised', 'openings', 'payment_due', 'team_invite']);
+  // Two openings rows, one event: the note is rewritten, not repeated.
+  await db.exec('reset role');
+  assert.equal((await db.query(`select count(*)::int n from public.hubspot_events where project_id = $1 and kind = 'openings'`, [P])).rows[0].n, 1);
+  await as(S);
+  // Paying and deciding are separate events from recording and raising.
+  await db.query('update public.payments set paid_at = now() where id = $1', [pay]);
+  await as(A); // the architect decides a change the team raised, through decide_change (no direct updates allowed)
+  await db.query(`select public.decide_change($1, 'approved', '')`, [chg]);
+  await as(S);
+  assert.deepEqual(await kinds(), ['change_decided', 'change_raised', 'openings', 'payment_due', 'payment_paid', 'team_invite']);
+  // An edit after the note was written reopens that one event rather than adding another.
+  await db.exec('reset role');
+  await db.query(`update public.hubspot_events set sent_at = now(), note_id = '42' where kind = 'openings'`);
+  await as(S);
+  await db.query(`update public.openings set qty = 4 where project_id = $1 and ref = 'W1'`, [P]);
+  await db.exec('reset role');
+  const op = (await db.query(`select sent_at, note_id from public.hubspot_events where kind = 'openings'`)).rows;
+  assert.equal(op.length, 1);
+  assert.equal(op[0].sent_at, null, 'the openings event is reopened');
+  assert.equal(op[0].note_id, '42', 'and keeps the note it already wrote');
 });
 
 test('quotes and the firm details on them are for staff only', async () => {

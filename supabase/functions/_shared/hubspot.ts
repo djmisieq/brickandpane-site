@@ -208,7 +208,7 @@ const dealOf = async (token: string, r: Enquiry, contactId: string, products: { 
 
 // Minimal shape of the supabase-js client used here (the service-role client from contact-submit).
 // deno-lint-ignore no-explicit-any
-type Db = { from: (table: string) => any };
+type Db = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: any }> };
 
 // Retries (hubspot-retry, every 15 min): attempt 1 is the form itself, then 15, 30, 60 and 120 min after the
 // previous one. After the 5th failure the team gets one email. Test enquiries are skipped: name or company starting
@@ -234,6 +234,7 @@ export async function syncEnquiry(supabase: Db, id: string) {
   try {
     const products = productsOf(r.systems, r.openings);
     const contactId = await contactOf(token, r, products.interest);
+    await markPortalAccount(supabase, token, contactId, r.email);
     const companyId = await companyOf(token, r);
     if (companyId) await associate(token, 'contact', contactId, 'company', companyId);
 
@@ -294,6 +295,18 @@ export async function linkProject(supabase: Db, projectId: string): Promise<stri
   await hs(token, 'PATCH', `/crm/v3/objects/deals/${dealId}`, { properties: { bp_portal_project_id: p.id, bp_portal_project_ref: p.ref, bp_portal_stage: p.stage } });
   if (internal?.hubspot_deal_id !== dealId) await supabase.from('project_internal').update({ hubspot_deal_id: dealId }).eq('project_id', projectId);
   return 'linked';
+}
+
+// A confirmed portal account may predate its HubSpot contact, in which case linkProfile (below) found no contact
+// to mark. Called once the enquiry's contact exists, this closes that gap. It never creates or changes a person's
+// own fields, only the two portal flags, and a failure must not fail the enquiry sync.
+async function markPortalAccount(supabase: Db, token: string, contactId: string, email: string) {
+  try {
+    const { data: profileId } = await supabase.rpc('profile_for_confirmed_email', { addr: email });
+    if (!profileId) return;
+    await hs(token, 'PATCH', `/crm/v3/objects/contacts/${contactId}`, { properties: { bp_portal_user_id: profileId, bp_portal_account: 'true' } });
+    await supabase.from('profile_internal').upsert({ profile_id: profileId, hubspot_contact_id: contactId, updated_at: new Date().toISOString() });
+  } catch { /* the enquiry matters more than the flag; the next enquiry retries it */ }
 }
 
 // deno-lint-ignore no-explicit-any
@@ -386,27 +399,55 @@ export async function syncStages(supabase: Db, now = Date.now()) {
 // The leads script recognises these by the fixed start of the note ("Portal message · <ref>" counts as the client
 // writing to us), so keep the prefixes as they are. Notes carry no message text and no amounts: the team reads the
 // rest in the CRM, which needs a sign-in. Switch: HUBSPOT_EVENTS=off.
-export type PortalEventKind = 'message' | 'quote_accepted' | 'client_upload' | 'document';
+export type PortalEventKind = 'message' | 'quote_accepted' | 'client_upload' | 'document'
+  | 'payment_due' | 'payment_paid' | 'change_raised' | 'change_decided' | 'openings' | 'team_member' | 'team_invite';
 const EVENT_PREFIX: Record<PortalEventKind, string> = {
   message: 'Portal message',
   quote_accepted: 'Portal quote accepted',
   client_upload: 'Portal file upload',
   document: 'Portal document added',
+  payment_due: 'Portal payment due',
+  payment_paid: 'Portal payment received',
+  change_raised: 'Portal change raised',
+  change_decided: 'Portal change decided',
+  openings: 'Portal openings',
+  team_member: 'Portal team member',
+  team_invite: 'Portal team invite',
 };
 // Titles are typed by people; a "£23,900" in one must not reach HubSpot.
 export const noAmounts = (s: string) => s.replace(/£\s*[\d.,]+\s*[km]?\b/gi, '').replace(/£/g, '').replace(/\s{2,}/g, ' ').trim();
 
-export const eventNote = (kind: PortalEventKind, e: { ref: string; projectId: string; who?: string | null; title?: string | null; hidden?: boolean }) => {
-  const head = `${EVENT_PREFIX[kind]} · ${e.ref}${e.title ? ` · ${noAmounts(e.title)}` : ''}`;
+// Payment notes carry the amount (owner decision 11.11.2026); every other note still goes through noAmounts,
+// so a "£23,900" typed into a document or change title cannot reach HubSpot by the back door.
+const AMOUNTS_OK: PortalEventKind[] = ['payment_due', 'payment_paid'];
+
+export const eventNote = (kind: PortalEventKind, e: { ref: string; projectId: string; who?: string | null; title?: string | null; hidden?: boolean; amount?: string | null; detail?: string | null }) => {
+  const title = e.title ? (AMOUNTS_OK.includes(kind) ? e.title : noAmounts(e.title)) : '';
+  const head = `${EVENT_PREFIX[kind]} · ${e.ref}${title ? ` · ${title}` : ''}${e.amount && AMOUNTS_OK.includes(kind) ? ` · ${e.amount}` : ''}`;
   const who = e.who ? escape(e.who) : 'The client';
   const line = kind === 'message' ? `${who} wrote in the portal. Read and reply in the CRM.`
     : kind === 'quote_accepted' ? `${who} accepted this quotation in the portal.`
     : kind === 'client_upload' ? `${who} uploaded a file in the portal.`
+    : kind === 'payment_due' ? `The team recorded this payment stage in the CRM. Not a request to the client.`
+    : kind === 'payment_paid' ? `Marked received in the CRM.`
+    : kind === 'change_raised' ? `${who} raised this in the change register. It is not decided yet.`
+    : kind === 'change_decided' ? `Decided in the change register${e.detail ? `: ${escape(e.detail)}` : ''}.`
+    : kind === 'openings' ? `The openings on this project, as they stand now${e.detail ? `: ${escape(e.detail)}` : ''}. This note is rewritten when the list changes.`
+    : kind === 'team_member' ? `${who} now has access to this project in the portal.`
+    : kind === 'team_invite' ? `${who} was invited to this project in the portal.`
     : `Added by the team${e.hidden ? ' (internal, not shown to the client)' : ''}.`;
   return `<p><strong>${escape(head)}</strong></p><p>${line}</p><p><a href="${SITE}/admin.html#/p/${encodeURIComponent(e.projectId)}">Open the project in the Brick &amp; Pane CRM</a> (sign-in needed)</p>`;
 };
 
-type QueuedEvent = { id: string; kind: PortalEventKind; project_id: string; source_id: string; created_at: string };
+// Amounts are typed by the team in the CRM and only ever reach a payment note.
+const gbp = (n: number | string | null) => n == null ? null : `£${Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Plain words for the systems, as everywhere else the client might read them.
+const SYSTEM_LABEL: Record<string, string> = {
+  'lift-slide': 'lift & slide doors', 'slim-slide': 'slim sliding doors', bifold: 'bi-fold doors', hinged: 'hinged doors',
+  casement: 'casement windows', sash: 'sash windows', 'tilt-turn': 'tilt & turn windows', rooflight: 'rooflights', facade: 'facades',
+};
+
+type QueuedEvent = { id: string; kind: PortalEventKind; project_id: string; source_id: string; created_at: string; note_id?: string | null };
 
 // Reads what a note needs for one queued event; null when the source row is gone.
 const eventDetails = async (supabase: Db, ev: QueuedEvent) => {
@@ -422,6 +463,37 @@ const eventDetails = async (supabase: Db, ev: QueuedEvent) => {
     const d = a && await doc(a.document_id);
     return d ? { who: a.on_behalf ? 'The team, on the client’s behalf,' : await name(a.actor_id), title: titled(d) } : null;
   }
+  if (ev.kind === 'payment_due' || ev.kind === 'payment_paid') {
+    const { data: pay } = await supabase.from('payments').select('label, amount').eq('id', ev.source_id).maybeSingle();
+    return pay ? { title: pay.label, amount: gbp(pay.amount) } : null;
+  }
+  if (ev.kind === 'change_raised' || ev.kind === 'change_decided') {
+    const { data: c } = await supabase.from('changes').select('title, status, raised_by, decided_by').eq('id', ev.source_id).maybeSingle();
+    if (!c) return null;
+    return ev.kind === 'change_raised'
+      ? { who: await name(c.raised_by), title: c.title }
+      : { who: await name(c.decided_by), title: c.title, detail: c.status === 'approved' ? 'approved' : 'rejected' };
+  }
+  if (ev.kind === 'openings') {
+    const { data: rows } = await supabase.from('openings').select('system, qty').eq('project_id', ev.project_id);
+    const list = (rows ?? []) as { system: string; qty: number }[];
+    if (!list.length) return { detail: 'none left' };
+    const byType = new Map<string, number>();
+    for (const o of list) byType.set(o.system, (byType.get(o.system) ?? 0) + (o.qty ?? 1));
+    const total = [...byType.values()].reduce((a, b) => a + b, 0);
+    const detail = [...byType.entries()].map(([k, n]) => `${n}× ${SYSTEM_LABEL[k] ?? k}`).join(', ');
+    return { title: `${total} in total`, detail };
+  }
+  if (ev.kind === 'team_member') {
+    // Keyed by (project_id, user_id), so the row is found by the project and not by the event's synthetic id.
+    const { data: ms } = await supabase.from('project_members').select('user_id, role').eq('project_id', ev.project_id);
+    const last = ((ms ?? []) as { user_id: string; role: string }[]).at(-1);
+    return last ? { who: await name(last.user_id), title: last.role } : null;
+  }
+  if (ev.kind === 'team_invite') {
+    const { data: inv } = await supabase.from('project_invites').select('email, role').eq('id', ev.source_id).maybeSingle();
+    return inv ? { who: inv.email, title: inv.role } : null;
+  }
   const d = await doc(ev.source_id);
   return d ? { who: await name(d.uploaded_by), title: titled(d), hidden: !d.visible_to_client } : null;
 };
@@ -432,7 +504,7 @@ export async function sendEvents(supabase: Db) {
   const token = Deno.env.get('HUBSPOT_TOKEN');
   if (!token) return { skipped: 'no token' };
   if (Deno.env.get('HUBSPOT_EVENTS') === 'off') return { skipped: 'off' };
-  const { data } = await supabase.from('hubspot_events').select('id, kind, project_id, source_id, created_at')
+  const { data } = await supabase.from('hubspot_events').select('id, kind, project_id, source_id, created_at, note_id')
     .is('sent_at', null).gte('created_at', new Date(Date.now() - 7 * 864e5).toISOString()).order('created_at').limit(100);
   let sent = 0, waiting = 0, failed = 0;
   for (const ev of (data ?? []) as QueuedEvent[]) {
@@ -442,8 +514,16 @@ export async function sendEvents(supabase: Db) {
       const { data: p } = await supabase.from('projects').select('ref').eq('id', ev.project_id).single();
       const details = await eventDetails(supabase, ev);
       if (!details) { await supabase.from('hubspot_events').update({ sent_at: new Date().toISOString() }).eq('id', ev.id); continue; }
-      const noteId = await create(token, 'notes', { hs_timestamp: ev.created_at, hs_note_body: eventNote(ev.kind, { ref: p.ref, projectId: ev.project_id, ...details }) });
-      await associate(token, 'note', noteId, 'deal', internal.hubspot_deal_id);
+      const body = eventNote(ev.kind, { ref: p.ref, projectId: ev.project_id, ...details });
+      // The openings event is reopened on every edit (migration 0029), so rewrite the note it already has
+      // instead of leaving a trail of near-identical ones on the deal.
+      let noteId = ev.note_id ?? null;
+      if (noteId) {
+        await hs(token, 'PATCH', `/crm/v3/objects/notes/${noteId}`, { properties: { hs_note_body: body } });
+      } else {
+        noteId = await create(token, 'notes', { hs_timestamp: ev.created_at, hs_note_body: body });
+        await associate(token, 'note', noteId, 'deal', internal.hubspot_deal_id);
+      }
       await supabase.from('hubspot_events').update({ sent_at: new Date().toISOString(), note_id: noteId }).eq('id', ev.id);
       sent++;
     } catch { failed++; }
