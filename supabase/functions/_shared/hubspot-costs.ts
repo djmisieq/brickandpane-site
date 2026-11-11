@@ -56,11 +56,12 @@ export const stageStep = (c: Pick<Cost, 'status' | 'hubspot_status' | 'hubspot_s
 const num = (n: number | string) => Number(n);
 export const costDealName = (c: Pick<Cost, 'supplier' | 'reference'>, projectRef: string) =>
   [c.supplier, c.reference, projectRef].filter(Boolean).join(' · ').slice(0, 200);
-// What the deal carries. Amount is the supplier's net in its own currency (bp_cost_currency), as agreed with the bot.
+// What the deal carries. Costs are in £ (owner, 11.11.2026: "wszędzie funty, nie mieszajmy"); amount × rate keeps
+// the few early rows typed in PLN right, and the rate stays 1 for everything new.
 export const costProperties = (c: Cost, projectRef: string): Record<string, string> => ({
   dealname: costDealName(c, projectRef),
   pipeline: PIPELINE,
-  amount: num(c.amount).toFixed(2),
+  amount: (num(c.amount) * num(c.fx_to_gbp)).toFixed(2),
   bp_cost_currency: c.currency,
   bp_cost_fx_to_gbp: String(num(c.fx_to_gbp)),
   bp_cost_category: c.category,
@@ -74,20 +75,17 @@ export const costNote = (c: Pick<Cost, 'supplier' | 'reference' | 'amount' | 'cu
     + (c.note ? `<p>${escape(c.note)}</p>` : '')
     + (pdf ? '' : '<p>No PDF attached in the CRM.</p>');
 };
-// A Purchasing deal made in HubSpot, read into the CRM. Fills what HubSpot has; a missing rate for PLN/EUR stays 1
-// and says so in the note, so the team sets it before accepting (accepted costs count in the margin).
+// A Purchasing deal made in HubSpot, read into the CRM. Its amount is in £, like every cost.
 export const costFromDeal = (p: Record<string, string | null>, company: string | null) => {
-  const currency = ['GBP', 'PLN', 'EUR'].includes(p.bp_cost_currency ?? '') ? p.bp_cost_currency! : 'GBP';
-  const fx = Number(p.bp_cost_fx_to_gbp);
-  const rateOk = currency === 'GBP' || fx > 0;
+  const gbp = Number(p.amount) >= 0 && p.amount !== null && p.amount !== '' ? Number(p.amount) : 0;
   return {
     supplier: (company || p.dealname || 'Supplier (from HubSpot)').slice(0, 120),
     reference: (p.bp_supplier_quote_ref ?? '').slice(0, 60),
     category: ['production', 'transport', 'installation', 'other'].includes(p.bp_cost_category ?? '') ? p.bp_cost_category! : 'other',
-    amount: Number(p.amount) >= 0 && p.amount !== null && p.amount !== '' ? Number(p.amount) : 0,
-    currency,
-    fx_to_gbp: currency === 'GBP' ? 1 : rateOk ? fx : 1,
-    note: `From HubSpot deal “${(p.dealname ?? '').slice(0, 120)}”.${rateOk ? '' : ' Rate to £ missing in HubSpot: set it here before accepting.'}`.slice(0, 2000),
+    amount: gbp,
+    currency: 'GBP',
+    fx_to_gbp: 1,
+    note: `From HubSpot deal “${(p.dealname ?? '').slice(0, 120)}”.`.slice(0, 2000),
   };
 };
 

@@ -229,9 +229,9 @@ export const store = {
     return { sale_gbp: sale, sale_source: sale == null ? null : 'value', sale_refs: null, cost_gbp: cost, accepted: acc.length,
       margin_gbp: sale == null ? null : Math.round((sale - cost) * 100) / 100, margin_pct: sale ? Math.round((sale - cost) / sale * 1000) / 10 : null };
   },
-  async addCost(pid, { supplier, reference = '', category, amount, currency, fx, quoted_on = null, valid_until = null, note = '', file = null }) {
+  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null }) {
     const s = load(); needStaff(s); s.costs ||= [];
-    s.costs.push({ id: uid(), project_id: pid, supplier, reference, category, amount: +amount, currency, fx_to_gbp: currency === 'GBP' ? 1 : +fx, status: 'received', quoted_on, valid_until, pdf_path: null, pdf_name: file?.name || '', note, created_at: now() });
+    s.costs.push({ id: uid(), project_id: pid, supplier, reference, category, amount: +amount, currency: 'GBP', fx_to_gbp: 1, status: 'received', quoted_on, valid_until, pdf_path: null, pdf_name: file?.name || '', note, created_at: now() });
     save(s);
   },
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },

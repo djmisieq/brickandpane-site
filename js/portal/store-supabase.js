@@ -163,13 +163,13 @@ export const store = {
   // Costs: supplier and subcontractor quotes on a project and the margin (migration 0031, staff only).
   async listCosts(pid) { return ok(await sb.from('supplier_quotes').select('*').eq('project_id', pid).order('created_at', { ascending: false })); },
   async projectMargin(pid) { return ok(await sb.rpc('project_margin', { pid })); },
-  async addCost(pid, { supplier, reference = '', category, amount, currency, fx, quoted_on = null, valid_until = null, note = '', file = null }) {
+  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null }) {
     let pdf_path = null, pdf_name = '';
     if (file) {
       pdf_path = `${pid}/${crypto.randomUUID()}.pdf`; pdf_name = file.name.slice(0, 200);
       ok(await sb.storage.from('supplier-quotes').upload(pdf_path, file, { contentType: 'application/pdf' }));
     }
-    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency, fx_to_gbp: currency === 'GBP' ? 1 : Number(fx), status: 'received', quoted_on, valid_until, pdf_path, pdf_name, note }));
+    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency: 'GBP', fx_to_gbp: 1, status: 'received', quoted_on, valid_until, pdf_path, pdf_name, note }));
     emit();
   },
   async setCostStatus(id, status) { ok(await sb.from('supplier_quotes').update({ status }).eq('id', id)); emit(); },

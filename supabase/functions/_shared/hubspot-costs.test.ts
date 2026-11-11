@@ -30,7 +30,7 @@ Deno.test('the purchase deal carries the supplier net in its own currency', () =
   const cost = { id: 'c1', supplier: 'Okna Polska', reference: 'OP/114', category: 'production', amount: '40000.00', currency: 'PLN', fx_to_gbp: '0.195000', note: '' } as unknown as Cost;
   eq(costDealName(cost, 'BP-2026-0004'), 'Okna Polska · OP/114 · BP-2026-0004');
   eq(costProperties(cost, 'BP-2026-0004'), {
-    dealname: 'Okna Polska · OP/114 · BP-2026-0004', pipeline: PIPELINE, amount: '40000.00', bp_cost_currency: 'PLN',
+    dealname: 'Okna Polska · OP/114 · BP-2026-0004', pipeline: PIPELINE, amount: '7800.00', bp_cost_currency: 'PLN',
     bp_cost_fx_to_gbp: '0.195', bp_cost_category: 'production', bp_supplier_quote_ref: 'OP/114', bp_portal_supplier_quote_id: 'c1',
   });
   const note = costNote(cost, 'BP-2026-0004', null);
@@ -39,10 +39,9 @@ Deno.test('the purchase deal carries the supplier net in its own currency', () =
   eq(note.includes('never shown to the client'), true);
 });
 
-Deno.test('a Purchasing deal made in HubSpot becomes a supplier quote; a missing rate is flagged', () => {
+Deno.test('a Purchasing deal made in HubSpot becomes a supplier quote in £', () => {
   eq(costFromDeal({ dealname: 'Glass for E5', amount: '1200', bp_cost_currency: 'GBP', bp_cost_fx_to_gbp: null, bp_cost_category: 'production', bp_supplier_quote_ref: 'W-9' }, 'Whitesales'),
     { supplier: 'Whitesales', reference: 'W-9', category: 'production', amount: 1200, currency: 'GBP', fx_to_gbp: 1, note: 'From HubSpot deal “Glass for E5”.' });
   const eur = costFromDeal({ dealname: 'Frames', amount: '', bp_cost_currency: 'EUR', bp_cost_fx_to_gbp: '', bp_cost_category: 'weird', bp_supplier_quote_ref: null }, null);
-  eq([eur.supplier, eur.amount, eur.currency, eur.fx_to_gbp, eur.category], ['Frames', 0, 'EUR', 1, 'other']);
-  eq(eur.note.includes('Rate to £ missing'), true);
+  eq([eur.supplier, eur.amount, eur.currency, eur.fx_to_gbp, eur.category], ['Frames', 0, 'GBP', 1, 'other']); // everything in £
 });
