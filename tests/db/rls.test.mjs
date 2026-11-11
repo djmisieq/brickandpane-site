@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -395,6 +395,15 @@ test('payments, changes, openings and team queue HubSpot events', async () => {
   assert.equal(op.length, 1);
   assert.equal(op[0].sent_at, null, 'the openings event is reopened');
   assert.equal(op[0].note_id, '42', 'and keeps the note it already wrote');
+  // A converted enquiry's reservation for the client (make_owner) is no invitation until its email goes out.
+  const inv = (await db.query(`insert into public.project_invites (project_id, email, role, make_owner) values ($1, 'client@x.com', 'client', true) returning id`, [P])).rows[0].id;
+  const invites = async () => (await db.query(`select count(*)::int n from public.hubspot_events where kind = 'team_invite' and source_id = $1`, [inv])).rows[0].n;
+  assert.equal(await invites(), 0, 'no note for an invitation nobody sent');
+  await db.query('update public.project_invites set emailed_at = now() where id = $1', [inv]);
+  assert.equal(await invites(), 1, 'announced once the invitation email is sent');
+  await db.query('update public.project_invites set emailed_at = null where id = $1', [inv]); // invite-email gives the claim back on failure
+  await db.query('update public.project_invites set emailed_at = now() where id = $1', [inv]);
+  assert.equal(await invites(), 1, 'a retried email does not announce it twice');
 });
 
 test('quotes and the firm details on them are for staff only', async () => {

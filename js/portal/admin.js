@@ -34,7 +34,9 @@ const headClient = (p, invites = []) => {
   const c = clientOf(p);
   if (c) return `${esc(c.full_name || '')}${c.company ? `, ${esc(c.company)}` : ''}${c.account_type ? ` · ${esc(tr(ACCOUNT_TYPES[c.account_type] || ''))}` : ''}`;
   const inv = invites.find((i) => i.make_owner) || invites[0];
-  return inv ? esc(tr('Client invited: {email}', { email: inv.email })) : esc(tr('No client yet'));
+  if (!inv) return esc(tr('No client yet'));
+  // A converted enquiry reserves the project for the client's email; it is an invitation only once emailed.
+  return esc(tr(inv.make_owner && !inv.emailed_at ? 'Awaiting client sign-up: {email}' : 'Client invited: {email}', { email: inv.email }));
 };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
