@@ -570,6 +570,7 @@ const PL = {
   "Turn into a project": "Zamień w projekt",
   "Project created.": "Projekt założony.",
   "Client invited: {email}": "Klient zaproszony: {email}",
+  "Awaiting client sign-up: {email}": "Czeka na rejestrację klienta: {email}",
   "No client yet": "Brak klienta",
   "Email the client an invitation to the portal": "Wyślij klientowi zaproszenie do portalu",
   "Project created. The client’s account owns it.": "Projekt założony. Właścicielem jest konto klienta.",
