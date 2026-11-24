@@ -91,6 +91,8 @@ export async function mailView(app, switcher) {
   const status = accounts.map((a) => `<li><strong>${esc(a.address)}</strong> <span class="note">${a.mode === 'known' ? tr('known people only') : tr('whole mailbox')} · ${a.last_error ? `<span class="q-warn">${esc(a.last_error)}</span>` : a.last_run_at ? tr('read {ago}', { ago: ago(a.last_run_at) }) : tr('not read yet')}</span></li>`).join('');
   // A live update redraws the list: mails that were open stay open.
   const openIds = new Set($$('details.mail[open]', app).map((d) => d.dataset.mail));
+  // …and what is being typed into the contact form is kept (read right before the redraw, after the data loads).
+  const typed = Object.fromEntries($$('[data-mail-contact] [id]', app).filter((el) => el.value).map((el) => [el.id, el.value]));
   app.innerHTML = `
     <div class="container section-tight">
       <div class="dash-head"><div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Email')}</h1></div></div>
@@ -120,6 +122,7 @@ export async function mailView(app, switcher) {
       </div>
     </div>`;
   openIds.forEach((id) => { const d = $$('details.mail', app).find((x) => x.dataset.mail === id); if (d) d.open = true; });
+  Object.entries(typed).forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = v; });
   const again = () => mailView(app, switcher);
   bindMail(app);
   $$('[data-mail-filter]', app).forEach((b) => b.addEventListener('click', () => { filter = b.dataset.mailFilter; again(); }));
@@ -138,7 +141,7 @@ export async function mailView(app, switcher) {
     e.preventDefault(); const f = e.currentTarget;
     const match = f.match.value.trim().toLowerCase();
     if (!/^([^@\s]+)?@[^@\s]+\.[^@\s]+$/.test(match)) { f.match.focus(); toast(tr('Enter an email address or @domain.')); return; }
-    try { await store.addMailContact({ match, kind: f.kind.value, label: f.label.value.trim(), project_id: f.project.value || null }); toast(tr('Contact added.')); await again(); } catch (err) { toast(tr(err.message)); }
+    try { await store.addMailContact({ match, kind: f.kind.value, label: f.label.value.trim(), project_id: f.project.value || null }); f.reset(); toast(tr('Contact added.')); await again(); } catch (err) { toast(tr(err.message)); }
   });
   $$('[data-contact-del]', app).forEach((b) => b.addEventListener('click', async () => {
     try { await store.deleteMailContact(b.closest('[data-contact]').dataset.contact); await again(); } catch (err) { toast(tr(err.message)); }
