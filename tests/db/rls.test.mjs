@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -576,4 +576,46 @@ test('costs: only edits by the team mark a supplier quote changed for HubSpot', 
   await db.query(`update public.supplier_quotes set status = 'rejected', hubspot_status = 'rejected', hubspot_synced_at = now() - interval '1 minute' where id = $1`, [id]);
   const r = (await db.query('select updated_at, hubspot_synced_at from public.supplier_quotes where id = $1', [id])).rows[0];
   assert.equal(r.hubspot_synced_at.getTime(), r.updated_at.getTime(), 'a pull is synced as of the same instant');
+});
+
+// 0035: mail copied from Zimbra is the team's alone; it shows on a project by the client's address, an invitation, the
+// enquiry or a contact the team added; the rest waits as unassigned.
+test('mail: staff only, matched to projects by address, unassigned otherwise', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.query(`select public.invite_member($1, 'newclient@y.com', 'client')`, [P]);
+  await db.exec('reset role');
+  const acc = (await db.query(`select id from public.mail_accounts where address = 'contact@brickandpane.co.uk'`)).rows[0].id;
+  const put = (uid, from, to, subject) => db.query(`insert into public.mail_messages (account_id, folder, uidvalidity, uid, message_id, direction, from_addr, to_addrs, subject, sent_at)
+    values ($1, 'INBOX', 1, $2, $3, 'in', $4, $5, $6, now() - make_interval(mins => $7))`, [acc, uid, `m${uid}@x`, from, [to], subject, uid]);
+  await put(1, 'arch@x.com', 'contact@brickandpane.co.uk', 'From the owner');        // client account on the project
+  await put(2, 'newclient@y.com', 'contact@brickandpane.co.uk', 'Invited client');   // invitation
+  await put(3, 'jan@okna.pl', 'contact@brickandpane.co.uk', 'Supplier');             // nobody yet
+  await put(4, 'stranger@z.com', 'contact@brickandpane.co.uk', 'Sash windows?');     // unknown
+  await fails(`insert into public.mail_messages (account_id, folder, uidvalidity, uid, message_id, direction) values ($1, 'INBOX', 1, 9, 'm1@x', 'in')`, [acc]); // same Message-ID
+  await as(S);
+  const list = async (pid, un = false) => (await db.query('select subject from public.mail_list($1, $2)', [pid, un])).rows.map((r) => r.subject);
+  assert.deepEqual(await list(P), ['From the owner', 'Invited client']);
+  assert.deepEqual(await list(null, true), ['Supplier', 'Sash windows?']);
+  // The team adds the supplier's domain to the project; and files the stranger by hand.
+  await db.query(`insert into public.mail_contacts (match, kind, label, project_id) values ('@okna.pl', 'supplier', 'Okna', $1)`, [P]);
+  const m4 = (await db.query(`select id from public.mail_messages where uid = 4`)).rows[0].id;
+  await db.query('update public.mail_messages set project_id = $1 where id = $2', [P, m4]);
+  assert.deepEqual(await list(P), ['From the owner', 'Invited client', 'Supplier', 'Sash windows?']);
+  assert.deepEqual(await list(null, true), []);
+  await fails(`update public.mail_messages set body_text = 'x' where id = $1`, [m4]); // the mail itself is read-only
+  await fails(`insert into public.mail_contacts (match) values ('Not An Address')`);
+  await fails('select * from public.mail_project_addresses()');
+  await fails('select * from public.mail_folder_state'); // sync state: the sync's alone
+  // Nobody else: not the client on the project, not their own mail.
+  for (const who of [A, C, O]) {
+    await as(who);
+    assert.equal((await db.query('select * from public.mail_messages')).rows.length, 0);
+    assert.equal((await db.query('select * from public.mail_accounts')).rows.length, 0);
+    await fails('select * from public.mail_list($1, false)', [P]);
+    await fails(`insert into public.mail_contacts (match) values ('@x.com')`);
+  }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.mail_messages');
 });

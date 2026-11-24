@@ -127,6 +127,19 @@ const notifyStaff = (s, pid, type, title, body) => {
 const me = (s) => s.users.find((u) => u.id === sessionId()) || null;
 const canSee = (s, u, pid) => u && (u.role === 'staff' || s.members.some((m) => m.project_id === pid && m.user_id === u.id));
 const need = (s) => { const u = me(s); if (!u) throw new Error('Please sign in.'); return u; };
+// Demo mail, added on first use so older saved demo data gets it too.
+function demoMail(s) {
+  if (s.mail) { s.mailContacts ||= []; return; }
+  const anna = s.users.find((u) => u.id === 'u-anna')?.email || 'anna@example-studio.co.uk';
+  const at = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const m = (id, direction, from_addr, from_name, to, subject, body, h, attachments = []) => ({ id, account: direction === 'out' ? 'kate@brickandpane.co.uk' : 'contact@brickandpane.co.uk', folder: direction === 'out' ? 'Sent' : 'INBOX', direction, from_addr, from_name, to_addrs: to, cc_addrs: [], subject, sent_at: at(h), body_text: body, attachments, too_large: false, message_id: id + '@demo', in_reply_to: null, dismissed: false, project_id: null });
+  s.mail = [
+    m('mail-1', 'in', anna, 'Anna Clarke', ['contact@brickandpane.co.uk'], 'Hartley Road: threshold detail', 'Hi Kate,\n\nCould the threshold be flush with the new patio? Drawing attached.\n\nAnna', 30, [{ name: 'threshold-detail.pdf', type: 'application/pdf', size: 240000, path: null }]),
+    m('mail-2', 'out', 'kate@brickandpane.co.uk', 'Kate', [anna], 'Re: Hartley Road: threshold detail', 'Hi Anna,\n\nYes: a flush threshold with a drainage channel. We will add it to the quotation.\n\nKate', 26),
+    m('mail-3', 'in', 'jan@okna-demo.pl', 'Jan (Okna demo)', ['contact@brickandpane.co.uk'], 'Offer for frames', 'Dear Sir,\n\nplease find our offer attached.', 5),
+  ];
+  s.mailContacts = [];
+}
 const needStaff = (s) => { const u = need(s); if (u.role !== 'staff') throw new Error('Staff only.'); return u; };
 const demoDeals = () => [
   { id: '9001', name: 'BP-261018-3F2A · Jo Bennett · Walthamstow, E17', stage: 'appointmentscheduled', stageLabel: 'Enquiry', closed: false, ref: 'BP-261018-3F2A', created: daysAgo(20), url: null, source: 'website', portal: 'BP-2026-0001', test: false,
@@ -237,6 +250,27 @@ export const store = {
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },
   async deleteCost(id) { const s = load(); needStaff(s); s.costs = (s.costs || []).filter((x) => x.id !== id); save(s); },
   async costPdfUrl() { return null; },
+  // Mail in demo mode: a few made-up mails, matched to projects the way mail_list does it (migration 0035).
+  async listMail({ pid = null, unassigned = false } = {}) {
+    const s = load(); needStaff(s); demoMail(s);
+    const addrs = (m) => [m.from_addr, ...m.to_addrs, ...m.cc_addrs].map((a) => a.toLowerCase());
+    const known = [
+      ...s.members.map((mb) => ({ addr: s.users.find((u) => u.id === mb.user_id && u.role !== 'staff')?.email, pid: mb.project_id })),
+      ...s.invites.map((i) => ({ addr: i.email, pid: i.project_id })),
+      ...(s.requests || []).filter((r) => r.project_id).map((r) => ({ addr: r.email, pid: r.project_id })),
+      ...s.mailContacts.filter((c) => c.project_id).map((c) => ({ addr: c.match, pid: c.project_id })),
+    ].filter((k) => k.addr).map((k) => ({ ...k, addr: k.addr.toLowerCase() }));
+    return s.mail.map((m) => ({ ...m, projects: m.project_id ? [m.project_id] : [...new Set(known.filter((k) => addrs(m).some((a) => a === k.addr || (k.addr.startsWith('@') && a.endsWith(k.addr)))).map((k) => k.pid))] }))
+      .filter((m) => (!pid || m.projects.includes(pid)) && (!unassigned || (!m.projects.length && !m.dismissed)))
+      .sort((a, b) => b.sent_at.localeCompare(a.sent_at));
+  },
+  async mailAccounts() { return [{ address: 'contact@brickandpane.co.uk', mode: 'all', last_run_at: now(), last_error: null }, { address: 'kate@brickandpane.co.uk', mode: 'known', last_run_at: now(), last_error: null }]; },
+  async assignMail(id, project_id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.project_id = project_id; save(s); } },
+  async dismissMail(id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.dismissed = true; save(s); } },
+  async listMailContacts() { const s = load(); needStaff(s); demoMail(s); return [...s.mailContacts]; },
+  async addMailContact(c) { const s = load(); needStaff(s); demoMail(s); if (s.mailContacts.some((x) => x.match === c.match)) throw new Error('That contact is already there.'); s.mailContacts.push({ id: uid(), ...c, created_at: now() }); save(s); },
+  async deleteMailContact(id) { const s = load(); needStaff(s); s.mailContacts = (s.mailContacts || []).filter((x) => x.id !== id); save(s); },
+  async mailFileUrl() { return null; },
   async listRequests() {
     const s = load(); needStaff(s);
     return [...(s.requests || [])].sort((a, b) => b.created_at.localeCompare(a.created_at));
