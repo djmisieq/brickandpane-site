@@ -5,6 +5,7 @@ import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
 import { quotesView } from './quotes.js';
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
+import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -57,6 +58,7 @@ async function render(fromStore = false) {
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else await board(r.name === 'list');
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
   Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && (dirty.has(id) || (!el.value && el.tagName !== 'SELECT'))) { el.value = v; if (dirty.has(id)) el.dataset.dirty = '1'; } });
@@ -111,7 +113,7 @@ async function board(asList) {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
 }
 
 async function enquiries() {
@@ -207,7 +209,7 @@ async function enquiries() {
 
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id)]);
+  const [d, staff, costs, mail] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id)]);
   const p = d.project;
   document.title = `${p.ref} · ${p.name} | CRM`;
   const nextIdx = STAGES.findIndex((s) => s.id === p.stage) + 1;
@@ -226,6 +228,7 @@ async function detail(id) {
           <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
             ${activeTab === 'documents' ? documentsPanel(d, 'staff', user) : activeTab === 'changes' ? changesPanel(d, 'staff', user) : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d, 'staff', 'staff', user)}
           </div>
+          ${mailPanel(mail)}
         </div>
         <aside class="crm-side">
           ${d.internal?.hubspot_deal_id ? `<form class="ctl" data-next-step novalidate>
@@ -299,6 +302,7 @@ async function detail(id) {
 
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
+  bindMail(app);
   $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;

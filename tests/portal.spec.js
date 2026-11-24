@@ -85,7 +85,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Board/, /List/, /Enquiries/, /Quotes/]);
+  await expect(page.locator('.seg a')).toHaveText([/Board/, /List/, /Enquiries/, /Quotes/, /Email/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -513,4 +513,43 @@ test('costs: staff add a supplier quote in £, accept it and see the margin; the
   await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
   await expect(client.locator('.now-card')).toBeVisible();
   for (const text of ['Costs & margin', 'Okna Polska', 'Margin', '7,800']) await expect(client.locator('body')).not.toContainText(text);
+});
+
+test('mail: the client’s email shows on the project, the rest waits in Email; the client sees none of it', async ({ page, context }) => {
+  await page.goto('/admin.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  const panel = page.locator('[data-mail-panel]');
+  await expect(panel).toContainText('Hartley Road: threshold detail');
+  await expect(panel).toContainText('Re: Hartley Road: threshold detail');
+  await expect(panel).not.toContainText('Offer for frames');
+  await panel.locator('details.mail', { hasText: 'threshold detail' }).first().locator('summary').click();
+  await expect(panel).toContainText('Could the threshold be flush');
+
+  // The supplier matches no project: it waits in Email until the team adds its domain to the project.
+  await page.goto('/admin.html#/mail');
+  const list = page.locator('.mail-list');
+  await expect(list).toContainText('Offer for frames');
+  await expect(list).not.toContainText('threshold detail');
+  await page.locator('details.mail', { hasText: 'Offer for frames' }).locator('summary').click();
+  await page.locator('[data-mail-known]').click();
+  await expect(page.locator('#mc-match')).toHaveValue('jan@okna-demo.pl');
+  await page.locator('#mc-match').fill('@okna-demo.pl');
+  await page.locator('#mc-project').selectOption({ label: await page.locator('#mc-project option', { hasText: 'Hartley Road' }).innerText() });
+  await page.locator('#mc-label').fill('Okna (demo)');
+  await page.locator('#mc-label').press('Enter'); // on the phone layout the page still moves under a click here
+  await expect(page.locator('.toast').last()).toContainText('Contact added.');
+  await expect(page.locator('.callout')).toContainText('Every email is on a project.');
+  await page.goto('/admin.html#/');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await expect(page.locator('[data-mail-panel]')).toContainText('Offer for frames');
+
+  // The architect on the same project: no mail, no Email view.
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html');
+  await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await expect(client.locator('.now-card')).toBeVisible();
+  for (const text of ['threshold detail', 'Offer for frames', 'Zimbra']) await expect(client.locator('body')).not.toContainText(text);
 });

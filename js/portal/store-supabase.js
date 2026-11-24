@@ -175,6 +175,15 @@ export const store = {
   async setCostStatus(id, status) { ok(await sb.from('supplier_quotes').update({ status }).eq('id', id)); emit(); },
   async deleteCost(id) { ok(await sb.from('supplier_quotes').delete().eq('id', id)); emit(); },
   async costPdfUrl(path) { return ok(await sb.storage.from('supplier-quotes').createSignedUrl(path, 300))?.signedUrl; },
+  // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
+  async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },
+  async mailAccounts() { return ok(await sb.from('mail_accounts').select('address, mode, last_run_at, last_error').order('created_at')); },
+  async assignMail(id, project_id) { ok(await sb.from('mail_messages').update({ project_id }).eq('id', id)); emit(); },
+  async dismissMail(id) { ok(await sb.from('mail_messages').update({ dismissed: true }).eq('id', id)); emit(); },
+  async listMailContacts() { return ok(await sb.from('mail_contacts').select('*').order('match')); },
+  async addMailContact({ match, kind, label, project_id }) { ok(await sb.from('mail_contacts').insert({ match, kind, label, project_id })); emit(); },
+  async deleteMailContact(id) { ok(await sb.from('mail_contacts').delete().eq('id', id)); emit(); },
+  async mailFileUrl(path) { return ok(await sb.storage.from('mail-files').createSignedUrl(path, 300))?.signedUrl; },
   async quotePdfUrl(path) { return ok(await sb.storage.from('quote-pdfs').createSignedUrl(path, 300))?.signedUrl; },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
   async listRequests() {

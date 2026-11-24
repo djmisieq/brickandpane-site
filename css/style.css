@@ -742,6 +742,19 @@ body.app .list-btn{display:none}
 .q-deal-search input{flex:1;min-width:0}
 .cost-sum{display:grid;gap:var(--s-xs);margin:0 0 var(--s-s)}.cost-sum div{display:flex;justify-content:space-between;gap:var(--s-s)}.cost-sum dt{color:var(--ink-2)}.cost-sum dd{margin:0;text-align:right}
 .cost-list{list-style:none;padding:0;margin:0 0 var(--s-m);display:grid;gap:var(--s-xs)}.cost-list li{display:grid;gap:var(--s-xs);padding:var(--s-s) 0;border-top:1px solid var(--line)}.cost-list .note{display:block}.cost-acts{display:flex;gap:var(--s-xs);flex-wrap:wrap}
+/* Mail in the CRM (js/portal/mail.js) */
+.mail-panel{display:grid;gap:var(--s-s)}.mail-panel .panel-h{margin:0}
+.mail-list{display:grid;gap:var(--s-xs)}
+.mail{background:var(--surface);border:1px solid var(--line)}.mail.is-out{border-left:3px solid var(--line)}.mail:not(.is-out){border-left:3px solid var(--accent)}
+.mail summary{display:grid;grid-template-columns:auto 1fr auto;gap:2px var(--s-s);align-items:baseline;padding:.7rem var(--s-m);cursor:pointer;min-height:44px}
+.mail-dir{color:var(--ink-2)}.mail-subj{font-weight:600;overflow-wrap:anywhere}.mail-when{grid-column:3;grid-row:1;white-space:nowrap}.mail-who{grid-column:2/4;overflow-wrap:anywhere}
+.mail-body{padding:0 var(--s-m) var(--s-m);display:grid;gap:var(--s-s)}.mail-body p{margin:0}
+.mail-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:28rem;overflow:auto;font-size:var(--step--1);border-top:1px solid var(--line);padding-top:var(--s-s)}
+.mail-files{display:flex;flex-wrap:wrap;gap:var(--s-xs);align-items:center}
+.mail-assign{display:flex;flex-wrap:wrap;gap:var(--s-xs);align-items:center}.mail-assign select{width:auto;max-width:100%;min-height:42px}
+.mail-side{display:grid;gap:var(--s-m);margin-top:var(--s-l)}@media (min-width:900px){.mail-side{grid-template-columns:1fr 1fr;align-items:start}}
+.mail-accounts,.mail-contacts{list-style:none;padding:0;margin:0;display:grid;gap:var(--s-xs)}.mail-accounts .note,.mail-contacts .note{display:block}
+@media (max-width:600px){.mail summary{grid-template-columns:auto 1fr}.mail-when{grid-column:2;grid-row:auto}.mail-who{grid-column:2}}
 .q-deals,.q-files,.q-sends{list-style:none;padding:0;display:grid;gap:var(--s-xs);margin-top:var(--s-s)}
 .q-deals li{display:flex;justify-content:space-between;align-items:center;gap:var(--s-s);padding:var(--s-s) 0;border-top:1px solid var(--line)}
 .q-deals li>div{min-width:0}
