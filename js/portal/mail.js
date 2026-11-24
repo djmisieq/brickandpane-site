@@ -89,6 +89,8 @@ export async function mailView(app, switcher) {
   ]);
   const open = projects.filter((p) => !['closed'].includes(p.stage));
   const status = accounts.map((a) => `<li><strong>${esc(a.address)}</strong> <span class="note">${a.mode === 'known' ? tr('known people only') : tr('whole mailbox')} · ${a.last_error ? `<span class="q-warn">${esc(a.last_error)}</span>` : a.last_run_at ? tr('read {ago}', { ago: ago(a.last_run_at) }) : tr('not read yet')}</span></li>`).join('');
+  // A live update redraws the list: mails that were open stay open.
+  const openIds = new Set($$('details.mail[open]', app).map((d) => d.dataset.mail));
   app.innerHTML = `
     <div class="container section-tight">
       <div class="dash-head"><div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Email')}</h1></div></div>
@@ -117,6 +119,7 @@ export async function mailView(app, switcher) {
         </form>
       </div>
     </div>`;
+  openIds.forEach((id) => { const d = $$('details.mail', app).find((x) => x.dataset.mail === id); if (d) d.open = true; });
   const again = () => mailView(app, switcher);
   bindMail(app);
   $$('[data-mail-filter]', app).forEach((b) => b.addEventListener('click', () => { filter = b.dataset.mailFilter; again(); }));
