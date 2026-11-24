@@ -10,7 +10,9 @@ const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.m
 const who = (m) => (m.direction === 'out' ? `${tr('To')} ${(m.to_addrs || []).join(', ')}` : `${m.from_name ? `${m.from_name} ` : ''}<${m.from_addr}>`);
 
 export async function loadMail(pid) {
-  return store.listMail ? store.listMail({ pid }).catch(() => null) : null;
+  if (!store.listMail) return null;
+  const [list, keywords] = await Promise.all([store.listMail({ pid }).catch(() => null), store.listMailKeywords ? store.listMailKeywords(pid).catch(() => []) : []]);
+  return list == null ? null : Object.assign(list, { keywords });
 }
 
 function item(m, { projects = null } = {}) {
@@ -47,10 +49,28 @@ export function mailPanel(list) {
   return `<section class="mail-panel" data-mail-panel>${head}
     <p class="hint">${tr('A copy of the Zimbra mailboxes, read only: reply in Zimbra.')}</p>
     ${list.length ? `<div class="mail-list">${list.map((m) => item(m)).join('')}</div>` : `<p class="hint">${tr('No email with this project’s client yet.')}</p>`}
+    <form class="mail-keywords" data-mail-keywords>
+      <p class="hint">${tr('Site names: mail with one of these in its subject shows here, e.g. “Avon Run” when a client has several sites.')}</p>
+      ${(list.keywords || []).length ? `<ul class="mail-contacts">${list.keywords.map((k) => `<li data-keyword="${esc(k.id)}"><strong>${esc(k.keyword)}</strong> <button type="button" class="q-link" data-keyword-del>${tr('Remove')}</button></li>`).join('')}</ul>` : ''}
+      <div class="field-row">
+        <div class="field"><label for="mk-word">${tr('Site name in the subject')}</label><input id="mk-word" name="keyword" minlength="3" maxlength="80" placeholder="Avon Run"></div>
+      </div>
+      <button class="btn btn-sm btn-ghost" type="submit">${tr('Add site name')}</button>
+    </form>
   </section>`;
 }
 
-export function bindMail(root) {
+export function bindMail(root, pid = null) {
+  const kw = $('[data-mail-keywords]', root);
+  kw?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const word = kw.keyword.value.trim();
+    if (word.length < 3) { kw.keyword.focus(); toast(tr('Enter at least 3 letters of the site name.')); return; }
+    try { await store.addMailKeyword(pid, word); toast(tr('Site name added.')); } catch (err) { toast(tr(err.message)); }
+  });
+  $$('[data-keyword-del]', root).forEach((b) => b.addEventListener('click', async () => {
+    try { await store.deleteMailKeyword(b.closest('[data-keyword]').dataset.keyword); } catch (err) { toast(tr(err.message)); }
+  }));
   $$('[data-mail-file]', root).forEach((b) => b.addEventListener('click', async () => {
     try { const url = await store.mailFileUrl(b.dataset.mailFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }
   }));

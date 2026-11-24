@@ -260,7 +260,8 @@ export const store = {
       ...(s.requests || []).filter((r) => r.project_id).map((r) => ({ addr: r.email, pid: r.project_id })),
       ...s.mailContacts.filter((c) => c.project_id).map((c) => ({ addr: c.match, pid: c.project_id })),
     ].filter((k) => k.addr).map((k) => ({ ...k, addr: k.addr.toLowerCase() }));
-    return s.mail.map((m) => ({ ...m, projects: m.project_id ? [m.project_id] : [...new Set(known.filter((k) => addrs(m).some((a) => a === k.addr || (k.addr.startsWith('@') && a.endsWith(k.addr)))).map((k) => k.pid))] }))
+    const words = s.mailKeywords || [];
+    return s.mail.map((m) => ({ ...m, projects: m.project_id ? [m.project_id] : [...new Set([...known.filter((k) => addrs(m).some((a) => a === k.addr || (k.addr.startsWith('@') && a.endsWith(k.addr)))).map((k) => k.pid), ...words.filter((w) => m.subject.toLowerCase().includes(w.keyword.toLowerCase())).map((w) => w.project_id)])] }))
       .filter((m) => (!pid || m.projects.includes(pid)) && (!unassigned || (!m.projects.length && !m.dismissed)))
       .sort((a, b) => b.sent_at.localeCompare(a.sent_at));
   },
@@ -270,6 +271,9 @@ export const store = {
   async listMailContacts() { const s = load(); needStaff(s); demoMail(s); return [...s.mailContacts]; },
   async addMailContact(c) { const s = load(); needStaff(s); demoMail(s); if (s.mailContacts.some((x) => x.match === c.match)) throw new Error('That contact is already there.'); s.mailContacts.push({ id: uid(), ...c, created_at: now() }); save(s); },
   async deleteMailContact(id) { const s = load(); needStaff(s); s.mailContacts = (s.mailContacts || []).filter((x) => x.id !== id); save(s); },
+  async listMailKeywords(pid) { const s = load(); needStaff(s); return (s.mailKeywords || []).filter((k) => k.project_id === pid); },
+  async addMailKeyword(pid, keyword) { const s = load(); needStaff(s); s.mailKeywords ||= []; if (s.mailKeywords.some((k) => k.project_id === pid && k.keyword.toLowerCase() === keyword.toLowerCase())) throw new Error('That keyword is already there.'); s.mailKeywords.push({ id: uid(), project_id: pid, keyword }); save(s); },
+  async deleteMailKeyword(id) { const s = load(); needStaff(s); s.mailKeywords = (s.mailKeywords || []).filter((k) => k.id !== id); save(s); },
   async mailFileUrl() { return null; },
   async listRequests() {
     const s = load(); needStaff(s);

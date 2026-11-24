@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -618,4 +618,37 @@ test('mail: staff only, matched to projects by address, unassigned otherwise', a
   }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.mail_messages');
+});
+
+// 0037: one client, two sites on one domain: the site's name in the subject says which project the mail is for.
+test('mail: keywords in the subject route mail to a project; the header review is staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(S);
+  const P1 = (await db.query(`insert into public.projects (name, owner_id) values ('Kingsgate – 6 Avon Run Road', $1) returning id`, [S])).rows[0].id;
+  const P2 = (await db.query(`insert into public.projects (name, owner_id) values ('Kingsgate – Lawford Court', $1) returning id`, [S])).rows[0].id;
+  await db.query(`insert into public.mail_contacts (match, kind) values ('@kingsgate.example', 'client')`);
+  await db.query(`insert into public.mail_keywords (project_id, keyword) values ($1, 'Avon Run'), ($2, 'lawford court')`, [P1, P2]);
+  await fails(`insert into public.mail_keywords (project_id, keyword) values ($1, 'avon run')`, [P1]); // once per project
+  await fails(`insert into public.mail_keywords (project_id, keyword) values ($1, 'ab')`, [P1]);   // too short to mean a site
+  await db.exec('reset role');
+  const acc = (await db.query(`select id from public.mail_accounts where address = 'contact@brickandpane.co.uk'`)).rows[0].id;
+  const put = (uid, subject) => db.query(`insert into public.mail_messages (account_id, folder, uidvalidity, uid, message_id, direction, from_addr, to_addrs, subject, sent_at)
+    values ($1, 'INBOX', 1, $2, $3, 'in', 'grant@kingsgate.example', '{contact@brickandpane.co.uk}', $4, now() - make_interval(mins => $5))`, [acc, uid, `k${uid}@x`, subject, uid]);
+  await put(1, 'RE: Quotation Request - 6 Avon Run Road, Christchurch');
+  await put(2, '17-31 LAWFORD COURT: Invitation to tender');
+  await put(3, 'Another job next month');
+  await db.query(`insert into public.mail_header_scan (account, folder, uid, from_addr, subject) values ('kate@brickandpane.co.uk', 'INBOX', 9, 'new@client.co.uk', 'Quote please')`);
+  await as(S);
+  const list = async (pid, un = false) => (await db.query('select subject from public.mail_list($1, $2)', [pid, un])).rows.map((r) => r.subject);
+  assert.deepEqual(await list(P1), ['RE: Quotation Request - 6 Avon Run Road, Christchurch']);
+  assert.deepEqual(await list(P2), ['17-31 LAWFORD COURT: Invitation to tender']);
+  assert.deepEqual(await list(null, true), ['Another job next month']);
+  assert.equal((await db.query('select * from public.mail_header_scan')).rows.length, 1);
+  await fails(`insert into public.mail_header_scan (account, folder, uid) values ('x', 'INBOX', 1)`); // only the sync writes it
+  for (const who of [A, C, O]) {
+    await as(who);
+    assert.equal((await db.query('select * from public.mail_header_scan')).rows.length, 0);
+    assert.equal((await db.query('select * from public.mail_keywords')).rows.length, 0);
+    await fails(`insert into public.mail_keywords (project_id, keyword) values ($1, 'Avon Run')`, [P1]);
+  }
 });

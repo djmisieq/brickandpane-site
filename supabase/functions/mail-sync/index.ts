@@ -5,7 +5,7 @@
 // Secrets: MAIL_PASSWORD_CONTACT, MAIL_PASSWORD_CHRIS, MAIL_PASSWORD_KATE (set by the owner; a mailbox without one is
 // skipped), optional MAIL_SYNC=off to pause, plus SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided). Logs counts only.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { syncMail } from '../_shared/mail-sync.ts';
+import { scanHeaders, syncMail } from '../_shared/mail-sync.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -13,7 +13,9 @@ Deno.serve(async (req) => {
   const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   if (req.method !== 'POST') return reply(405, { error: 'method' });
   try {
-    const result = await syncMail(supabase);
+    // { scan: { account, folder, after } }: the one-off header review (0037); it answers with a cursor only.
+    const body = await req.json().catch(() => ({}));
+    const result = body?.scan ? await scanHeaders(supabase, body.scan) : await syncMail(supabase);
     console.log(JSON.stringify(result));
     return reply(200, result);
   } catch (e) {

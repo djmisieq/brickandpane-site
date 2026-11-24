@@ -2,7 +2,7 @@
 // kate@ never downloaded, each mail kept once. Run: npx -y deno@2 test --node-modules-dir=auto supabase/functions/_shared/
 import { deepStrictEqual as eq, ok as assert } from 'node:assert/strict';
 import { Imap, imapDate, type Conn } from './imap.ts';
-import { directionOf, flat, htmlToText, isKnown, outsiders, safeName, secretName, syncMail } from './mail-sync.ts';
+import { directionOf, flat, htmlToText, isKnown, outsiders, safeName, scanHeaders, secretName, syncMail } from './mail-sync.ts';
 
 const enc = new TextEncoder();
 const mail = (from: string, to: string, subject: string, id: string, body = 'Hello') =>
@@ -39,7 +39,7 @@ function fakeServer(folders: Record<string, { uid: number; raw: string }[]>, log
         for (const [n, msg] of current.entries()) {
           if (!ids.includes(msg.uid)) continue;
           const head = msg.raw.split('\r\n\r\n')[0] + '\r\n\r\n';
-          const part = /HEADER\.FIELDS/i.test(cmd) ? head.split('\r\n').filter((l) => /^(From|To|Cc):/i.test(l)).join('\r\n') + '\r\n\r\n'
+          const part = /HEADER\.FIELDS/i.test(cmd) ? head.split('\r\n').filter((l) => new RegExp(`^(${cmd.match(/HEADER\.FIELDS \(([^)]*)\)/i)![1].split(' ').join('|')}):`, 'i').test(l)).join('\r\n') + '\r\n\r\n'
             : /BODY\.PEEK\[HEADER\]/i.test(cmd) ? head : /BODY\.PEEK\[\]/i.test(cmd) ? msg.raw : null;
           const bytes = part === null ? null : enc.encode(part);
           out += `* ${n + 1} FETCH (UID ${msg.uid} RFC822.SIZE ${msg.raw.length}${bytes ? ` BODY[] {${bytes.length}}\r\n${part}` : ''})\r\n`;
@@ -60,7 +60,7 @@ function fakeDb(known: string[]) {
       { id: 'a1', address: 'contact@brickandpane.co.uk', mode: 'all', folders: ['INBOX', 'Sent'], since: '2026-09-01', enabled: true, created_at: '1' },
       { id: 'a2', address: 'kate@brickandpane.co.uk', mode: 'known', folders: ['INBOX', 'Sent'], since: '2026-09-01', enabled: true, created_at: '2' },
     ],
-    mail_folder_state: [], mail_messages: [],
+    mail_folder_state: [], mail_messages: [], mail_header_scan: [],
   };
   const uploads: string[] = [];
   const q = (name: string) => {
@@ -73,7 +73,13 @@ function fakeDb(known: string[]) {
       eq: (k: string, v: unknown) => { filters.push([k, v]); return b; },
       maybeSingle: async () => ({ data: rows().find(match) ?? null }),
       update: (p: Record<string, unknown>) => { op = 'update'; patch = p; return b; },
-      upsert: async (r: Record<string, unknown>) => { const i = rows().findIndex((x) => x.account_id === r.account_id && x.folder === r.folder); if (i >= 0) rows()[i] = r; else rows().push(r); return { error: null }; },
+      upsert: async (rs: Record<string, unknown> | Record<string, unknown>[]) => {
+        for (const r of Array.isArray(rs) ? rs : [rs]) {
+          const key = (x: Record<string, unknown>) => [x.account_id ?? x.account, x.folder, x.uid ?? ''].join('|');
+          const i = rows().findIndex((x) => key(x) === key(r)); if (i >= 0) rows()[i] = r; else rows().push(r);
+        }
+        return { error: null };
+      },
       insert: async (r: Record<string, unknown>) => {
         if (r.message_id && rows().some((x) => x.message_id === r.message_id)) return { error: { code: '23505', message: 'dup' } };
         rows().push(r); return { error: null };
@@ -158,5 +164,28 @@ Deno.test('sync: contact@ whole, kate@ only known people, read only, each mail o
     const again = await syncMail(db, connect) as Record<string, number>;
     eq(again.saved, 0);
     eq(db.t.mail_folder_state.map((s) => `${s.account_id}/${s.folder}:${s.last_uid}`).sort(), ['a1/INBOX:2', 'a1/Sent:0', 'a2/INBOX:6', 'a2/Sent:10']);
+  } finally { Deno.env.get = get; }
+});
+
+Deno.test('header review: kate@ mail with unknown people, headers only, nothing else', async () => {
+  const box = {
+    INBOX: [{ uid: 5, raw: mail('Mum <mum@gmail.com>', 'kate@brickandpane.co.uk', 'Sunday lunch', 'p1@x', 'PRIVATE') },
+            { uid: 6, raw: mail('Okna <jan@okna.pl>', 'kate@brickandpane.co.uk', 'Offer', 'm3@x') },
+            { uid: 7, raw: mail('New Client <new@client.co.uk>', 'kate@brickandpane.co.uk', 'Quote for 4 Elm Road', 'n1@x', 'SECRET BODY') }],
+    Sent: [],
+  };
+  const env = { MAIL_PASSWORD_KATE: 'y' } as Record<string, string>;
+  const get = Deno.env.get; Deno.env.get = (k: string) => env[k];
+  try {
+    const db = fakeDb(['@okna.pl']);
+    const log: string[] = [];
+    const connect = async () => { const s = fakeServer(box, log); const imap = new Imap(s.conn); s.hello(); await imap.readResponse(); return imap; };
+    eq(await scanHeaders(db, { account: 'contact@brickandpane.co.uk', folder: 'INBOX' }, connect), { error: 'account' }); // contact@ is read whole anyway
+    const r = await scanHeaders(db, { account: 'kate@brickandpane.co.uk', folder: 'INBOX' }, connect);
+    eq(r, { stored: 2, next: null });
+    eq(db.t.mail_header_scan.map((x) => x.subject).sort(), ['Quote for 4 Elm Road', 'Sunday lunch']); // the known supplier is not listed
+    assert(!JSON.stringify(db.t).includes('SECRET BODY') && !JSON.stringify(db.t).includes('PRIVATE'), 'no body is kept');
+    assert(!log.some((c) => /BODY\.PEEK\[\]|BODY\[|STORE|COPY|MOVE|EXPUNGE|APPEND/i.test(c)), log.join(' | '));
+    eq(db.t.mail_messages.length, 0);
   } finally { Deno.env.get = get; }
 });

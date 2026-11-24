@@ -302,7 +302,7 @@ async function detail(id) {
 
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
-  bindMail(app);
+  bindMail(app, id);
   $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
