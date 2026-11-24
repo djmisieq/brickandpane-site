@@ -750,6 +750,7 @@ body.app .list-btn{display:none}
 .mail-dir{color:var(--ink-2)}.mail-subj{font-weight:600;overflow-wrap:anywhere}.mail-when{grid-column:3;grid-row:1;white-space:nowrap}.mail-who{grid-column:2/4;overflow-wrap:anywhere}
 .mail-body{padding:0 var(--s-m) var(--s-m);display:grid;gap:var(--s-s)}.mail-body p{margin:0}
 .mail-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:28rem;overflow:auto;font-size:var(--step--1);border-top:1px solid var(--line);padding-top:var(--s-s)}
+.mail-keywords{display:grid;gap:var(--s-xs);border-top:1px solid var(--line);padding-top:var(--s-s)}.mail-keywords .btn{justify-self:start}
 .mail-files{display:flex;flex-wrap:wrap;gap:var(--s-xs);align-items:center}
 .mail-assign{display:flex;flex-wrap:wrap;gap:var(--s-xs);align-items:center}.mail-assign select{width:auto;max-width:100%;min-height:42px}
 .mail-side{display:grid;gap:var(--s-m);margin-top:var(--s-l)}@media (min-width:900px){.mail-side{grid-template-columns:1fr 1fr;align-items:start}}

@@ -525,6 +525,11 @@ test('mail: the client’s email shows on the project, the rest waits in Email; 
   await expect(panel).not.toContainText('Offer for frames');
   await panel.locator('details.mail', { hasText: 'threshold detail' }).first().locator('summary').click();
   await expect(panel).toContainText('Could the threshold be flush');
+  // A site name in the subject routes mail too (one client, several sites).
+  await page.locator('#mk-word').fill('Avon Run');
+  await page.locator('#mk-word').press('Enter');
+  await expect(page.locator('.toast').last()).toContainText('Site name added.');
+  await expect(page.locator('[data-mail-keywords]')).toContainText('Avon Run');
 
   // The supplier matches no project: it waits in Email until the team adds its domain to the project.
   await page.goto('/admin.html#/mail');

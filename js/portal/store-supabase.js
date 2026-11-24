@@ -183,6 +183,9 @@ export const store = {
   async listMailContacts() { return ok(await sb.from('mail_contacts').select('*').order('match')); },
   async addMailContact({ match, kind, label, project_id }) { ok(await sb.from('mail_contacts').insert({ match, kind, label, project_id })); emit(); },
   async deleteMailContact(id) { ok(await sb.from('mail_contacts').delete().eq('id', id)); emit(); },
+  async listMailKeywords(pid) { return ok(await sb.from('mail_keywords').select('id, keyword').eq('project_id', pid).order('keyword')); },
+  async addMailKeyword(pid, keyword) { ok(await sb.from('mail_keywords').insert({ project_id: pid, keyword })); emit(); },
+  async deleteMailKeyword(id) { ok(await sb.from('mail_keywords').delete().eq('id', id)); emit(); },
   async mailFileUrl(path) { return ok(await sb.storage.from('mail-files').createSignedUrl(path, 300))?.signedUrl; },
   async quotePdfUrl(path) { return ok(await sb.storage.from('quote-pdfs').createSignedUrl(path, 300))?.signedUrl; },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).

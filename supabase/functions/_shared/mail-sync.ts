@@ -156,3 +156,41 @@ export async function syncMail(supabase: Db, connect: (host: string) => Promise<
   }
   return counts;
 }
+
+// One-off review (migration 0037): HEADERS ONLY of chris@ / kate@ mail with people the CRM does not know, written to
+// the staff-only table mail_header_scan, never returned to the caller. Called page by page: { account, folder, after }
+// → { next } (the last UID looked at, or null at the end). The body of these mails is never fetched.
+const SCAN_PAGE = 300;
+export async function scanHeaders(supabase: Db, req: { account: string; folder: string; after?: number }, connect: (host: string) => Promise<Imap> = (h) => Imap.connect(h)) {
+  const { data: a } = await supabase.from('mail_accounts').select('*').eq('address', req.account).maybeSingle();
+  if (!a || a.mode !== 'known' || !(a.folders as string[]).includes(req.folder)) return { error: 'account' };
+  const pass = Deno.env.get(secretName(a.address));
+  if (!pass) return { error: 'no password' };
+  const known = await loadKnown(supabase);
+  const imap = await connect(HOST);
+  try {
+    await imap.login(a.address, pass);
+    await imap.examine(req.folder);
+    const after = Number(req.after) || 0;
+    const uids = (await imap.search(`SINCE ${imapDate(new Date(a.since))}`)).filter((u) => u > after).slice(0, SCAN_PAGE);
+    let stored = 0;
+    for (let i = 0; i < uids.length; i += 100) {
+      const heads = await imap.fetch(uids.slice(i, i + 100), 'BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE)]');
+      const rows = [];
+      for (const h of heads) {
+        if (!h.data) continue;
+        const p = await PostalMime.parse(h.data);
+        const from = flat(p.from as Addr)[0] ?? { address: '', name: '' };
+        const to = [...flat(p.to as Addr[]), ...flat(p.cc as Addr[])].map((x) => x.address);
+        if (isKnown(known, [from.address, ...to])) continue; // already in the CRM
+        rows.push({ account: a.address, folder: req.folder, uid: h.uid, from_addr: from.address, from_name: from.name.slice(0, 200), to_addrs: to.slice(0, 50), subject: (p.subject ?? '').slice(0, 500), sent_at: p.date && !isNaN(Date.parse(p.date)) ? new Date(p.date).toISOString() : null });
+      }
+      if (rows.length) {
+        const up = await supabase.from('mail_header_scan').upsert(rows);
+        if (up.error) throw new Error(`scan: ${up.error.message}`);
+        stored += rows.length;
+      }
+    }
+    return { stored, next: uids.length === SCAN_PAGE ? uids[uids.length - 1] : null };
+  } finally { await imap.logout(); }
+}

@@ -647,6 +647,12 @@ const PL = {
   "Contact added.": "Dodano kontakt.",
   "That contact is already there.": "Ten kontakt już jest.",
   "Client": "Klient",
+  "Site names: mail with one of these in its subject shows here, e.g. “Avon Run” when a client has several sites.": "Nazwy obiektu: mail z jedną z nich w temacie pokaże się tutaj, np. „Avon Run”, gdy klient ma kilka obiektów.",
+  "Site name in the subject": "Nazwa obiektu w temacie",
+  "Add site name": "Dodaj nazwę obiektu",
+  "Enter at least 3 letters of the site name.": "Wpisz co najmniej 3 litery nazwy obiektu.",
+  "Site name added.": "Dodano nazwę obiektu.",
+  "That keyword is already there.": "Ta nazwa już jest.",
 };
 
 export const tr = (s, vars) => {
