@@ -270,6 +270,23 @@ async function enquiries() {
   }));
 }
 
+// Which side panels of the project card are open; a live redraw keeps them as the user left them.
+const openFolds = new Set();
+const keyNumbers = (p, d, { margin }) => {
+  const m = margin || {};
+  const sale = m.sale_gbp ?? d.internal?.value_gbp;
+  const inStage = Math.floor((Date.now() - new Date(p.stage_changed_at).getTime()) / 86400e3);
+  const due = isOverdue(p) ? `<strong class="kn-late">${esc(tr('Overdue {date}', { date: fmtDay(p.due_at) }))}</strong>` : p.due_at ? esc(fmtDay(p.due_at)) : '—';
+  const item = (label, value) => `<div><dt>${tr(label)}</dt><dd>${value}</dd></div>`;
+  return `<dl class="key-numbers">
+    ${item('Stage', `${stageBadge(p.stage, 'staff')} <span class="note">${esc(tr('{n} d', { n: inStage }))}</span>`)}
+    ${item('Due', due)}
+    ${item('Value', sale == null || sale === '' ? '—' : esc(fmtMoney(sale)))}
+    ${item('Margin', m.margin_gbp == null ? '—' : !Number(m.cost_gbp) ? `<span class="note">${tr('no costs entered')}</span>` : `${esc(fmtMoney(m.margin_gbp))}${m.margin_pct == null ? '' : ` (${esc(String(m.margin_pct))}%)`}`)}
+    ${item('Account manager', esc(p.assignee?.full_name || tr('Unassigned')))}
+  </dl>`;
+};
+
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
   const [d, staff, costs, mail] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id)]);
@@ -283,6 +300,7 @@ async function detail(id) {
       <div class="detail-head">
         <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${headClient(p, d.invites)}</p></div>
       </div>
+      ${keyNumbers(p, d, costs)}
       <div class="crm-grid">
         <div class="crm-main">
           ${nowCard(p, 'staff')}
@@ -309,33 +327,33 @@ async function detail(id) {
             <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
           </form>`}
 
-          <form class="ctl" data-dates>
-            <h2 class="panel-h">${tr('Delivery & fitting')}</h2>
+          <details class="ctl fold" data-fold="dates" ${openFolds.has('dates') ? 'open' : ''}><summary class="panel-h">${tr('Delivery & fitting')}</summary>
+          <form class="fold-body" data-dates>
             <div class="field-row">
               <div class="field"><label for="ctl-del">${tr('Delivery')}</label><input id="ctl-del" name="delivery" type="date" value="${p.delivery_at ? p.delivery_at.slice(0, 10) : ''}"></div>
               <div class="field"><label for="ctl-ins">${tr('Fitting')}</label><input id="ctl-ins" name="install" type="date" value="${p.install_at ? p.install_at.slice(0, 10) : ''}"></div>
             </div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save & notify client')}</button>
-          </form>
+          </form></details>
 
-          <form class="ctl" data-payment>
-            <h2 class="panel-h">${tr('Payment schedule')}</h2>
+          <details class="ctl fold" data-fold="payment" ${openFolds.has('payment') ? 'open' : ''}><summary class="panel-h">${tr('Payment schedule')}</summary>
+          <form class="fold-body" data-payment>
             <div class="field"><label for="pay-label">${tr('Stage')}</label><input id="pay-label" name="label" placeholder="${tr('e.g. Deposit')}" required></div>
             <div class="field-row">
               <div class="field"><label for="pay-amt">${tr('Amount (£)')}</label><input id="pay-amt" name="amount" type="number" min="0" step="1" required></div>
               <div class="field"><label for="pay-due">${tr('Due')}</label><input id="pay-due" name="due" type="date"></div>
             </div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Add payment')}</button>
-          </form>
+          </form></details>
 
-          <form class="ctl" data-assign>
-            <h2 class="panel-h">${tr('Account manager')}</h2>
+          <details class="ctl fold" data-fold="assign" ${openFolds.has('assign') ? 'open' : ''}><summary class="panel-h">${`${tr('Account manager')}: ${esc(p.assignee?.full_name || tr('Unassigned'))}`}</summary>
+          <form class="fold-body" data-assign>
             <div class="field"><label for="ctl-owner" class="visually-hidden">${tr('Account manager')}</label><select id="ctl-owner" name="assignee_id"><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save owner')}</button>
-          </form>
+          </form></details>
 
-          <form class="ctl" data-doc>
-            <h2 class="panel-h">${tr('Share a document')}</h2>
+          <details class="ctl fold" data-fold="doc" ${openFolds.has('doc') ? 'open' : ''}><summary class="panel-h">${tr('Share a document')}</summary>
+          <form class="fold-body" data-doc>
             <div class="field"><label for="ctl-file">${tr('File')}</label><input id="ctl-file" name="file" type="file" required></div>
             <div class="field-row">
               <div class="field"><label for="ctl-kind">${tr('Type')}</label><select id="ctl-kind" name="kind">${Object.entries(DOC_KINDS).filter(([k]) => k !== 'client_upload').map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select></div>
@@ -346,19 +364,19 @@ async function detail(id) {
             <label class="consent"><input type="checkbox" name="approval"> <span>${tr('Ask the client to approve')}</span></label>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client')}</span></label>
             <button class="btn btn-sm" type="submit">${tr('Upload & notify')}</button>
-          </form>
+          </form></details>
 
-          <form class="ctl" data-internal>
-            <h2 class="panel-h">${tr('Commercial')} <span class="tag">${tr('staff only')}</span></h2>
+          <details class="ctl fold" data-fold="internal" ${openFolds.has('internal') ? 'open' : ''}><summary class="panel-h">${`${tr('Commercial')} <span class="tag">${tr('staff only')}</span>`}</summary>
+          <form class="fold-body" data-internal>
             <div class="field-row">
               <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
               <div class="field"><label for="ctl-prob">${tr('Probability (%)')}</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
             </div>
             <div class="field"><label for="ctl-notes">${tr('Notes')}</label><textarea id="ctl-notes" name="notes" rows="3">${esc(d.internal?.notes || '')}</textarea></div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
-          </form>
+          </form></details>
 
-          ${costsPanel(costs)}
+          <details class="ctl fold" data-fold="costs" ${openFolds.has('costs') ? 'open' : ''}><summary class="panel-h">${tr('Costs & margin')} <span class="tag">${tr('staff only')}</span></summary>${costsPanel(costs)}</details>
         </aside>
       </div>
     </div>`;
@@ -366,6 +384,7 @@ async function detail(id) {
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
   bindMail(app, id);
+  $$('[data-fold]', app).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openFolds.add(el.dataset.fold); else openFolds.delete(el.dataset.fold); }));
   $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;

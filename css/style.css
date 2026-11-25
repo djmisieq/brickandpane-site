@@ -1203,3 +1203,21 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .crm .board-tools>.seg{max-width:100%;overflow-x:auto}
 .crm .seg a{white-space:nowrap}
 @media (max-width:600px){.crm .today-stats{display:none}}
+
+/* Project card (audit K7): key numbers on top, side panels folded. */
+.key-numbers{display:flex;flex-wrap:wrap;gap:0;margin:0 0 var(--s-m);border:1px solid var(--line);background:var(--surface)}
+.key-numbers>div{padding:.6rem 1rem;min-width:120px}
+.key-numbers>div+div{border-left:1px solid var(--line)}
+.key-numbers dt{font-size:var(--step--2);color:var(--muted)}
+.key-numbers dd{margin:0;font-weight:600}
+.kn-late{color:var(--accent)}
+@media (max-width:600px){.key-numbers{display:grid;grid-template-columns:1fr 1fr}.key-numbers>div+div{border-left:0}.key-numbers>div{border-top:1px solid var(--line)}.key-numbers>div:first-child{grid-column:1/-1;border-top:0}}
+.fold{padding:0;gap:0}
+.fold>summary{padding:var(--s-s) var(--s-m);cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin:0}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"+";font-family:var(--mono);color:var(--muted)}
+.fold[open]>summary::after{content:"−"}
+.fold-body{display:grid;gap:var(--s-s);padding:0 var(--s-m) var(--s-m)}
+.fold>.ctl{border:0;padding:0 var(--s-m) var(--s-m)}
+.fold>.ctl>.panel-h:first-child{display:none}
+.crm .court-you{color:var(--ink-2)}
