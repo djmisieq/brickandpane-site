@@ -729,6 +729,38 @@ test('quote builder: our cost comes from a supplier quote on the project, the pr
   await expect(page.locator('.offer')).not.toContainText('Frames Ltd');
 });
 
+test('quote builder: an extra is a line in the total, an option is priced beside it; our cost stays off the print', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const before = await page.locator('.offer .of-totals').first().innerText();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  const box = page.locator('#q-extras');
+  await box.locator('[data-act="add-x"][data-v="extra"]').click();
+  const extra = box.locator('[data-xid]').first();
+  await extra.locator('[data-b$=":label"]').fill('Scaffolding, two weeks');
+  await extra.locator('[data-b$=":amount"]').fill('850');
+  await extra.locator('[data-b$=":cost"]').fill('600');
+  await box.locator('[data-act="add-x"][data-v="option"]').click();
+  const option = box.locator('[data-xid]').nth(1);
+  await expect(option.locator('[data-act="x-kind"][data-v="option"]')).toHaveAttribute('aria-pressed', 'true');
+  await option.locator('[data-b$=":label"]').fill('Triple glazing on all items');
+  await option.locator('[data-b$=":amount"]').fill('1200');
+  await expect(page.locator('#q-sum')).toContainText('Extras');
+  await expect(page.locator('#q-sum')).toContainText('£850.00');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const totalsBox = page.locator('.offer .of-totals').first();
+  await expect(totalsBox).toContainText('Scaffolding, two weeks');
+  await expect(totalsBox).not.toContainText('Triple glazing');
+  expect(await totalsBox.innerText()).not.toEqual(before);
+  const opts = page.locator('.offer [data-options]');
+  await expect(opts).toContainText('Options, not in the total');
+  await expect(opts).toContainText('Triple glazing on all items');
+  await expect(opts).toContainText('+ £1,200.00');
+  await expect(page.locator('.offer')).not.toContainText('£600');
+});
+
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');
