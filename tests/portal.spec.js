@@ -613,3 +613,44 @@ test('a quote started on a project goes out without a HubSpot deal: PDF in Docum
   await page.locator('[data-tab="documents"]').click();
   await expect(page.locator('#app')).toContainText(`Quotation ${ref}`);
 });
+
+test('quote builder: our cost per line shows the margin live and never reaches the printed quote', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await expect(page.locator('#q-margin')).toContainText('Type our cost');
+  const first = page.locator('[data-pid]').first();
+  await first.locator('[data-b$=":unitCost"]').fill('6000');
+  await expect(page.locator('#q-margin')).toContainText('£6,000.00'); // our cost; the sale stays as priced
+  await expect(page.locator('#q-margin .q-margin-v')).toContainText('%');
+  // Copying a line keeps its price and cost.
+  const before = await page.locator('[data-pid]').count();
+  await first.locator('[data-act="copy-item"]').click();
+  await expect(page.locator('[data-pid]')).toHaveCount(before + 1);
+  await expect(page.locator('[data-pid]').nth(1).locator('[data-b$=":unitCost"]')).toHaveValue('6000');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer')).not.toContainText('£6,000'); // our cost is not printed (the total may contain 26,000)
+});
+
+test('quote builder: freight cost and a reserve lower the margin, markup shows beside it; item codes print', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  const first = page.locator('[data-pid]').first();
+  await first.locator('[data-b$=":ref"]').fill('D01');
+  await first.locator('[data-b$=":unitCost"]').fill('6000');
+  await page.locator('[data-act="step"][data-v="terms"]').click();
+  await page.locator('[data-b="q:deliveryCost"]').fill('500');
+  await page.locator('[data-b="q:contingencyPct"]').fill('10');
+  const box = page.locator('#q-margin');
+  await expect(box).toContainText('£6,500.00'); // our cost: line + freight
+  await expect(box).toContainText('Reserve 10%');
+  await expect(box).toContainText('£650.00');
+  await expect(box).toContainText('Markup on cost');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer .of-no').first()).toHaveText('D01');
+  await expect(page.locator('.offer')).not.toContainText('Reserve');
+});

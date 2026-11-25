@@ -108,7 +108,7 @@ const itemTitle = (p, lang) => p.system.trim() || named(KINDS, p.kind, lang);
 const stageName = (s, lang) => (s.label.trim() ? s.label.trim() : s.key === 'custom' ? (lang === 'pl' ? 'Etap' : 'Stage') : PAY[s.key][lang === 'pl' ? 'pl' : 'en']);
 const stageWhen = (s, lang) => (s.trigger.trim() ? s.trigger.trim() : s.key === 'custom' ? '' : lang === 'pl' ? PAY[s.key].triggerPl : PAY[s.key].triggerEn);
 
-const newProduct = () => ({ id: uid(), kind: 'casement', frame: 'aluminium', location: '', system: '', material: '', opening: '', finish: '', glazing: '', bars: '', hardware: '', vents: '', cill: '', performance: '', security: '', widthMm: '', heightMm: '', drawingRef: '', qty: 1, unitPrice: 0, notes: '', showSpec: false });
+const newProduct = () => ({ id: uid(), kind: 'casement', frame: 'aluminium', location: '', system: '', material: '', opening: '', finish: '', glazing: '', bars: '', hardware: '', vents: '', cill: '', performance: '', security: '', widthMm: '', heightMm: '', drawingRef: '', ref: '', qty: 1, unitPrice: 0, unitCost: 0, notes: '', showSpec: false });
 const newInstallLines = () => INSTALL_KEYS.map((key) => ({ key, included: key === 'windows', detail: '', amount: 0 }));
 const newPayments = () => [
   { id: uid(), key: 'deposit', percent: 40, label: '', trigger: '' },
@@ -128,7 +128,7 @@ function newQuote(all, f) {
     audience: 'home', preparedBy: f.preparedBy, leadTime: '', guarantee: '', projectNotes: '', internalNote: '',
     discount: 0, surveyDelivery: 0, vatRate: f.vatRegistered ? 20 : 0, products: [], installMode: 'none',
     installLines: newInstallLines(), siteNotes: '', exclusions: '', programme: '', certification: '',
-    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', updatedAt: Date.now(),
+    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', installCost: 0, deliveryCost: 0, contingencyPct: 0, updatedAt: Date.now(),
   };
 }
 function sampleQuote(all, f) {
@@ -154,6 +154,17 @@ function totals(q) {
   const net = r2(productNet - discount + survey + (q.installMode === 'included' ? installNet : 0));
   const vat = r2((net * q.vatRate) / 100), installVat = r2((installNet * q.vatRate) / 100);
   return { productNet, discount, survey, installNet, net, vat, gross: r2(net + vat), installVat, installGross: r2(installNet + installVat), units: q.products.reduce((s, p) => s + (Number(p.qty) || 0), 0) };
+}
+// Margin while pricing (audit K3): the team's own costs per line and for installation, never printed. Installation
+// priced separately is still our sale, so it counts here even though it is outside the quote's main total.
+function marginOf(q) {
+  const tot = totals(q);
+  const sale = r2(tot.net + (q.installMode === 'separate' ? tot.installNet : 0));
+  // Survey and delivery are sold (in the net total) and also cost us: freight from the factory, racks, the survey.
+  const base = r2(q.products.reduce((s, p) => s + r2(p.qty * (Number(p.unitCost) || 0)), 0) + (q.installMode === 'none' ? 0 : Number(q.installCost) || 0) + (Number(q.deliveryCost) || 0));
+  // A reserve for what moves after the survey, the exchange rate on a factory order, transport damage: cost, never shown.
+  const reserve = r2((base * (Number(q.contingencyPct) || 0)) / 100), cost = r2(base + reserve);
+  return { sale, base, reserve, cost, margin: r2(sale - cost), pct: sale > 0 ? Math.round(((sale - cost) / sale) * 1000) / 10 : null, markup: cost > 0 ? Math.round(((sale - cost) / cost) * 1000) / 10 : null };
 }
 const paySum = (q) => r2(q.payments.reduce((s, p) => s + (Number(p.percent) || 0), 0));
 const payOk = (q) => Math.abs(paySum(q) - 100) < 0.05;
@@ -192,7 +203,7 @@ function normProduct(p) {
   const kind = KINDS.some((x) => x.id === k) ? k : { stable: 'side', aluclad: 'casement', screen: 'loft', other: 'fixed' }[k] ?? 'casement';
   let frame = FRAMES.some((f) => f.id === p.frame) ? p.frame : undefined;
   if (!frame) { const m = String(p.material ?? ''); frame = k === 'aluclad' ? 'timber-alu' : /pvc|upvc/i.test(m) ? 'pvc' : /aluminium|aluminum/i.test(m) ? 'aluminium' : 'timber'; }
-  return { ...newProduct(), ...p, id: p.id || uid(), kind, frame };
+  return { ...newProduct(), ...p, id: p.id || uid(), kind, frame, ref: String(p.ref ?? ''), unitCost: Number(p.unitCost) || 0 };
 }
 function normQuote(raw, f) {
   if (!raw || typeof raw.id !== 'string') return null;
@@ -205,7 +216,9 @@ function normQuote(raw, f) {
     installLines: INSTALL_KEYS.map((key) => { const l = lines.get(key); return { key, included: !!l?.included, detail: l?.detail ?? '', amount: r2(l?.amount ?? 0) }; }),
     payments: Array.isArray(raw.payments) && raw.payments.length ? raw.payments.map((s) => ({ id: s.id || uid(), key: s.key || 'custom', percent: Number(s.percent) || 0, label: s.label || '', trigger: s.trigger || '' })) : base.payments,
     docLang: raw.docLang === 'pl' ? 'pl' : 'en',
-    vatRate: (f.vatRegistered && Number(raw.vatRate)) || 0,
+    // Each quote keeps its own rate (audit 24.11.2026): switching VAT registration on one quote must not rewrite the others.
+    vatRate: Number(raw.vatRate) || 0,
+    installCost: Number(raw.installCost) || 0, deliveryCost: Number(raw.deliveryCost) || 0, contingencyPct: Number(raw.contingencyPct) || 0,
     installMode: ['included', 'separate'].includes(raw.installMode) ? raw.installMode : 'none',
     updatedAt: Number(raw.updatedAt) || Date.now(),
   };
@@ -234,7 +247,7 @@ const statusName = (s) => t(STATUS[s]?.en ?? s, STATUS[s]?.pl ?? s);
 const statusTag = (q) => { const m = metaOf(q), last = sendsOf(q)[0]; return `<span class="tag q-st q-st-${esc(m.status)}">${esc(statusName(m.status))}${m.status !== 'draft' && last ? ` · rev ${esc(last.revision)}` : ''}</span>`; };
 // What the client sees, so the CRM can tell a changed quote from the one sent: no timestamps, private note or UI flags.
 const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
-const content = (q) => { const { updatedAt, revision, internalNote, projectId, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, ...p }) => { void showSpec; return p; }) }); };
+const content = (q) => { const { updatedAt, revision, internalNote, projectId, installCost, deliveryCost, contingencyPct, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; void installCost; void deliveryCost; void contingencyPct; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, unitCost, ref, ...p }) => { void showSpec; void unitCost; return ref ? { ...p, ref } : p; }) }); }; // an empty code is the same as none (older sends had no code)
 export const nextRevision = (r) => {
   const s = String(r ?? '').trim();
   if (/^\d+$/.test(s)) return String(Number(s) + 1).padStart(Math.max(2, s.length), '0');
@@ -290,7 +303,7 @@ export async function newQuoteFor(d) {
     customerName: c?.company || c?.full_name || '', email: c?.email || inv?.email || '', phone: c?.phone || '',
     siteAddress: p.location || '', sameAddress: !p.location,
     audience: c?.account_type === 'homeowner' ? 'home' : c?.account_type === 'developer' ? 'developer' : 'architect',
-    products: (d.openings || []).map((o) => ({ ...newProduct(), kind: KIND_OF[o.system] || 'casement', location: o.ref || '', widthMm: o.width_mm ? String(o.width_mm) : '', heightMm: o.height_mm ? String(o.height_mm) : '', qty: Number(o.qty) || 1, notes: o.notes || '' })),
+    products: (d.openings || []).map((o) => ({ ...newProduct(), kind: KIND_OF[o.system] || 'casement', ref: o.ref || '', widthMm: o.width_mm ? String(o.width_mm) : '', heightMm: o.height_mm ? String(o.height_mm) : '', qty: Number(o.qty) || 1, notes: o.notes || '' })),
   });
   await store.saveQuote(q);
   quotes.unshift(q);
@@ -413,7 +426,7 @@ function estimate(q) {
     const spec = specRows(p, L);
     const meta = [named(FRAMES, p.frame, L), p.system.trim() ? named(KINDS, p.kind, L) : '', size(p.widthMm, p.heightMm, L), p.drawingRef.trim() ? `${w.drawing} ${p.drawingRef.trim()}` : ''].filter(Boolean);
     return `<div class="of-item of-keep">
-      <p class="of-no">${String(i + 1).padStart(2, '0')}</p>
+      <p class="of-no">${esc(p.ref.trim() || String(i + 1).padStart(2, '0'))}</p>
       <div>
         ${p.location.trim() ? `<p class="of-muted of-small">${esc(p.location.trim())}</p>` : ''}
         <h3>${esc(itemTitle(p, L))}</h3>
@@ -654,9 +667,11 @@ function stepProducts(q) {
           <div class="q-icons">
             <button type="button" class="q-icon" data-act="up" aria-label="${t('Move up', 'Wyżej')}" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
             <button type="button" class="q-icon" data-act="down" aria-label="${t('Move down', 'Niżej')}" ${i === q.products.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
+            <button type="button" class="q-icon" data-act="copy-item" aria-label="${t('Copy item', 'Kopiuj pozycję')}" title="${t('Copy item', 'Kopiuj pozycję')}">⧉</button>
             <button type="button" class="q-icon" data-act="del-item" aria-label="${t('Remove item', 'Usuń pozycję')}">${ICON.bin}</button>
           </div></div>
         <div class="q-grid">
+          ${field(t('Code', 'Kod'), text(`p:${p.id}:ref`, p.ref, `W${String(i + 1).padStart(2, '0')}`), t('As on the drawings and the schedule: W01, D01, RL01.', 'Jak na rysunkach i w zestawieniu: W01, D01, RL01.'), 'q-ref')}
           ${field(t('Where', 'Gdzie'), text(`p:${p.id}:location`, p.location, pl ? 'Elewacja frontowa' : 'Front elevation'))}
           ${field(t('Material', 'Materiał'), `<select data-b="p:${esc(p.id)}:frame">${opts(FRAMES, p.frame)}</select>`)}
           ${field(t('Type', 'Rodzaj'), `<select data-b="p:${esc(p.id)}:kind">${GROUPS.map((g) => `<optgroup label="${esc(pl ? g.pl : g.en)}">${opts(KINDS.filter((k) => k.group === g.id), p.kind)}</optgroup>`).join('')}</select>`)}
@@ -665,6 +680,7 @@ function stepProducts(q) {
           ${field(t('Height, mm', 'Wysokość, mm'), text(`p:${p.id}:heightMm`, p.heightMm, '1450'))}
           ${field(t('Quantity', 'Ilość'), qty(`p:${p.id}:qty`, p.qty))}
           ${field(t('Price each, net', 'Cena za sztukę, netto'), num(`p:${p.id}:unitPrice`, p.unitPrice, '0.00'))}
+          ${field(t('Our cost each, net', 'Nasz koszt za sztukę, netto'), num(`p:${p.id}:unitCost`, p.unitCost, '0.00'), t('Only for the margin: never on the quote.', 'Tylko do marży: nie trafia do oferty.'), 'q-cost')}
         </div>
         <button type="button" class="btn btn-sm btn-ghost q-gap" data-act="spec" aria-expanded="${p.showSpec}">${p.showSpec ? t('Hide the details', 'Zwiń szczegóły') : t('Add technical details', 'Dodaj szczegóły techniczne')}${filled && !p.showSpec ? ` · ${filled}` : ''}</button>
         ${p.showSpec ? `<div class="q-grid q-gap">
@@ -692,6 +708,7 @@ function stepInstall(q) {
           ${field(t('Detail', 'Doprecyzowanie'), text(`il:${l.key}:detail`, l.detail), t('If blank, the quote keeps the short sentence beside it.', 'Jeśli puste, w ofercie zostaje krótkie zdanie obok.'))}
         </div>` : ''}
       </div>`; }).join('')}
+      ${field(t('Our installation cost, net', 'Nasz koszt montażu, netto'), num('q:installCost', q.installCost, '0.00'), t('Fitters, transport, access: only for the margin, never on the quote.', 'Monterzy, transport, dostęp: tylko do marży, nie trafia do oferty.'), 'q-cost')}
       ${field(t('What the client needs to prepare', 'Co klient ma przygotować'), area('q:siteNotes', q.siteNotes, '', 2))}
       ${field(t('Further exclusions', 'Dodatkowe wyłączenia'), area('q:exclusions', q.exclusions, '', 2), t('The standard exclusion — decoration and structural work — is added on its own.', 'Standardowe wyłączenie — malowanie i konstrukcja — dopisze się samo.'))}
       <div class="q-grid">
@@ -711,8 +728,10 @@ function stepTerms(q) {
     <div class="q-grid">
       ${field(t('Discount, net £', 'Rabat, netto £'), num('q:discount', q.discount))}
       ${field(t('Survey and delivery, net £', 'Pomiar i dostawa, netto £'), num('q:surveyDelivery', q.surveyDelivery))}
-      <div class="wide q-box">${`<label class="q-check"><input type="checkbox" data-act="vat" ${firm.vatRegistered ? 'checked' : ''}><span><strong>${t('VAT registered', 'Płatnik VAT')}</strong><small>${t('Off: the quote shows no VAT and never says “including VAT”. The amount is the amount to pay.', 'Wyłączone: w ofercie nie ma VAT i nie pisze „razem z VAT”. Kwota jest kwotą do zapłaty.')}</small></span></label>`}</div>
-      ${firm.vatRegistered ? field(t('VAT, %', 'VAT, %'), num('q:vatRate', q.vatRate)) : ''}
+      ${field(t('Our survey and freight cost, net £', 'Nasz koszt pomiaru i transportu, netto £'), num('q:deliveryCost', q.deliveryCost), t('Freight from the factory, racks, the survey visit: only for the margin.', 'Transport z fabryki, stojaki, wizyta pomiarowa: tylko do marży.'), 'q-cost')}
+      ${field(t('Reserve on our cost, %', 'Rezerwa na koszt, %'), num('q:contingencyPct', q.contingencyPct), t('Changes after the survey, the rate on a factory order, damage. Never on the quote.', 'Zmiany po pomiarze, kurs przy zamówieniu w fabryce, uszkodzenia. Nie trafia do oferty.'), 'q-cost')}
+      <div class="wide q-box">${`<label class="q-check"><input type="checkbox" data-act="vat" ${q.vatRate > 0 ? 'checked' : ''}><span><strong>${t('VAT registered', 'Płatnik VAT')}</strong><small>${t('Off: the quote shows no VAT and never says “including VAT”. The amount is the amount to pay.', 'Wyłączone: w ofercie nie ma VAT i nie pisze „razem z VAT”. Kwota jest kwotą do zapłaty.')}</small></span></label>`}</div>
+      ${q.vatRate > 0 ? field(t('VAT, %', 'VAT, %'), num('q:vatRate', q.vatRate)) : ''}
       ${field(pl ? 'Czas realizacji' : 'Lead time', text('q:leadTime', q.leadTime, pl ? '10–12 tygodni od podpisanych rysunków' : '10–12 weeks from the drawings you sign'))}
       ${field(pl ? 'Gwarancja' : 'Guarantee', text('q:guarantee', q.guarantee, pl ? 'Według systemu, z instrukcją pielęgnacji' : 'As stated for the system, with the care notes'), '', 'wide')}
       ${field(pl ? 'Uwaga widoczna w ofercie' : 'Note on the estimate', area('q:projectNotes', q.projectNotes, '', 2), '', 'wide')}
@@ -757,7 +776,19 @@ function summary(q) {
       ${q.vatRate > 0 ? li(t('Net', 'Netto'), money(tot.net, L)) : ''}
     </ul>
     ${payOk(q) ? '' : `<p class="q-warn">${t(`Payments: ${paySum(q)}%, not 100%.`, `Płatności: ${paySum(q)}%, a nie 100%.`)}</p>`}
+    ${marginBox(q)}
     ${q.internalNote.trim() ? `<p class="q-sum-note">${esc(q.internalNote.trim())}</p>` : ''}`;
+}
+
+// The margin box beside the steps: staff only (the aside is never printed).
+function marginBox(q) {
+  const m = marginOf(q);
+  if (!m.base) return `<div class="q-margin" id="q-margin"><p class="q-sum-k">${t('MARGIN', 'MARŻA')}</p><p class="hint">${t('Type our cost on each line to see the margin here.', 'Wpisz nasz koszt przy pozycjach, a marża pokaże się tutaj.')}</p></div>`;
+  const low = m.pct != null && m.pct < 20;
+  return `<div class="q-margin${low ? ' is-low' : ''}" id="q-margin"><p class="q-sum-k">${t('MARGIN', 'MARŻA')}</p>
+    <p class="q-margin-v">${esc(money(m.margin, 'en'))}${m.pct == null ? '' : ` <span>${esc(String(m.pct))}%</span>`}</p>
+    <ul class="q-sum-list"><li><span>${t('Sale, net', 'Sprzedaż, netto')}</span><span>${esc(money(m.sale, 'en'))}</span></li><li><span>${t('Our cost', 'Nasz koszt')}</span><span>${esc(money(m.base, 'en'))}</span></li>${m.reserve ? `<li><span>${t('Reserve', 'Rezerwa')} ${esc(String(q.contingencyPct))}%</span><span>${esc(money(m.reserve, 'en'))}</span></li>` : ''}${m.markup == null ? '' : `<li><span>${t('Markup on cost', 'Narzut na koszt')}</span><span>${esc(String(m.markup))}%</span></li>`}</ul>
+    ${low ? `<p class="q-warn">${t('Below 20%.', 'Poniżej 20%.')}</p>` : ''}</div>`;
 }
 
 // ---------- pages ----------
@@ -873,6 +904,7 @@ async function act(btn) {
     case 'mode': q.installMode = v; break;
     case 'valid30': q.validUntil = addDays(q.date || today(), 30); break;
     case 'add-item': q.products.push(newProduct()); break;
+    case 'copy-item': { const i = q.products.findIndex((p) => p.id === pid); if (i >= 0) q.products.splice(i + 1, 0, { ...JSON.parse(JSON.stringify(q.products[i])), id: uid(), ref: '' }); break; }
     case 'del-item': q.products = q.products.filter((p) => p.id !== pid); break;
     case 'up': case 'down': {
       const from = q.products.findIndex((p) => p.id === pid), to = from + (a === 'up' ? -1 : 1);
