@@ -133,7 +133,8 @@ export const store = {
       sb.from('quote_sends').select('id, quote_id, project_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot, sent_on, created_at, hubspot_note_id, hubspot_error, hubspot_stage_moved, hubspot_attempts').order('created_at', { ascending: false }).limit(1000),
     ]);
     if (m.error || s.error) return { hubspot: false, meta: [], sends: [] };
-    return { hubspot: true, meta: m.data || [], sends: s.data || [] };
+    // HubSpot is off (owner, 25.11.2026): quotes hang on a project and are sent from the CRM only.
+    return { hubspot: false, meta: m.data || [], sends: s.data || [] };
   },
   async linkQuoteDeal(id, deal) {
     ok(await sb.from('quotes').update({ hubspot_deal_id: deal?.id ?? null, hubspot_deal_name: deal?.name ?? null, hubspot_dealstage: deal?.stage ?? null }).eq('id', id));

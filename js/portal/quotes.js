@@ -557,7 +557,7 @@ function dealFilesBlock(m) {
 function dealPanel(q) {
   const m = metaOf(q), sent = sendsOf(q).length > 0;
   const top = `<div class="q-subrow"><h3 class="q-sub">${t('HubSpot deal', 'Deal w HubSpocie')}</h3>${statusTag(q)}</div>`;
-  if (!hub.on) return `<section class="q-box q-deal" id="q-deal">${top}<p class="hint">${t('The HubSpot link is not switched on yet (migration 0026). You can still prepare and print the quote.', 'Połączenie z HubSpotem nie jest jeszcze włączone (migracja 0026). Ofertę dalej można przygotować i wydrukować.')}</p></section>`;
+  if (!hub.on) return `<section class="q-box q-deal" id="q-deal">${top}<p class="hint">${t('HubSpot is switched off. Link the quote to a project in step 01: it is sent and tracked in the CRM.', 'HubSpot jest wyłączony. Połącz ofertę z projektem w kroku 01: wysyłka i śledzenie są w CRM.')}</p></section>`;
   if (m.hubspot_deal_id) {
     const info = deals.get(m.hubspot_deal_id), deal = info?.deal;
     const others = onDeal(m.hubspot_deal_id).filter((x) => x.id !== q.id);
