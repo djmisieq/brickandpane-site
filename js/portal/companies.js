@@ -8,18 +8,20 @@ import { tr } from './i18n.js';
 export const KINDS = { architect: 'Architect', contractor: 'Contractor', developer: 'Developer', supplier: 'Supplier', homeowner: 'Homeowner', other: 'Other' };
 export const ROLES = { client: 'Client', architect: 'Architect', contractor: 'Contractor', developer: 'Developer', supplier: 'Supplier', other: 'Other' };
 const friendly = (e) => (/companies_name_kind|already exists/.test(e.message) ? tr('A company with this name and kind already exists.') : tr(e.message));
-let kindFilter = 'all', textFilter = '';
+let kindFilter = 'all', textFilter = '', showCold = false; // the ~1000 companies of the cold campaign list (import 25.11.2026) are hidden until asked for
 
 export async function companiesView(app, nav) {
   document.title = `${tr('Companies')} | CRM`;
   const [list, people] = await Promise.all([store.listCompanies(), store.listPeople().catch(() => [])]);
   const q = textFilter.toLowerCase();
   const count = (id) => people.filter((p) => p.company_id === id).length;
-  const shown = list.filter((c) => (kindFilter === 'all' || c.kind === kindFilter) && (!q || [c.name, c.email, c.phone, c.website, c.address, ...people.filter((p) => p.company_id === c.id).map((p) => `${p.full_name} ${p.email}`)].join(' ').toLowerCase().includes(q)));
+  const cold = list.filter((c) => c.source === 'cold').length;
+  const shown = list.filter((c) => (showCold || c.source !== 'cold' || q) && (kindFilter === 'all' || c.kind === kindFilter) && (!q || [c.name, c.email, c.phone, c.website, c.address, ...people.filter((p) => p.company_id === c.id).map((p) => `${p.full_name} ${p.email}`)].join(' ').toLowerCase().includes(q)));
   app.innerHTML = `<div class="container-wide section-tight" id="companies">
     <div class="dash-head"><div><h1 class="app-h1">${tr('Companies')}</h1></div><div class="board-tools">${nav}</div></div>
     <div class="board-tools">
       <div class="seg" role="group" aria-label="${tr('Kind')}">${[['all', 'All'], ...Object.entries(KINDS)].map(([k, v]) => `<button type="button" data-kind="${k}" aria-pressed="${kindFilter === k}" class="${kindFilter === k ? 'is-on' : ''}">${esc(tr(v))}</button>`).join('')}</div>
+      ${cold ? `<button type="button" class="btn btn-sm btn-ghost" data-co-cold aria-pressed="${showCold}">${esc(showCold ? tr('Hide the cold campaign list') : tr('Show the cold campaign list ({n})', { n: cold }))}</button>` : ''}
       <label class="visually-hidden" for="co-q">${tr('Search companies')}</label><input id="co-q" type="search" placeholder="${tr('Search name, person, email')}" value="${esc(textFilter)}">
     </div>
     <form class="ctl co-new" data-co-new novalidate><h2 class="panel-h">${tr('Add a company')}</h2>
@@ -27,10 +29,11 @@ export async function companiesView(app, nav) {
       <div class="field"><label for="co-kind">${tr('Kind')}</label><select id="co-kind" name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${kindFilter === k ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div></div>
       <button class="btn btn-sm" type="submit">${tr('Add company')}</button></form>
     ${shown.length ? `<table class="dash-table co-table"><thead><tr><th scope="col">${tr('Company')}</th><th scope="col">${tr('Kind')}</th><th scope="col">${tr('People')}</th><th scope="col">${tr('Contact')}</th></tr></thead><tbody>
-      ${shown.map((c) => `<tr><th scope="row"><a href="#/company/${esc(c.id)}">${esc(c.name)}</a></th><td>${esc(tr(KINDS[c.kind] || c.kind))}</td><td>${count(c.id)}</td><td>${esc(c.email || c.phone || '')}</td></tr>`).join('')}</tbody></table>`
+      ${shown.map((c) => `<tr><th scope="row"><a href="#/company/${esc(c.id)}">${esc(c.name)}</a></th><td>${esc(tr(KINDS[c.kind] || c.kind))}${c.source === 'cold' ? ` <span class="tag">${tr('cold')}</span>` : ''}</td><td>${count(c.id)}</td><td>${esc(c.email || c.phone || '')}</td></tr>`).join('')}</tbody></table>`
       : `<p class="callout">${tr(list.length ? 'No company matches.' : 'No companies yet. Add the practices, contractors and suppliers you work with.')}</p>`}
   </div>`;
   $$('[data-kind]', app).forEach((b) => b.addEventListener('click', () => { kindFilter = b.dataset.kind; companiesView(app, nav); }));
+  $('[data-co-cold]', app)?.addEventListener('click', () => { showCold = !showCold; companiesView(app, nav); });
   $('#co-q', app).addEventListener('input', (e) => { textFilter = e.target.value; clearTimeout(companiesView.t); companiesView.t = setTimeout(() => { companiesView(app, nav).then(() => { const i = $('#co-q', app); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); });
   $('[data-co-new]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget, name = f.name.value.trim();
