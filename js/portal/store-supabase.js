@@ -119,7 +119,8 @@ export const store = {
     return ok(await sb.from('quotes').select('data').order('updated_at', { ascending: false }).limit(500)).map((r) => r.data);
   },
   async saveQuote(q) {
-    ok(await sb.from('quotes').upsert({ id: q.id, reference: q.reference, data: q, updated_at: new Date(q.updatedAt || Date.now()).toISOString() }));
+    // project_id only when the quote names one: never clear a link made on the server (0038 backfill).
+    ok(await sb.from('quotes').upsert({ id: q.id, reference: q.reference, data: q, updated_at: new Date(q.updatedAt || Date.now()).toISOString(), ...(q.projectId ? { project_id: q.projectId } : {}) }));
   },
   async deleteQuote(id) { ok(await sb.from('quotes').delete().eq('id', id)); },
   async getQuoteSettings() { return ok(await sb.from('quote_settings').select('data').maybeSingle())?.data || {}; },
@@ -128,8 +129,8 @@ export const store = {
   // the migration the Quotes tab works as before (hubspot: false).
   async quoteHub() {
     const [m, s] = await Promise.all([
-      sb.from('quotes').select('id, hubspot_deal_id, hubspot_deal_name, hubspot_dealstage, status, status_source, status_at').limit(500),
-      sb.from('quote_sends').select('id, quote_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot, sent_on, created_at, hubspot_note_id, hubspot_error, hubspot_stage_moved, hubspot_attempts').order('created_at', { ascending: false }).limit(1000),
+      sb.from('quotes').select('id, project_id, hubspot_deal_id, hubspot_deal_name, hubspot_dealstage, status, status_source, status_at').limit(500),
+      sb.from('quote_sends').select('id, quote_id, project_id, hubspot_deal_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot, sent_on, created_at, hubspot_note_id, hubspot_error, hubspot_stage_moved, hubspot_attempts').order('created_at', { ascending: false }).limit(1000),
     ]);
     if (m.error || s.error) return { hubspot: false, meta: [], sends: [] };
     return { hubspot: true, meta: m.data || [], sends: s.data || [] };
@@ -148,13 +149,15 @@ export const store = {
   },
   // Stores the PDF, records the send (the trigger marks the quote sent) and asks HubSpot right away; if that call
   // fails, the cron retries within 15 minutes.
-  async sendQuote({ quoteId, dealId, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
+  async sendQuote({ quoteId, dealId = null, projectId = null, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
     // The row's id is the database's to give: staff may insert only the columns granted in migration 0026,
     // so the PDF gets a name of its own instead of borrowing the id.
     const path = `${quoteId}/${crypto.randomUUID()}.pdf`;
     const name = file.name.slice(0, 200);
     ok(await sb.storage.from('quote-pdfs').upload(path, file, { contentType: 'application/pdf' }));
-    const row = ok(await sb.from('quote_sends').insert({ quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: path, pdf_name: name, snapshot, sent_on: sentOn }).select().single());
+    const row = ok(await sb.from('quote_sends').insert({ quote_id: quoteId, hubspot_deal_id: dealId, project_id: projectId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: path, pdf_name: name, snapshot, sent_on: sentOn }).select().single());
+    // Without a deal (0038) there is nothing to tell HubSpot.
+    if (!dealId) return { ...row, result: 'no deal' };
     let hub;
     try { hub = await this.hubspot('send', { send_id: row.id }); } catch (e) { hub = { result: 'error', hubspot_error: e.message }; }
     return { ...row, ...hub };

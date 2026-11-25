@@ -1221,3 +1221,8 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .fold>.ctl{border:0;padding:0 var(--s-m) var(--s-m)}
 .fold>.ctl>.panel-h:first-child{display:none}
 .crm .court-you{color:var(--ink-2)}
+/* Quotes on the project card (0038). */
+.pq-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s-s)}
+.pq-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.pq-list li{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.pq-total{margin-left:auto;font-weight:600}

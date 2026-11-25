@@ -296,7 +296,7 @@ export async function syncQuotes(supabase: Db) {
   const token = Deno.env.get('HUBSPOT_TOKEN');
   if (!token) return { skipped: 'no token' };
   const out = { sent: 0, failed: 0, deals: 0, updated: 0 };
-  const { data: pending } = await supabase.from('quote_sends').select('id').is('hubspot_note_id', null).lt('hubspot_attempts', 5)
+  const { data: pending } = await supabase.from('quote_sends').select('id').not('hubspot_deal_id', 'is', null).is('hubspot_note_id', null).lt('hubspot_attempts', 5)
     .gte('created_at', new Date(Date.now() - 7 * 864e5).toISOString()).lt('created_at', new Date(Date.now() - 2 * 60e3).toISOString()).order('created_at').limit(20);
   for (const p of pending ?? []) {
     const r = await processSend(supabase, p.id);

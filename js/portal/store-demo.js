@@ -192,7 +192,9 @@ export const store = {
   async listQuotes() { needStaff(load()); return [...qload().quotes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); },
   async saveQuote(q) {
     needStaff(load()); const d = qload(); const i = d.quotes.findIndex((x) => x.id === q.id);
-    if (i < 0) d.quotes.push(q); else d.quotes[i] = q; qsave(d);
+    if (i < 0) d.quotes.push(q); else d.quotes[i] = q;
+    if (q.projectId) { d.meta ||= {}; d.meta[q.id] = { status: 'draft', status_source: null, ...(d.meta[q.id] || {}), id: q.id, project_id: q.projectId }; }
+    qsave(d);
   },
   async deleteQuote(id) { needStaff(load()); const d = qload(); d.quotes = d.quotes.filter((x) => x.id !== id); qsave(d); },
   async getQuoteSettings() { needStaff(load()); return qload().firm || {}; },
@@ -217,17 +219,17 @@ export const store = {
     if (action === 'send') return { result: 'sent', hubspot_note_id: 'demo-note', hubspot_error: null };
     throw new Error('action');
   },
-  async sendQuote({ quoteId, dealId, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
+  async sendQuote({ quoteId, dealId = null, projectId = null, reference, revision, kind, total, vatRate, file, sentOn, snapshot }) {
     needStaff(load()); const d = qload(); d.sends ||= []; d.meta ||= {};
-    const row = { id: uid(), quote_id: quoteId, hubspot_deal_id: dealId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: '', pdf_name: file.name, snapshot, sent_on: sentOn, created_at: now(), hubspot_note_id: 'demo-note', hubspot_error: null, hubspot_stage_moved: false, hubspot_attempts: 1 };
+    const row = { id: uid(), quote_id: quoteId, hubspot_deal_id: dealId, project_id: projectId, reference, revision, kind, total, vat_rate: vatRate, pdf_path: '', pdf_name: file.name, snapshot, sent_on: sentOn, created_at: now(), hubspot_note_id: dealId ? 'demo-note' : null, hubspot_error: null, hubspot_stage_moved: false, hubspot_attempts: 1 };
     d.sends.push(row);
     const m = d.meta[quoteId] || { id: quoteId };
     const deal = demoDeals().find((x) => x.id === dealId);
     const moved = (m.hubspot_dealstage ?? deal?.stage) === 'appointmentscheduled';
     row.hubspot_stage_moved = moved;
-    d.meta[quoteId] = { ...m, hubspot_deal_id: dealId, hubspot_dealstage: moved ? 'presentationscheduled' : (m.hubspot_dealstage ?? deal?.stage ?? null), status: ['accepted', 'declined'].includes(m.status) ? m.status : 'sent', status_source: ['accepted', 'declined'].includes(m.status) ? m.status_source : 'crm' };
+    d.meta[quoteId] = { ...m, hubspot_deal_id: dealId ?? m.hubspot_deal_id ?? null, project_id: projectId ?? m.project_id ?? null, hubspot_dealstage: moved ? 'presentationscheduled' : (m.hubspot_dealstage ?? deal?.stage ?? null), status: ['accepted', 'declined'].includes(m.status) ? m.status : 'sent', status_source: ['accepted', 'declined'].includes(m.status) ? m.status_source : 'crm' };
     qsave(d);
-    return { ...row, result: 'sent' };
+    return { ...row, result: dealId ? 'sent' : 'no deal' };
   },
   async retryQuoteSend() { return { result: 'sent', hubspot_note_id: 'demo-note', hubspot_error: null }; },
   async quotePdfUrl() { return null; },

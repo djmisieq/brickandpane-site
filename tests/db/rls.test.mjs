@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -455,7 +455,7 @@ test('quote sends: staff may insert exactly the columns the portal client sends'
   await as(S);
   await db.query(`insert into public.quotes (id, reference, data) values ($1, 'BP-2026-114', '{}')`, [Q]);
   const value = { quote_id: `'${Q}'::uuid`, hubspot_deal_id: "'538396856520'", reference: "'BP-2026-114'", revision: "'00'",
-    kind: "'new'", total: '100', vat_rate: '0', pdf_path: `'${Q}/x.pdf'`, pdf_name: "'q.pdf'", snapshot: `'{}'::jsonb`, sent_on: 'current_date' };
+    kind: "'new'", total: '100', vat_rate: '0', pdf_path: `'${Q}/x.pdf'`, pdf_name: "'q.pdf'", snapshot: `'{}'::jsonb`, sent_on: 'current_date', project_id: 'null' /* 0038 */ };
   for (const c of cols) assert.ok(value[c] !== undefined, `client sends column "${c}", which migration 0026 does not grant to staff`);
   await db.query(`insert into public.quote_sends (${cols.join(', ')}) values (${cols.map((c) => value[c]).join(', ')})`);
   assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'sent');
@@ -651,4 +651,33 @@ test('mail: keywords in the subject route mail to a project; the header review i
     assert.equal((await db.query('select * from public.mail_keywords')).rows.length, 0);
     await fails(`insert into public.mail_keywords (project_id, keyword) values ($1, 'Avon Run')`, [P1]);
   }
+});
+
+// 0038: a quote belongs to a project and can go out without a HubSpot deal; such a send counts in the margin, never
+// reaches HubSpot, and never clears a deal already pinned to the quote.
+test('quotes on a project: sent without a deal, counted in the margin, never claimed for HubSpot', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const Q = '34343434-3434-3434-3434-343434343434';
+  await db.query(`insert into public.quotes (id, reference, data, project_id) values ($1, 'BP-2026-020', '{}', $2)`, [Q, P]);
+  const send = (await db.query(`insert into public.quote_sends (quote_id, project_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot)
+    values ($1, $2, 'BP-2026-020', '00', 'new', 12000, 20, 'p', 'x.pdf', '{}') returning id`, [Q, P])).rows[0];
+  const q = (await db.query('select status, project_id, hubspot_deal_id from public.quotes where id = $1', [Q])).rows[0];
+  assert.equal(q.status, 'sent'); assert.equal(q.project_id, P); assert.equal(q.hubspot_deal_id, null);
+  const m = (await db.query('select public.project_margin($1) m', [P])).rows[0].m;
+  assert.equal(m.sale_source, 'sent'); assert.equal(Number(m.sale_gbp), 10000);
+  await db.exec('reset role');
+  assert.equal((await db.query('select * from public.claim_quote_send($1)', [send.id])).rows.length, 0);
+  // A later send with no deal keeps the deal pinned earlier.
+  await db.query(`update public.quotes set hubspot_deal_id = '777' where id = $1`, [Q]);
+  await as(S);
+  await db.query(`insert into public.quote_sends (quote_id, project_id, reference, revision, kind, total, vat_rate, pdf_path, pdf_name, snapshot)
+    values ($1, $2, 'BP-2026-020', '01', 'revision', 12000, 20, 'p2', 'y.pdf', '{}')`, [Q, P]);
+  assert.equal((await db.query('select hubspot_deal_id from public.quotes where id = $1', [Q])).rows[0].hubspot_deal_id, '777');
+  // Clients never see quotes or sends, and cannot record one.
+  await as(A);
+  assert.equal((await db.query('select * from public.quotes')).rows.length, 0);
+  await fails(`insert into public.quote_sends (quote_id, project_id, reference, total, pdf_path, snapshot) values ($1, $2, 'x', 1, 'p', '{}')`, [Q, P]);
 });
