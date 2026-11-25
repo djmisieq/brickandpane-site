@@ -7,6 +7,7 @@ import { quotesView, projectQuotes, newQuoteFor, sentQuotes, findQuotes } from '
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
+import { dashboardView, SOURCES } from './dashboard.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -65,6 +66,7 @@ async function render(fromStore = false) {
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'owner') await dashboardView(app, viewSwitch('owner', await listRequests()));
     else if (r.name === 'search') await searchView(decodeURIComponent(r.id || ''));
     else if (r.name === 'today') await today();
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
@@ -191,7 +193,7 @@ async function today() {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
@@ -426,6 +428,11 @@ async function detail(id) {
               <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
               <div class="field"><label for="ctl-prob">${tr('Probability (%)')}</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
             </div>
+            <div class="field-row">
+              <div class="field"><label for="ctl-src">${tr('Source')}</label><select id="ctl-src" name="source"><option value="">${tr('Not set')}</option>${Object.entries(SOURCES).filter(([k]) => k !== 'unknown').map(([k, v]) => `<option value="${k}" ${d.internal?.source === k ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
+              <div class="field"><label for="ctl-camp">${tr('Campaign or referrer')}</label><input id="ctl-camp" name="campaign" maxlength="120" value="${esc(d.internal?.campaign || '')}"></div>
+            </div>
+            ${p.stage === 'closed' ? `<div class="field"><label for="ctl-lost">${tr('Why it was lost')}</label><input id="ctl-lost" name="lost_reason" maxlength="500" value="${esc(d.internal?.lost_reason || '')}" placeholder="${esc(tr('e.g. price, lead time, went with the builder'))}"></div>` : ''}
             <div class="field"><label for="ctl-notes">${tr('Notes')}</label><textarea id="ctl-notes" name="notes" rows="3">${esc(d.internal?.notes || '')}</textarea></div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
           </form></details>
@@ -468,7 +475,7 @@ async function detail(id) {
   });
   $('[data-internal]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
-    try { await store.updateInternal(id, { value_gbp: f.value_gbp.value === '' ? null : +f.value_gbp.value, probability: f.probability.value === '' ? null : +f.probability.value, notes: f.notes.value }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
+    try { await store.updateInternal(id, { value_gbp: f.value_gbp.value === '' ? null : +f.value_gbp.value, probability: f.probability.value === '' ? null : +f.probability.value, notes: f.notes.value, source: f.source.value || null, campaign: f.campaign.value.trim(), ...(f.lost_reason ? { lost_reason: f.lost_reason.value.trim() } : {}) }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
   });
 }
 

@@ -204,6 +204,8 @@ export const store = {
     const me = (await sb.auth.getUser()).data.user?.id ?? null;
     ok(await sb.from('tasks').update({ done_at: done ? new Date().toISOString() : null, done_by: done ? me : null }).eq('id', id)); emit();
   },
+  // The owner's dashboard: every figure from one function (migration 0043, staff only).
+  async ownerDashboard(days = 90) { return ok(await sb.rpc('owner_dashboard', { days })); },
   async deleteTask(id) { ok(await sb.from('tasks').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
   async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },

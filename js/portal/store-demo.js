@@ -270,6 +270,36 @@ export const store = {
     save(s);
   },
   async setTaskDone(id, done) { const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (t) { t.done_at = done ? now() : null; t.done_by = done ? (needStaff(s).id) : null; save(s); } },
+  // The owner's dashboard in demo mode: the same figures as owner_dashboard (migration 0043), from this browser's data.
+  async ownerDashboard(days = 90) {
+    const s = load(); needStaff(s);
+    const since = Date.now() - days * 864e5, t = (x) => new Date(x).getTime(), med = (a) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return Math.round((b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2) * 10) / 10; };
+    const reached = (pid, st) => s.events.filter((e) => e.project_id === pid && e.to_stage === st).map((e) => t(e.created_at)).sort()[0] ?? null;
+    const enq = (s.requests || []).filter((r) => t(r.created_at) >= since && r.status !== 'spam');
+    const won = s.projects.filter((p) => (reached(p.id, 'accepted') ?? 0) >= since);
+    const lost = s.projects.filter((p) => (reached(p.id, 'closed') ?? 0) >= since && reached(p.id, 'accepted') == null);
+    const fresh = s.projects.filter((p) => t(p.created_at) >= since);
+    const bySrc = {}; fresh.forEach((p) => { const k = s.internal[p.id]?.source || 'unknown'; bySrc[k] = (bySrc[k] || 0) + 1; });
+    const lostBy = {}; lost.forEach((p) => { const k = (s.internal[p.id]?.lost_reason || '').trim() || '—'; lostBy[k] = (lostBy[k] || 0) + 1; });
+    const quoted = s.projects.map((p) => ({ p, at: reached(p.id, 'quote_issued') })).filter((x) => x.at);
+    const pays = s.payments || [], sum = (a) => Math.round(a.reduce((n, x) => n + Number(x.amount), 0) * 100) / 100;
+    const months = {}; pays.filter((x) => x.paid_at && t(x.paid_at) >= Date.now() - 183 * 864e5).forEach((x) => { const k = x.paid_at.slice(0, 7); months[k] = (months[k] || 0) + Number(x.amount); });
+    const staff = s.users.filter((u) => u.role === 'staff');
+    return {
+      days, enquiries: enq.length, enquiries_by_source: Object.entries(bySrc).map(([source, n]) => ({ source, n })).sort((a, b) => b.n - a.n),
+      projects_new: fresh.length, quoted: quoted.filter((x) => t(x.p.created_at) >= since).length,
+      won: won.length, won_value: won.reduce((n, p) => n + (Number(s.internal[p.id]?.value_gbp) || 0), 0),
+      lost: lost.length, lost_reasons: Object.entries(lostBy).map(([reason, n]) => ({ reason, n })),
+      reply_hours_median: med(enq.filter((r) => r.replied_at).map((r) => (t(r.replied_at) - t(r.created_at)) / 36e5)), replied_known: enq.filter((r) => r.replied_at).length,
+      unanswered: (s.requests || []).filter((r) => r.status === 'new').length,
+      quote_days_median: med(quoted.filter((x) => x.at >= since).map((x) => (x.at - t(x.p.created_at)) / 864e5)),
+      in_play: [], in_play_value: 0, margin: { projects: 0, sale: 0, cost: 0, low: [] },
+      paid: sum(pays.filter((x) => x.paid_at && t(x.paid_at) >= since)), due_30: sum(pays.filter((x) => !x.paid_at && x.due_date && t(x.due_date) >= Date.now() && t(x.due_date) < Date.now() + 30 * 864e5)),
+      overdue: sum(pays.filter((x) => !x.paid_at && x.due_date && t(x.due_date) < Date.now())),
+      paid_by_month: Object.entries(months).sort().map(([month, gbp]) => ({ month, gbp })),
+      workload: staff.map((u) => ({ id: u.id, name: u.full_name, projects: s.projects.filter((p) => p.assignee_id === u.id && !['completed', 'closed', 'on_hold'].includes(p.stage)).length, tasks: (s.tasks || []).filter((x) => x.assignee_id === u.id && !x.done_at).length })),
+    };
+  },
   async deleteTask(id) { const s = load(); needStaff(s); s.tasks = (s.tasks || []).filter((x) => x.id !== id); save(s); },
   // Mail in demo mode: a few made-up mails, matched to projects the way mail_list does it (migration 0035).
   async listMail({ pid = null, unassigned = false } = {}) {
@@ -302,7 +332,7 @@ export const store = {
   },
   async updateRequest(id, { status, staff_note }) {
     const s = load(); needStaff(s);
-    Object.assign((s.requests || []).find((r) => r.id === id), { status, staff_note }); save(s);
+    const r0 = (s.requests || []).find((r) => r.id === id); if (r0 && r0.status === 'new' && status !== 'new' && !r0.replied_at) r0.replied_at = now(); Object.assign(r0, { status, staff_note }); save(s);
   },
   async requestFileUrl() { return null; }, // demo: files are not stored
   // Mirrors convert_request() / convert_enquiry() in migrations 0008 and 0024 (demo sends no email).
