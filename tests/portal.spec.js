@@ -250,7 +250,7 @@ test('staff see website enquiries sent without an account and triage them', asyn
   await expect(enq).toContainText('3600 × 2200 mm');
   await enq.locator('select[name="status"]').selectOption('replied');
   await enq.locator('textarea[name="staff_note"]').fill('Called back, survey next week.');
-  await enq.locator('button[type="submit"]').click();
+  await enq.locator('[data-req-form] button[type="submit"]').click();
   await expect(page.locator('details.enq', { hasText: 'BP-261018-3F2A' }).locator('.badge')).toHaveText('Replied');
   await page.locator('#rq-filter').selectOption('closed');
   await expect(page.locator('#app')).toContainText('No enquiries match.');
@@ -293,6 +293,45 @@ test('CRM: the source enquiry sits on the project card; one search in the app ba
   await page.locator('#crm-gq').fill('nothing-like-this');
   await page.locator('#crm-gq').press('Enter');
   await expect(res.locator('.today-sec').first()).toContainText('Nothing found.');
+});
+
+test('tasks: a task on the project shows on Today; a logged call plans the next contact; the client sees none of it', async ({ page, context }) => {
+  await page.goto('/admin.html#/board');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="tasks"] > summary').click();
+  const box = page.locator('[data-fold="tasks"] [data-tasks]');
+  await expect(box).toContainText('No open tasks.');
+  await box.locator('[data-task-add] input[name="title"]').fill('Send the revised drawings');
+  const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await box.locator('[data-task-add] input[name="due_on"]').fill(today);
+  await box.locator('[data-task-add] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Task added.');
+  await expect(page.locator('[data-fold="tasks"] .task', { hasText: 'Send the revised drawings' })).toBeVisible();
+  // Log a call: saved as done, the next contact planned.
+  const tbox = page.locator('[data-fold="tasks"] [data-tasks]');
+  await tbox.locator('[data-task-log] textarea[name="note"]').fill('Client happy with the frames, wants the drawings by Friday.');
+  await tbox.locator('[data-task-log] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('next contact planned');
+  await expect(page.locator('[data-fold="tasks"] .task', { hasText: 'Follow up' })).toBeVisible();
+  await expect(page.locator('[data-fold="tasks"] .task-done')).toContainText('Done recently (1)');
+  // Today lists the task due today; ticking it off clears it.
+  await page.goto('/admin.html#/today');
+  const sec = page.locator('#t-tasks');
+  await expect(sec).toContainText('Send the revised drawings');
+  await page.goto('/admin.html#/board');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="tasks"] .task', { hasText: 'Send the revised drawings' }).locator('[data-task-done]').check();
+  await page.goto('/admin.html#/today');
+  await expect(page.locator('#t-tasks')).not.toContainText('Send the revised drawings');
+  // The client on the project: no tasks anywhere.
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html');
+  await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await expect(client.locator('.now-card')).toBeVisible();
+  for (const text of ['Send the revised drawings', 'Follow up', 'Client happy with the frames']) await expect(client.locator('body')).not.toContainText(text);
 });
 
 test('CRM: opens on Today; the board is one click away and its breadcrumb leads back to it', async ({ page }) => {

@@ -1245,3 +1245,7 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .q-margin-v span{font-size:var(--step-0);color:var(--ink-2);font-weight:400}
 .q-margin.is-low .q-margin-v{color:var(--accent)}
 .q-cost input{background:#fff4d6;border-color:#b38a00}
+/* Tasks and the conversation log (migration 0042, audit phase 3). */
+.task-list{list-style:none;margin:0 0 var(--s-s);padding:0;display:grid;gap:var(--s-xs)}.task{display:flex;justify-content:space-between;gap:var(--s-xs);align-items:flex-start;padding:var(--s-xs) 0;border-top:1px solid var(--line)}
+.task-check{display:flex;gap:var(--s-xs);align-items:flex-start;cursor:pointer}.task-check input{margin-top:.25rem}.task .note{display:block}.task.is-done strong{text-decoration:line-through;color:var(--ink-2)}
+.task.is-late .note:first-of-type{color:var(--danger,#b42318)}.task-note{white-space:pre-wrap}.task-form{margin-top:var(--s-s);padding-top:var(--s-s);border-top:1px solid var(--line)}
