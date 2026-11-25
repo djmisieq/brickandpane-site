@@ -103,7 +103,7 @@ export function nowCard(project, viewer, audience = viewer === 'staff' ? 'staff'
       ${project.next_step ? `<p class="now-next"><strong>${tr(viewer === 'client' ? 'Next step' : 'Next step shown to client')}:</strong> ${esc(tr(project.next_step))}</p>` : ''}
       <ul class="proof-list">
         ${dates}${due}
-        ${viewer !== 'client' || project.assignee ? `<li><span>${tr(viewer === 'client' ? 'Contact' : 'Owner')}</span><span>${esc(project.assignee?.full_name || tr('Unassigned'))}</span></li>` : ''}
+        ${viewer !== 'client' || project.assignee ? `<li><span>${tr(viewer === 'client' ? 'Contact' : 'Account manager')}</span><span>${esc(project.assignee?.full_name || tr('Unassigned'))}</span></li>` : ''}
         <li><span>${tr('In this stage since')}</span><span>${fmtDate(project.stage_changed_at)}</span></li>
       </ul>
     </section>`;
@@ -261,10 +261,10 @@ export function messagesPanel(d, user) {
         <div class="msg-body">${esc(m.body).replace(/\n/g, '<br>')}</div>
       </li>`).join('') : `<li class="note">${tr('No messages yet. Ask anything here instead of phoning: the whole team sees it.')}</li>`}
     </ol>
-    <form class="composer" data-message data-mode="client">
+    <form class="composer" data-message data-mode="${staff ? 'internal' : 'client'}">
       ${staff ? `<div class="seg composer-mode" role="radiogroup" aria-label="${tr('Message type')}">
-        <label><input type="radio" name="mode" value="client" checked> <span>${tr('Message to client')}</span></label>
-        <label><input type="radio" name="mode" value="internal"> <span>${tr('Internal note')}</span></label>
+        <label><input type="radio" name="mode" value="internal" checked> <span>${tr('Internal note')}</span></label>
+        <label><input type="radio" name="mode" value="client"> <span>${tr('Message to client')}</span></label>
       </div>` : ''}
       <label for="msg-body" class="visually-hidden">${tr('Message')}</label>
       <textarea id="msg-body" name="body" rows="3" required placeholder="${tr(staff ? 'Write to the client…' : 'Write a message…')}"></textarea>
@@ -315,8 +315,9 @@ export function bindDetail(root, d, refresh) {
   $$('[data-paid]', root).forEach((b) => b.addEventListener('click', async () => { try { await store.markPaid(b.dataset.paid); } catch (err) { toast(tr(err.message)); } }));
   const composer = $('[data-message]', root);
   // Live updates re-render the whole panel. Keep the chosen mode and the draft, or an internal note
-  // the staff member is writing would silently flip back to "message to client".
-  const draft = composerDrafts.get(d.project.id) || { mode: 'client', body: '' };
+  // the staff member is writing would silently flip modes. Staff start on an internal note (audit K6, 24.11.2026):
+  // a call note typed on the phone must never reach the client by default; writing to the client is one deliberate tap.
+  const draft = composerDrafts.get(d.project.id) || { mode: composer && $('input[name="mode"]', composer) ? 'internal' : 'client', body: '' };
   const setMode = (internal) => {
     composer.dataset.mode = internal ? 'internal' : 'client';
     const radio = $(`input[name="mode"][value="${internal ? 'internal' : 'client'}"]`, composer);
@@ -327,7 +328,7 @@ export function bindDetail(root, d, refresh) {
   };
   if (composer) {
     composer.body.value = draft.body;
-    if (draft.mode === 'internal' && $('input[name="mode"]', composer)) setMode(true);
+    if ($('input[name="mode"]', composer)) setMode(draft.mode === 'internal');
   }
   composer?.addEventListener('change', (e) => {
     if (e.target.name !== 'mode') return;
