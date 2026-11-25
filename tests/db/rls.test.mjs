@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -736,4 +736,34 @@ test('tasks: staff plan and close them on a project or an enquiry; nobody else s
   }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.tasks');
+});
+
+// 0043: the owner's dashboard reads one function, for staff only; the first reply time is set by the database.
+test('owner dashboard: enquiries, quotes, wins, reply time, money and workload in one call, for staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.exec('reset role');
+  const R = (await db.query(`insert into public.contact_requests (name, email, consent_at, created_at) values ('Jo', 'jo@example.com', now(), now() - interval '3 hours') returning id`)).rows[0].id;
+  await as(S);
+  await db.query(`update public.contact_requests set status = 'replied' where id = $1`, [R]);
+  const r = (await db.query('select replied_at from public.contact_requests where id = $1', [R])).rows[0];
+  assert.ok(r.replied_at);
+  await db.query(`update public.project_internal set value_gbp = 20000, source = 'referral', campaign = 'Architect: JSA' where project_id = $1`, [P]);
+  await fails(`update public.project_internal set source = 'billboard' where project_id = $1`, [P]);
+  await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, actor_id) values ($1, 'submitted', 'quote_issued', $2)`, [P, S]);
+  await db.query(`insert into public.stage_events (project_id, from_stage, to_stage, actor_id) values ($1, 'quote_issued', 'accepted', $2)`, [P, S]);
+  await db.query(`insert into public.payments (project_id, label, amount, due_date, paid_at) values ($1, 'Deposit', 6000, now() - interval '2 days', now()), ($1, 'Balance', 14000, now() - interval '1 day', null)`, [P]);
+  await db.query(`insert into public.tasks (title, assignee_id, project_id) values ('Book the survey', $1, $2)`, [S, P]);
+  const d = (await db.query('select public.owner_dashboard(90) d')).rows[0].d;
+  assert.equal(d.enquiries, 1);
+  assert.equal(Number(d.reply_hours_median), 3);
+  assert.equal(d.won, 1); assert.equal(Number(d.won_value), 20000);
+  assert.equal(d.quoted, 1);
+  assert.deepEqual(d.enquiries_by_source, [{ source: 'referral', n: 1 }]);
+  assert.equal(Number(d.paid), 6000); assert.equal(Number(d.overdue), 14000);
+  assert.equal(d.workload.find((w) => w.id === S).tasks, 1);
+  for (const who of [A, C, O]) { await as(who); await fails('select public.owner_dashboard(90)'); }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select public.owner_dashboard(90)');
 });

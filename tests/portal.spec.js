@@ -87,7 +87,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/]);
+  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/, /Dashboard/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -344,6 +344,31 @@ test('CRM: opens on Today; the board is one click away and its breadcrumb leads 
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('.breadcrumb a[href="#/board"]').click();
   await expect(page.locator('.board')).toBeVisible();
+});
+
+test('owner dashboard: one page with enquiries, quotes, wins, money and workload; the source is set on the project', async ({ page, context }) => {
+  await page.goto('/admin.html#/board');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="internal"] > summary').click();
+  await page.locator('#ctl-src').selectOption('referral');
+  await page.locator('#ctl-camp').fill('JSA Architects');
+  await page.locator('[data-internal] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Saved.');
+  await page.goto('/admin.html#/owner');
+  const dash = page.locator('#dashboard');
+  await expect(page.locator('h1')).toHaveText('Dashboard');
+  for (const t of ['New enquiries', 'First reply, median', 'Quotes in play', 'Won', 'Paid in', 'Due in 30 days', 'Overdue']) await expect(dash.locator('.dash-tiles')).toContainText(t);
+  await expect(dash).toContainText('From enquiry to order');
+  await expect(dash).toContainText('Who carries what');
+  await dash.locator('[data-days="365"]').click();
+  await expect(page.locator('[data-days="365"]')).toHaveAttribute('aria-pressed', 'true');
+  // Clients never reach it.
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/admin.html#/owner');
+  await expect(client.locator('#app')).toContainText('This area is for Brick & Pane staff');
 });
 
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
