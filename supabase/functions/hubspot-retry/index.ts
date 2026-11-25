@@ -6,7 +6,7 @@
 // Secrets: HUBSPOT_TOKEN, RESEND_API_KEY, MAIL_FROM, optional HUBSPOT_ALERT_TO (default chris@ and kate@),
 // plus SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided automatically). Logs only counts.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { isTestEnquiry, MAX_ATTEMPTS, retryDue, syncEnquiry } from '../_shared/hubspot.ts';
+import { hubspotToken, isTestEnquiry, MAX_ATTEMPTS, retryDue, syncEnquiry } from '../_shared/hubspot.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const ALERT_TO = (Deno.env.get('HUBSPOT_ALERT_TO') ?? 'chris@brickandpane.co.uk,kate@brickandpane.co.uk').split(',').map((s) => s.trim());
@@ -28,7 +28,7 @@ const pending = () => supabase.from('contact_requests').select(COLS)
 Deno.serve(async (req) => {
   const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   if (req.method !== 'POST') return reply(405, { error: 'method' });
-  if (!Deno.env.get('HUBSPOT_TOKEN')) return reply(200, { skipped: 'no token' });
+  if (!hubspotToken()) return reply(200, { skipped: 'no token' });
 
   const { data, error } = await pending();
   if (error) return reply(500, { error: 'read' });

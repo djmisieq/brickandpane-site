@@ -5,7 +5,7 @@
 // every 15 min the deal's stage sets the status of its quotes. Unlike the portal event notes (hubspot.ts, "no
 // amounts"), this note carries the total: the owner asked for it. The leads script owns bp_quote_* — never written.
 // Pure parts are tested in hubspot-quotes.test.ts. Nothing personal is logged.
-import { associate, create, escape, hs, HubSpotError, linked, SITE } from './hubspot.ts';
+import { associate, create, escape, hs, HubSpotError, hubspotToken, linked, SITE } from './hubspot.ts';
 
 // ---------- pipeline (same ids as STAGE_OF_DEAL in hubspot.ts) ----------
 export const DEAL_STAGE_LABEL: Record<string, string> = {
@@ -242,7 +242,7 @@ const errText = (e: unknown) => e instanceof HubSpotError ? `${e.status} ${e.mes
 
 // Returns what happened (for the button and the count-only log). Safe to call twice: claim_quote_send lets one through.
 export async function processSend(supabase: Db, sendId: string, maxAttempts = 5): Promise<string> {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return 'no token';
   const { data: claimed } = await supabase.rpc('claim_quote_send', { sid: sendId, max_attempts: maxAttempts });
   const s = (claimed as Send[] | null)?.[0];
@@ -293,7 +293,7 @@ export async function processSend(supabase: Db, sendId: string, maxAttempts = 5)
 
 // ---------- cron: retries and statuses ----------
 export async function syncQuotes(supabase: Db) {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return { skipped: 'no token' };
   const out = { sent: 0, failed: 0, deals: 0, updated: 0 };
   const { data: pending } = await supabase.from('quote_sends').select('id').not('hubspot_deal_id', 'is', null).is('hubspot_note_id', null).lt('hubspot_attempts', 5)
