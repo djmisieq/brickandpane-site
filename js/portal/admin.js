@@ -54,7 +54,9 @@ async function render(fromStore = false) {
   // A live update redraws the page: fields the user has changed keep their values (lists too), others refill empty ones.
   const keep = {}, dirty = new Set(); if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); });
   const focused = document.activeElement?.id;
-  await renderAppBar(bar, user, 'admin'); bindSearch();
+  // The app bar is drawn again on every update: what someone is typing in its search must survive that.
+  const gq = $('#crm-gq', bar), typed = gq ? { v: gq.value, focus: document.activeElement === gq, at: gq.selectionStart } : null;
+  await renderAppBar(bar, user, 'admin'); bindSearch(fromStore ? typed : null);
   const r = route();
   // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
   if (fromStore && r.name === 'quotes') return;
@@ -204,9 +206,11 @@ async function searchView(raw) {
     ${sec('Quotes', qs, (x) => li(`#/quotes/${esc(x.id)}`, esc(x.reference), esc([x.customer, x.site].filter(Boolean).join(' · '))))}` : `<p class="hint">${tr('Type a name, a reference, an email or a postcode in the search box above.')}</p>`}
   </div>`;
 }
-function bindSearch() {
+function bindSearch(typed) {
   const f = $('[data-gsearch]', bar); if (!f) return;
-  const r = route(); if (r.name === 'search') f.q.value = decodeURIComponent(r.id || '');
+  const r = route();
+  if (typed) { f.q.value = typed.v; if (typed.focus) { f.q.focus(); try { f.q.setSelectionRange(typed.at, typed.at); } catch { /* search inputs in some browsers */ } } }
+  else if (r.name === 'search') f.q.value = decodeURIComponent(r.id || '');
   f.addEventListener('submit', (e) => { e.preventDefault(); const v = f.q.value.trim(); location.hash = `#/search/${encodeURIComponent(v)}`; });
 }
 
