@@ -1,6 +1,8 @@
 // Mail in the CRM (migration 0035, plan: brickandpane-docs/docs/PLAN-WLASNY-CRM.md). STAFF ONLY: imported by admin.js
 // alone. A READ-ONLY copy of the Zimbra mailboxes (contact@ whole, chris@ and kate@ for known people only), shown on
-// the project it belongs to and, for what matches no project, in the Mail view. Replies are written in Zimbra for now.
+// the project it belongs to and, for what matches no project, in the Mail view.
+// Replies (stage 1b, migration 0045): written on the project and sent only when the person ticks that they checked
+// the recipients and the text and presses Send (mail-send checks both). Nothing is sent on its own.
 import { store } from './store.js';
 import { esc, fmtDate, ago, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
@@ -14,6 +16,9 @@ export async function loadMail(pid) {
   const [list, keywords] = await Promise.all([store.listMail({ pid }).catch(() => null), store.listMailKeywords ? store.listMailKeywords(pid).catch(() => []) : []]);
   return list == null ? null : Object.assign(list, { keywords });
 }
+let boxes = null; // the company mailboxes that can send
+const loadBoxes = async () => (boxes ||= store.mailAccounts ? (await store.mailAccounts().catch(() => [])).map((a) => a.address) : []);
+let draft = null; // { pid, reply_to, from, to, cc, subject, text }
 
 function item(m, { projects = null } = {}) {
   const files = (m.attachments || []).map((a) => a.path
@@ -37,6 +42,7 @@ function item(m, { projects = null } = {}) {
       <p class="note">${esc(fmtDate(m.sent_at, true))} · ${esc(m.account)}${m.folder !== 'INBOX' ? ` / ${esc(m.folder)}` : ''}${(m.cc_addrs || []).length ? ` · ${tr('Cc')} ${esc(m.cc_addrs.join(', '))}` : ''}</p>
       <div class="mail-text">${esc(m.body_text || '')}</div>
       ${files ? `<p class="mail-files">${files}</p>` : ''}
+      ${projects ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-mail-reply>${tr('Reply')}</button>`}
       ${assign}
     </div>
   </details>`;
@@ -47,8 +53,10 @@ export function mailPanel(list) {
   const head = `<h2 class="panel-h">${tr('Email')} <span class="tag">${tr('staff only')}</span></h2>`;
   if (list == null) return `<section class="mail-panel" data-mail-panel>${head}<p class="hint">${tr('Mail is not available right now.')}</p></section>`;
   return `<section class="mail-panel" data-mail-panel>${head}
-    <p class="hint">${tr('A copy of the Zimbra mailboxes, read only: reply in Zimbra.')}</p>
+    <p class="hint">${tr('A copy of the Zimbra mailboxes. A reply written here goes out only after you check it and press Send.')}</p>
     ${list.length ? `<div class="mail-list">${list.map((m) => item(m)).join('')}</div>` : `<p class="hint">${tr('No email with this project’s client yet.')}</p>`}
+    <div data-mail-compose-slot>${composeForm()}</div>
+    ${draft ? '' : `<button type="button" class="btn btn-sm" data-mail-new>${tr('New email')}</button>`}
     <form class="mail-keywords" data-mail-keywords>
       <p class="hint">${tr('Site names: mail with one of these in its subject shows here, e.g. “Avon Run” when a client has several sites.')}</p>
       ${(list.keywords || []).length ? `<ul class="mail-contacts">${list.keywords.map((k) => `<li data-keyword="${esc(k.id)}"><strong>${esc(k.keyword)}</strong> <button type="button" class="q-link" data-keyword-del>${tr('Remove')}</button></li>`).join('')}</ul>` : ''}
@@ -60,7 +68,55 @@ export function mailPanel(list) {
   </section>`;
 }
 
+function composeForm() {
+  if (!draft) return '';
+  const opts = (boxes || []).map((a) => `<option value="${esc(a)}" ${a === draft.from ? 'selected' : ''}>${esc(a)}</option>`).join('');
+  return `<form class="ctl mail-compose" data-mail-compose novalidate>
+    <h3 class="panel-h">${draft.reply_to ? tr('Reply') : tr('New email')}</h3>
+    <div class="field-row"><div class="field"><label for="mc-from">${tr('From')}</label><select id="mc-from" name="from">${opts}</select></div>
+      <div class="field"><label for="mc-to">${tr('To')}</label><input id="mc-to" name="to" value="${esc(draft.to)}" autocomplete="off"></div></div>
+    <div class="field"><label for="mc-cc">${tr('Cc')}</label><input id="mc-cc" name="cc" value="${esc(draft.cc)}" autocomplete="off"></div>
+    <div class="field"><label for="mc-subj">${tr('Subject')}</label><input id="mc-subj" name="subject" maxlength="300" value="${esc(draft.subject)}"></div>
+    <div class="field"><label for="mc-text">${tr('Message')}</label><textarea id="mc-text" name="text" rows="8">
+${esc(draft.text)}</textarea></div>
+    <label class="consent"><input type="checkbox" name="copy_me" checked> <span>${tr('Put a copy in the mailbox it is sent from')}</span></label>
+    <label class="consent mail-confirm"><input type="checkbox" name="confirm"> <span><strong>${tr('I checked the recipients and the text')}</strong></span></label>
+    <div class="btn-row"><button class="btn btn-sm" type="submit">${tr('Send')}</button><button class="btn btn-sm btn-ghost" type="button" data-mail-cancel>${tr('Cancel')}</button></div>
+  </form>`;
+}
+const redrawCompose = (root, pid) => { const slot = $('[data-mail-compose-slot]', root); if (slot) slot.innerHTML = composeForm(); $('[data-mail-new]', root)?.toggleAttribute('hidden', !!draft); bindCompose(root, pid); if (draft) $('#mc-text', root)?.focus(); };
+function bindCompose(root, pid) {
+  const f = $('[data-mail-compose]', root); if (!f) return;
+  // What is typed survives a live redraw of the card.
+  f.addEventListener('input', () => { if (draft) Object.assign(draft, { from: f.from.value, to: f.to.value, cc: f.cc.value, subject: f.subject.value, text: f.text.value }); });
+  $('[data-mail-cancel]', f).addEventListener('click', () => { draft = null; redrawCompose(root, pid); });
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!f.confirm.checked) { f.confirm.focus(); toast(tr('Tick that you checked the recipients and the text.')); return; }
+    if (!f.to.value.trim()) { f.to.focus(); toast(tr('Add a recipient.')); return; }
+    const btn = $('button[type="submit"]', f); btn.disabled = true;
+    try {
+      const res = await store.sendMail({ from: f.from.value, to: f.to.value, cc: f.cc.value, subject: f.subject.value, text: f.text.value, reply_to: draft?.reply_to || null, project_id: pid, copy_me: f.copy_me.checked, confirm: true });
+      if (res?.error) throw new Error(res.error);
+      draft = null; toast(tr('Sent.')); redrawCompose(root, pid);
+    } catch (err) { btn.disabled = false; toast(tr(err.message)); }
+  });
+}
+
 export function bindMail(root, pid = null) {
+  if (pid) {
+    loadBoxes().then(() => { if (draft && draft.pid === pid && !draft.from) draft.from = boxes[0] || ''; redrawCompose(root, pid); });
+    if (draft && draft.pid !== pid) draft = null;
+    $('[data-mail-new]', root)?.addEventListener('click', async () => { await loadBoxes(); draft = { pid, reply_to: null, from: boxes.includes('contact@brickandpane.co.uk') ? 'contact@brickandpane.co.uk' : boxes[0] || '', to: '', cc: '', subject: '', text: '' }; redrawCompose(root, pid); });
+    $$('[data-mail-reply]', root).forEach((b) => b.addEventListener('click', async () => {
+      await loadBoxes();
+      const m = (await store.listMail({ pid }).catch(() => [])).find((x) => x.id === b.closest('[data-mail]').dataset.mail); if (!m) return;
+      const to = m.direction === 'in' ? m.from_addr : (m.to_addrs || []).join(', ');
+      const quote = (m.body_text || '').split('\n').map((l) => `> ${l}`).join('\n');
+      draft = { pid, reply_to: m.id, from: boxes.includes(m.account) ? m.account : boxes[0] || '', to, cc: '', subject: /^re:/i.test(m.subject || '') ? m.subject : `Re: ${m.subject || ''}`, text: `\n\n${tr('On {date}, {who} wrote:', { date: fmtDate(m.sent_at, true), who: m.from_name || m.from_addr })}\n${quote}` };
+      redrawCompose(root, pid);
+    }));
+  }
   const kw = $('[data-mail-keywords]', root);
   kw?.addEventListener('submit', async (e) => {
     e.preventDefault();

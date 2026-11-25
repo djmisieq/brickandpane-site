@@ -1257,3 +1257,5 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .co-table a{font-weight:600}.co-new{margin:var(--s-s) 0 var(--s-m);max-width:640px}
 /* The view switch has 8 tabs: in a header row it scrolls inside itself instead of widening the page on phones. */
 .crm .dash-head>*{min-width:0;max-width:100%}.crm .dash-head .board-tools{max-width:100%}.crm .seg{max-width:100%;overflow-x:auto;flex-wrap:nowrap}
+/* Replying from the CRM (migration 0045). */
+.mail-compose{margin-top:var(--s-s)}.mail-compose textarea{font-family:inherit}.mail-confirm{margin:var(--s-xs) 0}

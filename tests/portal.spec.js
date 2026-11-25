@@ -423,6 +423,29 @@ test('CRM views never scroll sideways, whatever the width (8 tabs in the view sw
   }
 });
 
+test('mail: a reply is written on the project and goes only after the tick that it was checked', async ({ page }) => {
+  await page.goto('/admin.html#/board');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  const panel = page.locator('[data-mail-panel]');
+  const first = panel.locator('details.mail:not(.is-out)', { hasText: 'threshold detail' }).first();
+  await first.locator('summary').click();
+  await first.locator('[data-mail-reply]').click();
+  const form = panel.locator('[data-mail-compose]');
+  await expect(form.locator('#mc-subj')).toHaveValue('Re: Hartley Road: threshold detail');
+  await expect(form.locator('#mc-to')).toHaveValue(/@/);
+  await expect(form.locator('#mc-text')).toHaveValue(/> Hi Kate,/);
+  await form.locator('#mc-text').fill('Hi Anna,\n\nThe flush threshold is in the revised quote.\n\nKate');
+  // Without the tick nothing goes.
+  await form.locator('button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Tick that you checked');
+  await form.locator('input[name="confirm"]').check();
+  await form.locator('button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Sent.');
+  await expect(panel.locator('[data-mail-compose]')).toHaveCount(0);
+  await expect(panel.locator('details.mail.is-out').first()).toContainText('Re: Hartley Road: threshold detail');
+});
+
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('bp-openings-list', JSON.stringify([
     { ref: 'D01', system: 'bifold', material: 'alu', width_mm: 4200, height_mm: 2400, qty: 1, note: '3 leaves' },
