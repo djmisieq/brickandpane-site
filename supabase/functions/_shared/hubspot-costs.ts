@@ -18,21 +18,22 @@ export const OWNER = '39646197'; // Kate, as on sales deals
 const PURCHASE_FOR_SALE = { associationCategory: 'USER_DEFINED', associationTypeId: 1 };
 const DEAL_TO_COMPANY = { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 5 };
 
-export type CostStatus = 'received' | 'accepted' | 'rejected' | 'superseded';
+export type CostStatus = 'requested' | 'received' | 'accepted' | 'rejected' | 'superseded';
 export type Cost = {
   id: string; project_id: string; supplier: string; reference: string; category: string; amount: number | string;
   currency: string; fx_to_gbp: number | string; status: CostStatus; pdf_path: string | null; pdf_name: string;
   note: string; created_at: string; updated_at: string;
+  net_gbp?: number | string | null; vat_in_pct?: number | string; delivery_gbp?: number | string; discount_pct?: number | string; // 0039
   hubspot_deal_id: string | null; hubspot_synced_at: string | null; hubspot_status: string | null; hubspot_stage: string | null;
   hubspot_note_id: string | null; hubspot_attempts: number; hubspot_company_id: string | null;
 };
 
-// The CRM has four statuses, HubSpot six stages. Ordered and Delivered are steps after Accepted that the CRM does
+// The CRM has five statuses, HubSpot six stages (Requested since 0039: asked, no price yet). Ordered and Delivered are steps after Accepted that the CRM does
 // not track, so they read as accepted and are never pushed back down to Accepted.
 export const stageOf = (status: string): string =>
-  status === 'accepted' ? STAGE.accepted : status === 'rejected' || status === 'superseded' ? STAGE.rejected : STAGE.received;
+  status === 'requested' ? STAGE.requested : status === 'accepted' ? STAGE.accepted : status === 'rejected' || status === 'superseded' ? STAGE.rejected : STAGE.received;
 export const statusOf = (stage: string | null | undefined): CostStatus | null =>
-  stage === STAGE.requested || stage === STAGE.received ? 'received'
+  stage === STAGE.requested ? 'requested' : stage === STAGE.received ? 'received'
     : stage === STAGE.accepted || stage === STAGE.ordered || stage === STAGE.delivered ? 'accepted'
     : stage === STAGE.rejected ? 'rejected' : null;
 
@@ -61,15 +62,20 @@ export const costDealName = (c: Pick<Cost, 'supplier' | 'reference'>, projectRef
 export const costProperties = (c: Cost, projectRef: string): Record<string, string> => ({
   dealname: costDealName(c, projectRef),
   pipeline: PIPELINE,
-  amount: (num(c.amount) * num(c.fx_to_gbp)).toFixed(2),
+  // The comparable net (0039): VAT taken out, the discount off, delivery on top. Rows read before 0039: amount × rate.
+  amount: (c.net_gbp != null && c.net_gbp !== '' ? num(c.net_gbp) : num(c.amount) * num(c.fx_to_gbp)).toFixed(2),
   bp_cost_currency: c.currency,
   bp_cost_fx_to_gbp: String(num(c.fx_to_gbp)),
   bp_cost_category: c.category,
   bp_supplier_quote_ref: c.reference || '',
   bp_portal_supplier_quote_id: c.id,
 });
-export const costNote = (c: Pick<Cost, 'supplier' | 'reference' | 'amount' | 'currency' | 'fx_to_gbp' | 'note'>, projectRef: string, pdf: string | null) => {
-  const amount = `${num(c.amount).toFixed(2)} ${c.currency}${c.currency === 'GBP' ? '' : ` (rate to GBP ${num(c.fx_to_gbp)})`}`;
+export const costNote = (c: Pick<Cost, 'supplier' | 'reference' | 'amount' | 'currency' | 'fx_to_gbp' | 'note' | 'net_gbp' | 'vat_in_pct' | 'delivery_gbp' | 'discount_pct'>, projectRef: string, pdf: string | null) => {
+  // 0039: a price with VAT in it, a discount or delivery on top is stated as quoted, with the comparable net after it.
+  const extras = [num(c.vat_in_pct ?? 0) > 0 && `VAT ${num(c.vat_in_pct!)}% included`, num(c.discount_pct ?? 0) > 0 && `${num(c.discount_pct!)}% discount`,
+    num(c.delivery_gbp ?? 0) > 0 && `delivery £${num(c.delivery_gbp!).toFixed(2)} on top`].filter(Boolean);
+  const amount = `${num(c.amount).toFixed(2)} ${c.currency}${c.currency === 'GBP' ? '' : ` (rate to GBP ${num(c.fx_to_gbp)})`}`
+    + (extras.length && c.net_gbp != null ? ` as quoted (${extras.join(', ')}); comparable net £${num(c.net_gbp).toFixed(2)}` : '');
   return `<p><strong>${escape(`Portal supplier quote · ${projectRef} · ${c.supplier}${c.reference ? ` · ${c.reference}` : ''}`)}</strong></p>`
     + `<p>Net ${escape(amount)}. Internal: never shown to the client.</p>`
     + (c.note ? `<p>${escape(c.note)}</p>` : '')

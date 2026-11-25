@@ -166,14 +166,22 @@ export const store = {
   // Costs: supplier and subcontractor quotes on a project and the margin (migration 0031, staff only).
   async listCosts(pid) { return ok(await sb.from('supplier_quotes').select('*').eq('project_id', pid).order('created_at', { ascending: false })); },
   async projectMargin(pid) { return ok(await sb.rpc('project_margin', { pid })); },
-  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null }) {
-    let pdf_path = null, pdf_name = '';
-    if (file) {
-      pdf_path = `${pid}/${crypto.randomUUID()}.pdf`; pdf_name = file.name.slice(0, 200);
-      ok(await sb.storage.from('supplier-quotes').upload(pdf_path, file, { contentType: 'application/pdf' }));
-    }
-    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency: 'GBP', fx_to_gbp: 1, status: 'received', quoted_on, valid_until, pdf_path, pdf_name, note }));
+  // Comparison fields since 0039: VAT inside the amount, discount, delivery on top, lead time, variant; "requested" = asked, no price.
+  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received', requested_on = null }) {
+    const pdf = file ? await this.costPdf(pid, file) : { pdf_path: null, pdf_name: '' };
+    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency: 'GBP', fx_to_gbp: 1, status, quoted_on, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant, requested_on }));
     emit();
+  },
+  // The price for a supplier we asked: the same row, now with its numbers.
+  async updateCost(id, pid, { supplier, reference = '', category, amount, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received' }) {
+    const pdf = file ? await this.costPdf(pid, file) : {};
+    ok(await sb.from('supplier_quotes').update({ supplier, reference, category, amount: Number(amount), status, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant }).eq('id', id));
+    emit();
+  },
+  async costPdf(pid, file) {
+    const pdf_path = `${pid}/${crypto.randomUUID()}.pdf`;
+    ok(await sb.storage.from('supplier-quotes').upload(pdf_path, file, { contentType: 'application/pdf' }));
+    return { pdf_path, pdf_name: file.name.slice(0, 200) };
   },
   async setCostStatus(id, status) { ok(await sb.from('supplier_quotes').update({ status }).eq('id', id)); emit(); },
   async deleteCost(id) { ok(await sb.from('supplier_quotes').delete().eq('id', id)); emit(); },

@@ -3,9 +3,11 @@ import { deepStrictEqual as eq } from 'node:assert/strict';
 import { costDealName, costFromDeal, costNote, costProperties, PIPELINE, STAGE, stageOf, stageStep, statusOf, type Cost } from './hubspot-costs.ts';
 
 Deno.test('statuses and stages map both ways; Ordered and Delivered read as accepted', () => {
-  eq(['received', 'accepted', 'rejected', 'superseded'].map(stageOf), [STAGE.received, STAGE.accepted, STAGE.rejected, STAGE.rejected]);
+  eq(['requested', 'received', 'accepted', 'rejected', 'superseded'].map(stageOf), [STAGE.requested, STAGE.received, STAGE.accepted, STAGE.rejected, STAGE.rejected]);
   eq([STAGE.requested, STAGE.received, STAGE.accepted, STAGE.ordered, STAGE.delivered, STAGE.rejected, 'other', null].map(statusOf),
-    ['received', 'received', 'accepted', 'accepted', 'accepted', 'rejected', null, null]);
+    ['requested', 'received', 'accepted', 'accepted', 'accepted', 'rejected', null, null]);
+  // A price came in for a supplier we asked: Requested → Received is pushed.
+  eq(stageStep({ status: 'received', hubspot_status: 'requested', hubspot_stage: STAGE.requested } as Pick<Cost, 'status' | 'hubspot_status' | 'hubspot_stage'>, STAGE.requested), { push: STAGE.received });
 });
 
 Deno.test('who moved last decides the stage', () => {
@@ -33,10 +35,14 @@ Deno.test('the purchase deal carries the supplier net in its own currency', () =
     dealname: 'Okna Polska · OP/114 · BP-2026-0004', pipeline: PIPELINE, amount: '7800.00', bp_cost_currency: 'PLN',
     bp_cost_fx_to_gbp: '0.195', bp_cost_category: 'production', bp_supplier_quote_ref: 'OP/114', bp_portal_supplier_quote_id: 'c1',
   });
+  // 0039: the deal amount is the comparable net (VAT out, discount off, delivery on).
+  eq(costProperties({ ...cost, currency: 'GBP', fx_to_gbp: 1, amount: 12000, net_gbp: '9750.00' } as unknown as Cost, 'BP-2026-0004').amount, '9750.00');
   const note = costNote(cost, 'BP-2026-0004', null);
   eq(note.startsWith('<p><strong>Portal supplier quote · BP-2026-0004 · Okna Polska · OP/114</strong></p>'), true);
   eq(note.includes('Net 40000.00 PLN (rate to GBP 0.195)'), true);
   eq(note.includes('never shown to the client'), true);
+  const n39 = costNote({ ...cost, currency: 'GBP', fx_to_gbp: 1, amount: 12000, vat_in_pct: 20, discount_pct: 5, delivery_gbp: 250, net_gbp: 9750 } as unknown as Cost, 'BP-2026-0004', null);
+  eq(n39.includes('Net 12000.00 GBP as quoted (VAT 20% included, 5% discount, delivery £250.00 on top); comparable net £9750.00'), true);
 });
 
 Deno.test('a Purchasing deal made in HubSpot becomes a supplier quote in £', () => {

@@ -519,6 +519,50 @@ test('costs: staff add a supplier quote in £, accept it and see the margin; the
   for (const text of ['Costs & margin', 'Okna Polska', 'Margin', '7,800']) await expect(client.locator('body')).not.toContainText(text);
 });
 
+test('costs: supplier quotes compare at one net figure; a supplier asked waits on the list until the price comes in', async ({ page }) => {
+  await page.goto('/admin.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="costs"] > summary').click();
+  const box = page.locator('[data-costs]');
+  // Asked, no price yet.
+  await box.locator('#cost-ask-sup').fill('Okna Nowak (demo)');
+  await box.locator('[data-cost-ask] button[type="submit"]').click();
+  const asked = box.locator('[data-cost]', { hasText: 'Okna Nowak (demo)' });
+  await expect(asked).toContainText('Requested');
+  await expect(asked).toContainText('waiting 0 days');
+  // VAT inside the price, a discount and delivery on top: compared at £12,000 / 1.2 × 0.95 + £250.
+  await box.locator('#cost-sup').fill('Aluprof partner (demo)');
+  await box.locator('#cost-var').fill('MB-86');
+  await box.locator('#cost-amt').fill('12000');
+  await box.locator('#cost-vat').selectOption('20');
+  await box.locator('#cost-disc').fill('5');
+  await box.locator('#cost-del').fill('250');
+  await expect(box.locator('[data-cost-net]')).toContainText('£9,750.00');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  const alu = box.locator('[data-cost]', { hasText: 'Aluprof partner (demo)' });
+  await expect(alu).toContainText('£9,750.00 net');
+  await expect(alu).toContainText('incl. VAT 20%');
+  await box.locator('#cost-sup').fill('Plain Frames (demo)');
+  await box.locator('#cost-amt').fill('9000');
+  await box.locator('#cost-lead').fill('21');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  const plain = box.locator('[data-cost]', { hasText: 'Plain Frames (demo)' });
+  await expect(plain).toContainText('Lowest');
+  await expect(plain).toContainText('21 days lead time');
+  await expect(alu).toContainText('+£750.00 (+8.3%) vs lowest');
+  // The price for the supplier we asked fills that same row.
+  await asked.locator('[data-cost-price]').click();
+  await expect(box.locator('#cost-sup')).toHaveValue('Okna Nowak (demo)');
+  await box.locator('#cost-amt').fill('9500');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  await expect(box.locator('[data-cost]', { hasText: 'Okna Nowak (demo)' })).toHaveCount(1);
+  await expect(box.locator('[data-cost]', { hasText: 'Okna Nowak (demo)' })).toContainText('Received');
+  // Accepting one counts it at its net in the margin.
+  await alu.locator('[data-cost-set="accepted"]').click();
+  await expect(box.locator('.cost-sum')).toContainText('£9,750');
+});
+
 test('mail: the client’s email shows on the project, the rest waits in Email; the client sees none of it', async ({ page, context }) => {
   await page.goto('/admin.html');
   await page.locator('[data-demo-login="staff"]').click();
@@ -653,6 +697,27 @@ test('quote builder: freight cost and a reserve lower the margin, markup shows b
   await page.locator('[data-act="step"][data-v="offer"]').click();
   await expect(page.locator('.offer .of-no').first()).toHaveText('D01');
   await expect(page.locator('.offer')).not.toContainText('Reserve');
+});
+
+test('quote builder: a homeowner quote prints the right to cancel; one for an architect does not', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  await page.locator('[data-act="audience"][data-v="home"]').click();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer [data-cancel-notice]')).toContainText('cancel within 14 days');
+  // Switched off for this quote.
+  await page.locator('[data-act="step"][data-v="terms"]').click();
+  await page.locator('[data-b="q:cancelNotice"]').uncheck();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer [data-cancel-notice]')).toHaveCount(0);
+  await page.locator('[data-act="step"][data-v="terms"]').click();
+  await page.locator('[data-b="q:cancelNotice"]').check();
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  await page.locator('[data-act="audience"][data-v="architect"]').click();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer [data-cancel-notice]')).toHaveCount(0);
 });
 
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {

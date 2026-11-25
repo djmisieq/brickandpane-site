@@ -2,6 +2,7 @@
 // Mirrors the database triggers (timeline, notifications) so the demo behaves like production.
 // Open the client portal and the staff CRM in two tabs: changes appear live in both.
 import { stage, decisionRights, MEMBER_ROLES } from './core.js';
+import { netOf } from './cost-net.js';
 
 const KEY = 'bp-portal-demo-v4';
 const SESSION = 'bp-portal-demo-session';
@@ -239,15 +240,20 @@ export const store = {
   async projectMargin(pid) {
     const s = load(); needStaff(s);
     const acc = (s.costs || []).filter((c) => c.project_id === pid && c.status === 'accepted');
-    const cost = Math.round(acc.reduce((n, c) => n + c.amount * c.fx_to_gbp, 0) * 100) / 100;
+    const cost = Math.round(acc.reduce((n, c) => n + netOf(c), 0) * 100) / 100;
     const sale = s.internal[pid]?.value_gbp ?? null;
     return { sale_gbp: sale, sale_source: sale == null ? null : 'value', sale_refs: null, cost_gbp: cost, accepted: acc.length,
       margin_gbp: sale == null ? null : Math.round((sale - cost) * 100) / 100, margin_pct: sale ? Math.round((sale - cost) / sale * 1000) / 10 : null };
   },
-  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null }) {
-    const s = load(); needStaff(s); s.costs ||= [];
-    s.costs.push({ id: uid(), project_id: pid, supplier, reference, category, amount: +amount, currency: 'GBP', fx_to_gbp: 1, status: 'received', quoted_on, valid_until, pdf_path: null, pdf_name: file?.name || '', note, created_at: now() });
+  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null, status = 'received', ...more }) {
+    const s = load(); needStaff(s); s.costs ||= []; // more: the comparison fields of 0039
+    const { vat_in_pct = 0, delivery_gbp = 0, lead_days = null, variant = '', requested_on = null } = more;
+    s.costs.push({ id: uid(), project_id: pid, supplier, reference, category, amount: +amount, currency: 'GBP', fx_to_gbp: 1, status, quoted_on, valid_until, pdf_path: null, pdf_name: file?.name || '', note, ...more, vat_in_pct, delivery_gbp, lead_days, variant, requested_on, created_at: now() });
     save(s);
+  },
+  async updateCost(id, pid, { file = null, ...fields }) {
+    const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id);
+    if (c) { Object.assign(c, fields, { amount: +fields.amount }, file ? { pdf_name: file.name } : {}); save(s); }
   },
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },
   async deleteCost(id) { const s = load(); needStaff(s); s.costs = (s.costs || []).filter((x) => x.id !== id); save(s); },
