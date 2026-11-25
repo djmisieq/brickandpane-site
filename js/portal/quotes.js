@@ -61,6 +61,18 @@ const SPEC = [
   { key: 'performance', en: 'Performance', pl: 'Parametry' },
   { key: 'security', en: 'Security', pl: 'Bezpieczeństwo' },
 ];
+// Work the client or others arrange, printed as one list under installation (analysis item 9: supplier and fitter
+// mails asked the same "who does this" questions on every job).
+const BY_OTHERS = {
+  making: { en: 'Making good of plaster and render around the new frames', pl: 'Uzupełnienie tynków i elewacji wokół nowych ram' },
+  decoration: { en: 'Decoration', pl: 'Malowanie' },
+  structure: { en: 'Lintels and structural openings', pl: 'Nadproża i otwory konstrukcyjne' },
+  upstands: { en: 'Upstands and roof work for rooflights', pl: 'Podstawy i prace dachowe pod świetliki' },
+  electrics: { en: 'Electrical work', pl: 'Prace elektryczne' },
+  scaffolding: { en: 'Scaffolding', pl: 'Rusztowanie' },
+  approvals: { en: 'Planning, Building Control and party wall matters', pl: 'Pozwolenia, Building Control i sprawy party wall' },
+  clearing: { en: 'Clearing furniture, blinds and curtains', pl: 'Usunięcie mebli, rolet i zasłon' },
+};
 const INSTALL_KEYS = ['windows', 'rooflights', 'screens', 'protection', 'removal', 'boards', 'access', 'other'];
 const INSTALL = {
   windows: { en: 'Install windows, doors and glazing', pl: 'Montaż okien, drzwi i przeszkleń', hintEn: 'Including sliders and facade elements. Fixings and perimeter sealing.', hintPl: 'Także przesuwne i elementy fasady. Mocowania i uszczelnienie obwodu.' },
@@ -104,7 +116,13 @@ const size = (w, h, lang) => {
 };
 const named = (list, id, lang) => { const x = list.find((i) => i.id === id); return x ? x[lang === 'pl' ? 'pl' : 'en'] : id; };
 const audienceName = (a, lang) => ({ home: { en: 'For the home', pl: 'Dom' }, architect: { en: 'Specifier quote', pl: 'Dla projektanta' }, developer: { en: 'Package quote', pl: 'Dla budowy' } }[a] || { en: '', pl: '' })[lang === 'pl' ? 'pl' : 'en'];
-const specRows = (p, lang) => SPEC.flatMap((s) => { const v = String(p[s.key] ?? '').trim(); return v ? [{ label: lang === 'pl' ? s.pl : s.en, value: v }] : []; });
+const specRows = (p, lang) => [...(Number(p.uw) > 0 ? [{ label: 'Uw', value: `${String(p.uw).replace('.', lang === 'pl' ? ',' : '.')} W/m²K` }] : []),
+  ...SPEC.flatMap((s) => { const v = String(p[s.key] ?? '').trim(); return v ? [{ label: lang === 'pl' ? s.pl : s.en, value: v }] : []; })];
+// Part L (Approved Document L 2021, vol. 1, Table 4.2): limiting U-values for new and replacement windows, doors and
+// rooflights in existing homes, extensions included. New homes are designed to better (about 1.2). Curtain walling
+// and shopfronts follow other rules, so no hint. Check the current edition before relying on it.
+const uwLimit = (p) => (['lantern', 'rooflight'].includes(p.kind) ? 2.2 : ['curtain', 'gable', 'shopfront'].includes(p.kind) ? null : 1.4);
+const uwWarn = (p) => { const lim = uwLimit(p), u = Number(p.uw); return lim && u > lim ? t(`Above the Part L limit of ${lim} for existing homes.`, `Powyżej limitu Part L ${lim} dla istniejących domów.`) : ''; };
 const itemTitle = (p, lang) => p.system.trim() || named(KINDS, p.kind, lang);
 const stageName = (s, lang) => (s.label.trim() ? s.label.trim() : s.key === 'custom' ? (lang === 'pl' ? 'Etap' : 'Stage') : PAY[s.key][lang === 'pl' ? 'pl' : 'en']);
 const stageWhen = (s, lang) => (s.trigger.trim() ? s.trigger.trim() : s.key === 'custom' ? '' : lang === 'pl' ? PAY[s.key].triggerPl : PAY[s.key].triggerEn);
@@ -161,11 +179,18 @@ function totals(q) {
 }
 // Margin while pricing (audit K3): the team's own costs per line and for installation, never printed. Installation
 // priced separately is still our sale, so it counts here even though it is outside the quote's main total.
+// Our installation cost (analysis item 9): from the fitters when their days are typed in (days × fitters × day rate,
+// plus travel and parking, plus the survey visit), otherwise the lump sum. Staff only, never printed.
+const fitCost = (q) => r2((Number(q.fitDays) || 0) * (Number(q.fitCrew) || 0) * (Number(q.fitRate) || 0) + (Number(q.fitTravel) || 0) + (Number(q.fitSurvey) || 0));
+const fitLine = (q) => ((Number(q.fitDays) || 0) > 0
+  ? `${t('Installation cost', 'Koszt montażu')}: <strong>${esc(money(fitCost(q), 'en'))}</strong>`
+  : `${t('Installation cost', 'Koszt montażu')}: ${esc(money(Number(q.installCost) || 0, 'en'))} ${t('(lump sum)', '(ryczałt)')}`);
+const installCostOf = (q) => ((Number(q.fitDays) || 0) > 0 ? fitCost(q) : Number(q.installCost) || 0);
 function marginOf(q) {
   const tot = totals(q);
   const sale = r2(tot.net + (q.installMode === 'separate' ? tot.installNet : 0));
   // Survey and delivery are sold (in the net total) and also cost us: freight from the factory, racks, the survey.
-  const base = r2(q.products.reduce((s, p) => s + r2(p.qty * (Number(p.unitCost) || 0)), 0) + (q.installMode === 'none' ? 0 : Number(q.installCost) || 0) + (Number(q.deliveryCost) || 0)
+  const base = r2(q.products.reduce((s, p) => s + r2(p.qty * (Number(p.unitCost) || 0)), 0) + (q.installMode === 'none' ? 0 : installCostOf(q)) + (Number(q.deliveryCost) || 0)
     + (q.extras || []).filter((x) => x.kind === 'extra').reduce((s, x) => s + (Number(x.cost) || 0), 0));
   // A reserve for what moves after the survey, the exchange rate on a factory order, transport damage: cost, never shown.
   const reserve = r2((base * (Number(q.contingencyPct) || 0)) / 100), cost = r2(base + reserve);
@@ -224,7 +249,8 @@ function normQuote(raw, f) {
     docLang: raw.docLang === 'pl' ? 'pl' : 'en',
     // Each quote keeps its own rate (audit 24.11.2026): switching VAT registration on one quote must not rewrite the others.
     vatRate: Number(raw.vatRate) || 0,
-    installCost: Number(raw.installCost) || 0, deliveryCost: Number(raw.deliveryCost) || 0, contingencyPct: Number(raw.contingencyPct) || 0,
+    installCost: Number(raw.installCost) || 0, ...Object.fromEntries(['fitDays', 'fitCrew', 'fitRate', 'fitTravel', 'fitSurvey'].map((k) => [k, Number(raw[k]) || 0])),
+    byOthers: Array.isArray(raw.byOthers) ? raw.byOthers.filter((k) => BY_OTHERS[k]) : [], deliveryCost: Number(raw.deliveryCost) || 0, contingencyPct: Number(raw.contingencyPct) || 0,
     markupPct: raw.markupPct == null || raw.markupPct === '' || !Number.isFinite(Number(raw.markupPct)) ? 30 : Number(raw.markupPct),
     installMode: ['included', 'separate'].includes(raw.installMode) ? raw.installMode : 'none',
     updatedAt: Number(raw.updatedAt) || Date.now(),
@@ -254,7 +280,7 @@ const statusName = (s) => t(STATUS[s]?.en ?? s, STATUS[s]?.pl ?? s);
 const statusTag = (q) => { const m = metaOf(q), last = sendsOf(q)[0]; return `<span class="tag q-st q-st-${esc(m.status)}">${esc(statusName(m.status))}${m.status !== 'draft' && last ? ` · rev ${esc(last.revision)}` : ''}</span>`; };
 // What the client sees, so the CRM can tell a changed quote from the one sent: no timestamps, private note or UI flags.
 const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
-const content = (q) => { const { updatedAt, revision, internalNote, projectId, installCost, deliveryCost, contingencyPct, markupPct, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; void installCost; void deliveryCost; void contingencyPct; void markupPct; const { extras, ...base } = rest; return stable({ ...base, ...(extras?.length ? { extras: extras.map(({ cost, ...x }) => { void cost; return x; }) } : {}), products: (base.products || []).map(({ showSpec, unitCost, ref, ...p }) => { void showSpec; void unitCost; return ref ? { ...p, ref } : p; }) }); }; // an empty code is the same as none (older sends had no code)
+const content = (q) => { const { updatedAt, revision, internalNote, projectId, installCost, deliveryCost, contingencyPct, markupPct, fitDays, fitCrew, fitRate, fitTravel, fitSurvey, byOthers, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; void installCost; void deliveryCost; void contingencyPct; void markupPct; void fitDays; void fitCrew; void fitRate; void fitTravel; void fitSurvey; const { extras, ...base } = rest; return stable({ ...base, ...(byOthers?.length ? { byOthers } : {}), ...(extras?.length ? { extras: extras.map(({ cost, ...x }) => { void cost; return x; }) } : {}), products: (base.products || []).map(({ showSpec, unitCost, ref, ...p }) => { void showSpec; void unitCost; return ref ? { ...p, ref } : p; }) }); }; // an empty code is the same as none (older sends had no code)
 export const nextRevision = (r) => {
   const s = String(r ?? '').trim();
   if (/^\d+$/.test(s)) return String(Number(s) + 1).padStart(Math.max(2, s.length), '0');
@@ -271,6 +297,29 @@ function sendPlan(q) {
   return { kind: q.revision.trim() === last.revision ? 'resend' : 'revision', last, bump: false };
 }
 const pdfBase = (q) => `Brick-and-Pane-${q.reference}-rev${q.revision.trim() || '00'}`.replace(/[^\w.-]+/g, '-');
+// The PDF made in the browser from the estimate on screen (no print dialog, no download and upload again).
+// html2pdf.js 0.14.0 (MIT, html2canvas + jsPDF) is kept in js/vendor and loaded only when a PDF is made: the CRM's
+// CSP runs scripts from this site alone. The pages are images of the estimate, A4, with items kept whole.
+let pdfLib = null;
+const loadPdfLib = () => (pdfLib ||= new Promise((ok, fail) => {
+  if (window.html2pdf) { ok(window.html2pdf); return; }
+  const s = document.createElement('script'); s.src = new URL('../vendor/html2pdf.bundle.min.js', import.meta.url).href;
+  s.onload = () => ok(window.html2pdf); s.onerror = () => { pdfLib = null; fail(new Error('pdf')); }; document.head.append(s);
+}));
+async function makePdf(q) {
+  const html2pdf = await loadPdfLib(), el = root.querySelector('.offer');
+  if (!el) throw new Error('no estimate');
+  el.classList.add('is-pdf');
+  try {
+    const blob = await html2pdf().set({
+      margin: [12, 12, 14, 12], image: { type: 'jpeg', quality: 0.9 },
+      html2canvas: { scale: 2, backgroundColor: '#ffffff', ignoreElements: (n) => n.classList?.contains('no-print') },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.of-item', '.of-keep', '.of-row'] },
+    }).from(el).outputPdf('blob');
+    return new File([blob], `${pdfBase(q)}.pdf`, { type: 'application/pdf' });
+  } finally { el.classList.remove('is-pdf'); }
+}
 const onDeal = (dealId) => (quotes || []).filter((x) => metaOf(x).hubspot_deal_id === dealId);
 // HubSpot says the client accepted, but two or more quotes on the deal are live: staff say which.
 function needsChoice(q) {
@@ -427,6 +476,7 @@ function words(lang) {
     standardExclusion: p
       ? 'O ile nie wpisano wyżej: malowanie, prace konstrukcyjne i uzupełnienia poza uzgodnionym zakresem nie wchodzą w cenę.'
       : 'Unless it is listed above, decoration, structural work and making good beyond the agreed items are not included.',
+    byOthers: p ? 'Po stronie innych' : 'By others',
     programme: p ? 'Program' : 'Programme', certification: p ? 'Certyfikat' : 'Certification', notes: p ? 'Uwagi' : 'Notes',
     drawing: p ? 'Rysunek' : 'Drawing', supplier: p ? 'Sprzedawca' : 'Supplier', legal: p ? 'Podmiot' : 'Legal entity',
     companyNo: p ? 'Nr spółki' : 'Company no.', vatNo: p ? 'Nr VAT' : 'VAT no.', missingName: p ? 'Imię klienta' : 'Customer name',
@@ -503,6 +553,7 @@ function estimate(q) {
         <p><span class="of-label">${esc(w.exclusions)}</span>${q.exclusions.trim() ? `${esc(q.exclusions.trim())} ` : ''}${esc(w.standardExclusion)}</p>
         ${labelled(w.programme, q.programme.trim())}
         ${labelled(w.certification, q.certification.trim())}
+        ${labelled(w.byOthers, (q.byOthers || []).filter((k) => BY_OTHERS[k]).map((k) => BY_OTHERS[k][L === 'pl' ? 'pl' : 'en']).join('; '))}
       </div>
     </section>`}
     <section class="of-sec of-keep">
@@ -612,7 +663,7 @@ function sendPanel(q) {
   const choice = needsChoice(q) ? `<div class="callout q-gap"><p>${t(`In HubSpot the deal is at “${stageText(m.hubspot_dealstage)}”, and it has more than one quote sent. Did the client accept this one?`, `W HubSpocie deal jest na etapie „${stageText(m.hubspot_dealstage)}”, a ma kilka wysłanych ofert. Czy klient przyjął tę?`)}</p>
     <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="st-accepted">${t('Yes, this one', 'Tak, tę')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('No, another one', 'Nie, inną')}</button></div></div>` : '';
   const statusBtns = m.status === 'draft' ? '' : `<div class="btn-row q-gap">${m.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-accepted">${t('Mark accepted', 'Oznacz: przyjęta')}</button>` : ''}${m.status !== 'declined' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('Mark declined', 'Oznacz: odrzucona')}</button>` : ''}${m.status !== 'sent' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-sent">${t('Back to sent', 'Wróć do: wysłana')}</button>` : ''}</div>
-    <p class="hint">${m.status_source === 'hubspot' ? t('Status taken from the deal stage in HubSpot.', 'Status wzięty z etapu deala w HubSpocie.') : t('The status follows the HubSpot deal (every 15 min) unless you set it here.', 'Status idzie za dealem w HubSpocie (co 15 min), chyba że ustawisz go tutaj.')}</p>`;
+    <p class="hint"${hub.on ? "" : " hidden"}>${m.status_source === 'hubspot' ? t('Status taken from the deal stage in HubSpot.', 'Status wzięty z etapu deala w HubSpocie.') : t('The status follows the HubSpot deal (every 15 min) unless you set it here.', 'Status idzie za dealem w HubSpocie (co 15 min), chyba że ustawisz go tutaj.')}</p>`;
   const what = plan.kind === 'new' ? t('New quote', 'Nowa oferta')
     : plan.kind === 'resend' ? t(`The same revision ${q.revision} again, with no changes`, `Ta sama rewizja ${q.revision} jeszcze raz, bez zmian`)
     : t(`Revision ${q.revision}, replacing revision ${plan.last.revision} of ${fmtDay(plan.last.sent_on)}`, `Rewizja ${q.revision} w miejsce rewizji ${plan.last.revision} z ${fmtDay(plan.last.sent_on)}`);
@@ -622,7 +673,7 @@ function sendPanel(q) {
     form = `<div class="q-sendform q-gap">
       <p><strong>${esc(what)}</strong> · ${esc(money(q.vatRate > 0 ? totals(q).gross : totals(q).net, q.docLang))}</p>
       <ol class="q-steps-list">
-        <li>${t('Save the PDF the client gets:', 'Zapisz PDF, który dostaje klient:')} <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print → Save as PDF', 'Drukuj → Zapisz jako PDF')}</button><span class="hint">${t('File name', 'Nazwa pliku')}: ${esc(pdfBase(q))}.pdf</span></li>
+        <li>${t('Make the PDF the client gets:', 'Zrób PDF, który dostaje klient:')} <button type="button" class="btn btn-sm" data-act="send-make" ${sendForm.busy ? 'disabled' : ''}>${sendForm.making ? t('Making the PDF…', 'Robię PDF…') : t('Make the PDF', 'Zrób PDF')}</button>${f?.made ? ` <button type="button" class="btn btn-sm btn-ghost" data-act="send-make-open">${t('Look at it', 'Podgląd')}</button>` : ''}<span class="hint">${t('Made from the estimate below. Or print it yourself:', 'Z oferty poniżej. Albo wydrukuj samodzielnie:')}</span> <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print → Save as PDF', 'Drukuj → Zapisz jako PDF')}</button><span class="hint">${t('File name', 'Nazwa pliku')}: ${esc(pdfBase(q))}.pdf</span></li>
         <li><label class="field q-field"><span class="q-lab">${t('The PDF sent to the client', 'PDF wysłany do klienta')}</span><input type="file" id="q-send-file" accept="application/pdf,.pdf"></label>
           ${f ? `<span class="hint">${t('Chosen', 'Wybrany')}: ${esc(f.name)} (${Math.round(f.size / 1024)} KB)</span>` : ''}
           ${nameOk ? '' : `<label class="q-check"><input type="checkbox" id="q-send-sure"><span>${t(`The file name has no ${q.reference}. It is the PDF of this quote.`, `W nazwie pliku nie ma ${q.reference}. To jest PDF tej oferty.`)}</span></label>`}</li>
@@ -637,9 +688,9 @@ function sendPanel(q) {
   const openBtn = sendForm?.quoteId === q.id ? '' : `<div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-open" ${canSend ? '' : 'disabled'}>${sends.length ? t('Send again or send a revision…', 'Wyślij ponownie albo rewizję…') : t('Send to the client…', 'Wyślij do klienta…')}</button></div>
     ${canSend ? '' : `<p class="hint">${t('Choose the project, or pin a HubSpot deal, first (step 01, Client).', 'Najpierw wybierz projekt albo przypnij deal w HubSpocie (krok 01, Klient).')}</p>`}`;
   return `<section class="q-box q-send no-print" id="q-send">
-    <div class="q-subrow"><h3 class="q-sub">${t('Sending and HubSpot', 'Wysyłka i HubSpot')}</h3>${statusTag(q)}</div>
+    <div class="q-subrow"><h3 class="q-sub">${hub.on ? t('Sending and HubSpot', 'Wysyłka i HubSpot') : t('Sending', 'Wysyłka')}</h3>${statusTag(q)}</div>
     ${pr ? `<p class="q-item-meta">${t('Project', 'Projekt')}: <a href="#/p/${esc(pr.id)}">${esc(pr.ref)} · ${esc(pr.name)}</a></p>` : ''}
-    <p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>
+    ${hub.on || m.hubspot_deal_id ? `<p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>` : ''}
     ${choice}${hist}${statusBtns}${openBtn}${form}
   </section>`;
 }
@@ -696,10 +747,12 @@ function stepProducts(q) {
             <button type="button" class="q-icon" data-act="up" aria-label="${t('Move up', 'Wyżej')}" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
             <button type="button" class="q-icon" data-act="down" aria-label="${t('Move down', 'Niżej')}" ${i === q.products.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
             <button type="button" class="q-icon" data-act="copy-item" aria-label="${t('Copy item', 'Kopiuj pozycję')}" title="${t('Copy item', 'Kopiuj pozycję')}">⧉</button>
+            <button type="button" class="q-icon" data-act="lib-save" aria-label="${t('Save to the library', 'Zapisz w bibliotece')}" title="${t('Save to the library', 'Zapisz w bibliotece')}">☆</button>
             <button type="button" class="q-icon" data-act="del-item" aria-label="${t('Remove item', 'Usuń pozycję')}">${ICON.bin}</button>
           </div></div>
         <div class="q-grid">
           ${field(t('Code', 'Kod'), text(`p:${p.id}:ref`, p.ref, `W${String(i + 1).padStart(2, '0')}`), t('As on the drawings and the schedule: W01, D01, RL01.', 'Jak na rysunkach i w zestawieniu: W01, D01, RL01.'), 'q-ref')}
+          <label class="field q-field q-uw"><span class="q-lab">Uw, W/m²K</span>${num(`p:${p.id}:uw`, p.uw, '')}<span class="hint">${esc(uwLimit(p) ? t(`Part L, existing homes and extensions: up to ${uwLimit(p)}. New homes about 1.2.`, `Part L, istniejące domy i rozbudowy: najwyżej ${uwLimit(p)}. Nowe domy ok. 1,2.`) : t('Curtain walling and shopfronts: check with the system data.', 'Ściany kurtynowe i witryny: według danych systemu.'))}</span><span class="q-warn" data-uw-warn="${esc(p.id)}">${esc(uwWarn(p))}</span></label>
           ${field(t('Where', 'Gdzie'), text(`p:${p.id}:location`, p.location, pl ? 'Elewacja frontowa' : 'Front elevation'))}
           ${field(t('Material', 'Materiał'), `<select data-b="p:${esc(p.id)}:frame">${opts(FRAMES, p.frame)}</select>`)}
           ${field(t('Type', 'Rodzaj'), `<select data-b="p:${esc(p.id)}:kind">${GROUPS.map((g) => `<optgroup label="${esc(pl ? g.pl : g.en)}">${opts(KINDS.filter((k) => k.group === g.id), p.kind)}</optgroup>`).join('')}</select>`)}
@@ -719,6 +772,7 @@ function stepProducts(q) {
       </article>`;
     }).join('')}</div>
     <button type="button" class="btn q-gap" data-act="add-item">+ ${t('Add a window or door', 'Dodaj okno lub drzwi')}</button>
+    ${libraryBox(q)}
     ${extrasBox(q)}
     ${rfqBox(q)}
     ${costBox(q)}`;
@@ -739,7 +793,21 @@ function stepInstall(q) {
           ${field(t('Detail', 'Doprecyzowanie'), text(`il:${l.key}:detail`, l.detail), t('If blank, the quote keeps the short sentence beside it.', 'Jeśli puste, w ofercie zostaje krótkie zdanie obok.'))}
         </div>` : ''}
       </div>`; }).join('')}
-      ${field(t('Our installation cost, net', 'Nasz koszt montażu, netto'), num('q:installCost', q.installCost, '0.00'), t('Fitters, transport, access: only for the margin, never on the quote.', 'Monterzy, transport, dostęp: tylko do marży, nie trafia do oferty.'), 'q-cost')}
+      <div class="q-box" id="q-fit"><h3 class="q-sub">${t('Our installation cost', 'Nasz koszt montażu')} <span class="tag">${t('staff only', 'tylko zespół')}</span></h3>
+        <p class="hint">${t('From the fitters: days × fitters × day rate, plus travel and parking, plus the survey visit. Only for the margin, never on the quote.', 'Z monterów: dni × monterzy × stawka dzienna, plus dojazd i parking, plus wizyta pomiarowa. Tylko do marży, nie trafia do oferty.')}</p>
+        <div class="q-grid">
+          ${field(t('Days on site', 'Dni na budowie'), num('q:fitDays', q.fitDays), '', 'q-cost')}
+          ${field(t('Fitters', 'Monterzy'), num('q:fitCrew', q.fitCrew, '2'), '', 'q-cost')}
+          ${field(t('Day rate per fitter, £', 'Stawka dzienna montera, £'), num('q:fitRate', q.fitRate), '', 'q-cost')}
+          ${field(t('Travel, parking, congestion charge, £', 'Dojazd, parking, opłata za wjazd, £'), num('q:fitTravel', q.fitTravel), '', 'q-cost')}
+          ${field(t('Survey visit, £', 'Wizyta pomiarowa, £'), num('q:fitSurvey', q.fitSurvey), '', 'q-cost')}
+          ${field(t('Or a lump sum, £', 'Albo kwota ryczałtowa, £'), num('q:installCost', q.installCost, '0.00'), t('Used while no days are typed in.', 'Liczy się, dopóki nie wpiszesz dni.'), 'q-cost')}
+        </div>
+        <p class="q-fit-sum" id="q-fit-sum">${fitLine(q)}</p>
+      </div>
+      <div class="q-box"><h3 class="q-sub">${t('By others', 'Po stronie innych')}</h3><p class="hint">${t('Ticked items print as one list under installation.', 'Zaznaczone drukują się jedną listą przy montażu.')}</p>
+        <div class="q-checks">${Object.entries(BY_OTHERS).map(([k, d]) => `<label class="q-check"><input type="checkbox" data-act-check="by-others" data-v="${k}" ${(q.byOthers || []).includes(k) ? 'checked' : ''}><span>${esc(t(d.en, d.pl))}</span></label>`).join('')}</div>
+      </div>
       ${field(t('What the client needs to prepare', 'Co klient ma przygotować'), area('q:siteNotes', q.siteNotes, '', 2))}
       ${field(t('Further exclusions', 'Dodatkowe wyłączenia'), area('q:exclusions', q.exclusions, '', 2), t('The standard exclusion — decoration and structural work — is added on its own.', 'Standardowe wyłączenie — malowanie i konstrukcja — dopisze się samo.'))}
       <div class="q-grid">
@@ -813,6 +881,48 @@ function summary(q) {
 }
 
 // The margin box beside the steps: staff only (the aside is never printed).
+// ---------- item library and a schedule pasted from Excel (analysis item 10) ----------
+// The library: items the team prices again and again (a standard casement, a lantern size), saved with the firm
+// settings (quote_settings, staff only), so no table is needed. Price and our cost go with it; code, location and
+// quantity do not. The schedule: cells copied from Excel (tab separated) or a CSV, with or without a header row;
+// the CSV of a request for quotes reads back the same way.
+const libItems = () => (Array.isArray(firm.library) ? firm.library : []);
+const libName = (p) => [p.system.trim() || named(KINDS, p.kind, 'en'), named(FRAMES, p.frame, 'en'), p.widthMm && p.heightMm ? `${p.widthMm}×${p.heightMm}` : ''].filter(Boolean).join(' · ');
+function libraryBox(q) {
+  const lib = libItems();
+  return `<section class="q-box no-print" id="q-lib"><h3 class="q-sub">${t('Library and schedule', 'Biblioteka i zestawienie')}</h3>
+    ${lib.length ? `<div class="q-lib-row"><label class="field q-field"><span class="q-lab">${t('From the library', 'Z biblioteki')}</span><select id="q-lib-pick">${lib.map((x, i) => `<option value="${i}">${esc(x.name)}${x.unitPrice ? ` · ${esc(money(x.unitPrice, 'en'))}` : ''}</option>`).join('')}</select></label>
+      <div class="btn-row"><button type="button" class="btn btn-sm" data-act="lib-add">${t('Add to the quote', 'Dodaj do oferty')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="lib-del">${t('Remove from the library', 'Usuń z biblioteki')}</button></div></div>`
+    : `<p class="hint">${t('Save an item with ☆ on its card to use it again in any quote.', 'Zapisz pozycję gwiazdką ☆ na jej karcie, żeby użyć jej w każdej ofercie.')}</p>`}
+    <label class="field q-field q-gap"><span class="q-lab">${t('Paste a schedule from Excel', 'Wklej zestawienie z Excela')}</span><textarea id="q-import" rows="4" placeholder="${esc(t('code  description  width  height  qty', 'kod  opis  szerokość  wysokość  ilość'))}"></textarea><span class="hint">${t('Copy the cells in Excel and paste them here, or choose a CSV. With a header row the columns are found by name (code, description, width, height, qty, price, notes); without one they are read in that order.', 'Skopiuj komórki w Excelu i wklej tutaj albo wybierz CSV. Z wierszem nagłówków kolumny są rozpoznawane po nazwie (kod, opis, szerokość, wysokość, ilość, cena, uwagi); bez niego czytane w tej kolejności.')}</span></label>
+    <div class="btn-row"><button type="button" class="btn btn-sm" data-act="import">${t('Add the lines', 'Dodaj pozycje')}</button><label class="btn btn-sm btn-ghost q-file">${t('Choose a CSV', 'Wybierz CSV')}<input type="file" id="q-import-file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden></label></div>
+  </section>`;
+}
+const COLS = { ref: /^(code|ref|item|kod|nr|no\.?)$/i, system: /^(description|name|type|item name|opis|nazwa|typ|system)$/i, widthMm: /^(width|width_mm|w|szer(okość)?|szerokosc)/i, heightMm: /^(height|height_mm|h|wys(okość)?|wysokosc)/i, qty: /^(qty|quantity|ilość|ilosc|szt|pcs)/i, unitPrice: /^(price|unit price|cena)/i, notes: /^(notes?|uwagi|remarks)$/i, material: /^(material|materiał|frame)$/i };
+const ORDER = ['ref', 'system', 'widthMm', 'heightMm', 'qty'];
+const guessKind = (s) => { const x = s.toLowerCase(); return /lantern|świetlik/.test(x) ? 'lantern' : /rooflight|dachow/.test(x) ? 'rooflight' : /lift|unosz/.test(x) ? 'liftslide' : /bi-?fold|harmonij/.test(x) ? 'bifold' : /slid|przesuw/.test(x) ? 'slimslide' : /sash|skrzynk/.test(x) ? 'sash' : /french|francus/.test(x) ? 'french' : /entrance|wejści/.test(x) ? 'entrance' : /door|drzwi/.test(x) ? 'garden' : /tilt|uchyl/.test(x) ? 'tilt' : /fixed|stał|fix/.test(x) ? 'fixed' : /curtain|kurtyn/.test(x) ? 'curtain' : 'casement'; };
+const guessFrame = (s) => { const x = s.toLowerCase(); return /alu.?clad|timber.?alu|drewno.?alu/.test(x) ? 'timber-alu' : /u?pvc/.test(x) ? 'pvc' : /timber|wood|oak|accoya|drewn|sosn|dąb/.test(x) ? 'timber' : 'aluminium'; };
+function parseSchedule(textIn) {
+  const rows = String(textIn || '').replace(/^\ufeff/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (!rows.length) return [];
+  const sep = rows[0].includes('\t') ? '\t' : (rows[0].match(/;/g) || []).length > (rows[0].match(/,/g) || []).length ? ';' : ',';
+  const split = (l) => { if (sep === '\t') return l.split('\t'); const out = []; let cur = '', inQ = false; for (let i = 0; i < l.length; i++) { const c = l[i]; if (inQ) { if (c === '"' && l[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') inQ = false; else cur += c; } else if (c === '"') inQ = true; else if (c === sep) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out; };
+  let cells = rows.map((l) => split(l).map((c) => c.trim()));
+  const head = cells[0].map((h) => Object.keys(COLS).find((k) => COLS[k].test(h)) || null);
+  const named2 = head.filter(Boolean).length >= 2;
+  const map = named2 ? head : ORDER;
+  if (named2) cells = cells.slice(1);
+  const numOf = (v) => { const n = Number(String(v ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  return cells.flatMap((r) => {
+    const v = {}; map.forEach((k, i) => { if (k && r[i] != null && r[i] !== '') v[k] = r[i]; });
+    if (!v.system && !v.ref && !v.widthMm) return [];
+    const desc = [v.system, v.material].filter(Boolean).join(' ');
+    return [{ ...newProduct(), ref: (v.ref || '').slice(0, 20), system: v.system || '', material: v.material || '', kind: guessKind(desc), frame: guessFrame(desc),
+      widthMm: v.widthMm ? String(Math.round(numOf(v.widthMm))) : '', heightMm: v.heightMm ? String(Math.round(numOf(v.heightMm))) : '',
+      qty: Math.max(1, Math.round(numOf(v.qty)) || 1), unitPrice: r2(numOf(v.unitPrice)), notes: v.notes || '' }];
+  });
+}
+
 // ---------- extras and options (analysis item 7) ----------
 // An extra is a priced line in the total (scaffolding, a skip, a parking permit, out-of-hours work). An option is an
 // alternative or add-on priced beside the quote (triple glazing, a second colour, laminated glass) that stays out of
@@ -997,6 +1107,8 @@ function live() {
   const ps = root.querySelector('#q-paysum'); if (ps) ps.outerHTML = paySumLine(q);
   const amounts = payAmounts(q.payments, q.paymentOnGross ? tot.gross : tot.net, payOk(q));
   $$('[data-pay-amt]', root).forEach((el) => { el.textContent = money(amounts[+el.dataset.payAmt] ?? 0, q.docLang); });
+  const fit = root.querySelector('#q-fit-sum'); if (fit) fit.innerHTML = fitLine(q);
+  $$('[data-uw-warn]', root).forEach((el) => { const p = q.products.find((x) => x.id === el.dataset.uwWarn); el.textContent = p ? uwWarn(p) : ''; });
 }
 
 function draw() {
@@ -1079,6 +1191,20 @@ async function act(btn) {
     case 'mode': q.installMode = v; break;
     case 'valid30': q.validUntil = addDays(q.date || today(), 30); break;
     case 'add-item': q.products.push(newProduct()); break;
+    case 'lib-save': {
+      const p = q.products.find((x) => x.id === pid); if (!p) return;
+      const { id, ref, location, qty, showSpec, ...item } = JSON.parse(JSON.stringify(p)); void id; void ref; void location; void qty; void showSpec;
+      const name = libName(p), lib = libItems().filter((x) => x.name !== name);
+      firm.library = [...lib, { ...item, name }].slice(-200); firmDirty = true; later();
+      toast(t(`Saved to the library: ${name}.`, `Zapisano w bibliotece: ${name}.`)); const y = scrollY; draw(); scrollTo(0, y); return;
+    }
+    case 'lib-add': { const x = libItems()[Number(root.querySelector('#q-lib-pick')?.value)]; if (!x) return; const { name, ...item } = x; void name; q.products.push({ ...newProduct(), ...item, id: uid(), ref: '', qty: 1 }); break; }
+    case 'lib-del': { const i = Number(root.querySelector('#q-lib-pick')?.value); if (!libItems()[i]) return; firm.library = libItems().filter((_, j) => j !== i); firmDirty = true; later(); const y = scrollY; draw(); scrollTo(0, y); return; }
+    case 'import': {
+      const lines = parseSchedule(root.querySelector('#q-import')?.value);
+      if (!lines.length) { toast(t('Nothing to add: paste the cells with at least a description or a size.', 'Nic do dodania: wklej komórki z opisem albo wymiarem.')); return; }
+      q.products.push(...lines); toast(t(`${lines.length} lines added. Check the type and material of each.`, `Dodano pozycje: ${lines.length}. Sprawdź typ i materiał każdej.`)); break;
+    }
     case 'add-x': (q.extras ||= []).push({ id: uid(), kind: v === 'option' ? 'option' : 'extra', label: '', amount: 0, cost: 0 }); break;
     case 'x-kind': { const x = (q.extras || []).find((e) => e.id === btn.closest('[data-xid]')?.dataset.xid); if (x) x.kind = v === 'option' ? 'option' : 'extra'; break; }
     case 'del-x': q.extras = (q.extras || []).filter((e) => e.id !== btn.closest('[data-xid]')?.dataset.xid); break;
@@ -1170,6 +1296,14 @@ async function hubAct(a, v, q) {
       sendForm = { quoteId: q.id, file: null, error: '', busy: false }; redraw(); return;
     }
     if (a === 'send-cancel') { sendForm = null; redraw(); return; }
+    if (a === 'send-make') {
+      if (!sendForm || sendForm.busy) return;
+      sendForm.making = true; sendForm.busy = true; sendForm.error = ''; redraw();
+      try { await flush(); const file = await makePdf(q); file.made = true; sendForm.file = file; }
+      catch { sendForm.error = t('The PDF could not be made here. Print it and choose the file below.', 'Nie udało się zrobić PDF. Wydrukuj go i wybierz plik poniżej.'); }
+      sendForm.making = false; sendForm.busy = false; redraw(); return;
+    }
+    if (a === 'send-make-open') { const f = sendForm?.file; if (f) { const u = URL.createObjectURL(f); open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60000); } return; }
     if (a === 'send-retry') {
       const r = await store.retryQuoteSend(v);
       const s = hub.sends.find((x) => x.id === v);
@@ -1279,6 +1413,8 @@ function bind(app) {
   app.addEventListener('change', (e) => {
     const el = e.target; if (!inDesk(el)) return;
     if (el.id === 'q-send-share') { if (sendForm) sendForm.share = el.checked; return; }
+    if (el.id === 'q-import-file') { const file = el.files?.[0]; if (file) file.text().then((txt) => { const box = root.querySelector('#q-import'); if (box) { box.value = txt; box.focus(); } }); return; }
+    if (el.dataset.actCheck === 'by-others') { const q = current(); if (!q) return; const set = new Set(q.byOthers || []); if (el.checked) set.add(el.dataset.v); else set.delete(el.dataset.v); q.byOthers = Object.keys(BY_OTHERS).filter((k) => set.has(k)); touch(q); return; }
     if (el.id === 'q-send-file') { if (sendForm) { sendForm.file = el.files?.[0] || null; sendForm.error = ''; const y = scrollY; draw(); scrollTo(0, y); } return; }
     if (el.dataset.act === 'vat') {
       const q = current(); firm.vatRegistered = el.checked; firmDirty = true;

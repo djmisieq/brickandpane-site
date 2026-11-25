@@ -472,7 +472,6 @@ test('demo mode shows no provider buttons', async ({ page }) => {
 
 test('portal pages: CSP, frame guard, password settings and size checks', async ({ page }) => {
   const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('/login.html');
   await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /frame-src ('none'|https:\/\/challenges\.cloudflare\.com);/); // Turnstile only, when on
   await expect(page.locator('#no-frame')).toHaveCount(0); // top window: the page is shown
@@ -753,6 +752,58 @@ test('quote builder: our cost comes from a supplier quote on the project, the pr
   await expect(page.locator('.offer')).not.toContainText('Frames Ltd');
 });
 
+test('quote builder: the PDF is made in the browser and sent, no print and upload', async ({ page }) => {
+  test.setTimeout(90000);
+  page.on('console', (m) => console.log('CONSOLE', m.type(), m.text())); page.on('pageerror', (e) => console.log('PAGEERR', e.message));
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-new-quote]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  const ref = await page.locator('[data-b="q:reference"]').inputValue();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await page.locator('#q-send [data-act="send-open"]').click();
+  await page.locator('#q-send [data-act="send-make"]').click();
+  await expect(page.locator('#q-send')).toContainText(`Chosen: Brick-and-Pane-${ref}-rev00.pdf`, { timeout: 60000 });
+  await expect(page.locator('#q-send [data-act="send-make-open"]')).toBeVisible();
+  await expect(page.locator('#q-send-sure')).toHaveCount(0); // the name carries the reference
+  await page.locator('#q-send [data-act="send-go"]').click();
+  await expect(page.locator('#q-send')).toContainText('rev 00');
+  await expect(page.locator('.offer')).toBeVisible();
+  await expect(page.locator('.offer.is-pdf')).toHaveCount(0);
+});
+
+test('quote builder: Uw with the Part L limit, installation cost from the fitters, a by-others list on the quote', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  const first = page.locator('[data-pid]').first();
+  await first.locator('[data-b$=":uw"]').fill('1.6');
+  await expect(first.locator('[data-uw-warn]')).toContainText('Above the Part L limit of 1.4');
+  await first.locator('[data-b$=":uw"]').fill('1.3');
+  await expect(first.locator('[data-uw-warn]')).toHaveText('');
+  await page.locator('[data-act="step"][data-v="install"]').click();
+  await page.locator('[data-act="mode"][data-v="included"]').click();
+  await page.locator('[data-b="q:fitDays"]').fill('2');
+  await page.locator('[data-b="q:fitCrew"]').fill('2');
+  await page.locator('[data-b="q:fitRate"]').fill('250');
+  await page.locator('[data-b="q:fitTravel"]').fill('80');
+  await page.locator('[data-b="q:fitSurvey"]').fill('120');
+  await expect(page.locator('#q-fit-sum')).toContainText('£1,200.00'); // 2 × 2 × 250 + 80 + 120
+  await expect(page.locator('#q-margin')).toContainText('£1,200.00');
+  await page.locator('[data-act-check="by-others"][data-v="decoration"]').check();
+  await page.locator('[data-act-check="by-others"][data-v="scaffolding"]').check();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const offer = page.locator('.offer');
+  await expect(offer).toContainText('By others');
+  await expect(offer).toContainText('Decoration; Scaffolding');
+  await expect(offer).toContainText('1.3 W/m²K');
+  await expect(offer).not.toContainText('£1,200');
+  await expect(offer).not.toContainText('Day rate');
+});
+
 test('quote builder: an extra is a line in the total, an option is priced beside it; our cost stays off the print', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');
@@ -783,6 +834,34 @@ test('quote builder: an extra is a line in the total, an option is priced beside
   await expect(opts).toContainText('Triple glazing on all items');
   await expect(opts).toContainText('+ £1,200.00');
   await expect(page.locator('.offer')).not.toContainText('£600');
+});
+
+test('quote builder: an item saved to the library goes into another quote; a schedule pasted from Excel becomes lines', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await page.locator('[data-pid]').first().locator('[data-act="lib-save"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Saved to the library');
+  // A new, empty quote takes it from the library.
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="new"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await expect(page.locator('#q-lib-pick option')).toHaveCount(1);
+  await page.locator('#q-lib [data-act="lib-add"]').click();
+  await expect(page.locator('[data-pid]')).toHaveCount(1);
+  await expect(page.locator('[data-pid]').first().locator('[data-b$=":unitPrice"]')).not.toHaveValue('');
+  // Cells copied from Excel, with a header row.
+  await page.locator('#q-import').fill('Code\tDescription\tWidth\tHeight\tQty\nW01\tTimber sash window\t920\t1450\t2\nD01\tAluminium bi-fold door\t3600\t2100\t1\n');
+  await page.locator('#q-lib [data-act="import"]').click();
+  await expect(page.locator('.toast').last()).toContainText('2 lines added');
+  const cards = page.locator('[data-pid]');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(1).locator('[data-b$=":ref"]')).toHaveValue('W01');
+  await expect(cards.nth(1).locator('[data-b$=":widthMm"]')).toHaveValue('920');
+  await expect(cards.nth(2).locator('[data-b$=":ref"]')).toHaveValue('D01');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer')).toContainText('Aluminium bi-fold door');
 });
 
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {

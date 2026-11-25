@@ -776,6 +776,8 @@ body.app .list-btn{display:none}
 .q-st-declined{border-color:var(--line-strong);color:var(--muted);text-decoration:line-through}
 .q-item-hub{margin-top:4px}
 .q-sendform{border-top:1px solid var(--line);padding-top:var(--s-s)}
+/* The estimate while the PDF is made: A4 width, no frame (the page margins come from the PDF). */
+.offer.is-pdf{width:186mm;max-width:none;border:0;padding:0;font-size:10.5pt}
 .q-steps-list{padding-left:1.2em;display:grid;gap:var(--s-s);margin-top:var(--s-s)}
 .q-steps-list .btn{margin:.3em .5em .3em 0}
 .q-steps-list .hint{display:block}
@@ -829,6 +831,10 @@ body.app .list-btn{display:none}
 .of-totals.of-plain{border-top:0;margin-top:var(--s-xs)}
 .of-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-m);padding:.3rem 0}
 .of-row span:first-child{color:var(--ink-2)}
+/* Item library and pasted schedule (analysis item 10). */
+.q-lib-row{display:grid;gap:var(--s-xs)}.q-file{cursor:pointer}
+/* Fitters cost and by-others list in the builder (analysis item 9). */
+.q-checks{display:grid;gap:var(--s-xs)}.q-fit-sum{margin:var(--s-s) 0 0}
 /* Extras and options in the builder (analysis item 7). */
 .q-x{display:grid;gap:var(--s-xs);padding:var(--s-s) 0;border-top:1px solid var(--line)}.q-x-kind{justify-self:start}.q-x>.btn{justify-self:start}
 .of-row span:last-child{font-family:var(--mono);white-space:nowrap}
