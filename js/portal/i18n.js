@@ -441,6 +441,7 @@ const PL = {
   "Everyone": "Wszyscy",
   "{n} emails are not on any project yet": "Maile bez projektu: {n}",
   "Account manager": "Opiekun",
+  "no costs entered": "brak wpisanych kosztów",
   "Overdue (with us)": "Po terminie (u nas)",
   "With us": "U nas",
   "Waiting on client": "Czeka na klienta",

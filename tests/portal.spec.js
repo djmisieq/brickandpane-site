@@ -489,6 +489,8 @@ test('costs: staff add a supplier quote in £, accept it and see the margin; the
   await page.goto('/admin.html');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await expect(page.locator('.key-numbers')).toContainText('£23,900'); // value on top of the card, no scrolling
+  await page.locator('[data-fold="costs"] > summary').click();
   const box = page.locator('[data-costs]');
   await expect(box).toContainText('Costs & margin');
   await expect(box).toContainText('£23,900'); // the Commercial value, until a quote goes out on a deal
