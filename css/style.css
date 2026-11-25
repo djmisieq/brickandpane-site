@@ -444,6 +444,9 @@ fieldset{border:0;padding:0;min-width:0}
 .appbar-inner{display:flex;align-items:center;justify-content:space-between;gap:var(--s-m);min-height:60px}
 .appbar-title{font-weight:600;text-decoration:none}
 .appbar-actions{display:flex;align-items:center;gap:var(--s-m)}
+/* One search for the CRM in the app bar (audit, phase 1). */
+.crm-gsearch{flex:1;max-width:420px}.crm-gsearch input{width:100%;min-height:40px}.enq-src .enq-msg{white-space:pre-wrap;margin:var(--s-xs) 0}
+@media (max-width:640px){.appbar-inner{flex-wrap:wrap}.crm-gsearch{order:3;flex-basis:100%;max-width:none;padding-bottom:var(--s-xs)}}
 .notif{position:relative}
 .notif-btn{position:relative;display:grid;place-items:center;width:44px;height:44px;background:none;border:1px solid var(--line);color:var(--ink);cursor:pointer}
 .notif-count{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--accent);color:#fff;font-size:.75rem;font-weight:600;display:grid;place-items:center}

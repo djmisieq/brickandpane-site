@@ -26,6 +26,7 @@ export async function renderAppBar(el, user, area) {
     <div class="appbar">
       <div class="${area === 'admin' ? 'container-wide' : 'container'} appbar-inner">
         <a class="appbar-title" href="${home}">${area === 'admin' ? tr('Projects CRM') : tr(user.account_type === 'homeowner' ? 'Your orders' : 'Your projects')}</a>
+        ${area === 'admin' ? `<form class="crm-gsearch" role="search" data-gsearch><label class="visually-hidden" for="crm-gq">${tr('Search the CRM')}</label><input id="crm-gq" name="q" type="search" placeholder="${tr('Search projects, enquiries, quotes')}" autocomplete="off"></form>` : ''}
         <div class="appbar-actions">
           ${area === 'portal' ? `<a class="btn btn-sm" href="#/new">${tr(user.account_type === 'homeowner' ? 'Add your opening' : 'New project')}</a>` : ''}
           <div class="notif">
