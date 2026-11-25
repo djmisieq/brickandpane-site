@@ -39,7 +39,7 @@ if (store.mode === 'demo') {
   $('[data-demo]', root).hidden = false;
   $$('[data-demo-login]', root).forEach((b) => b.addEventListener('click', async () => {
     await store.demoLogin(b.dataset.demoLogin);
-    location.href = b.dataset.demoLogin === 'staff' ? 'admin.html' : (safeNext.startsWith('portal') ? safeNext : 'portal.html');
+    location.href = b.dataset.demoLogin === 'staff' ? (safeNext.startsWith('admin') ? safeNext : 'admin.html') : (safeNext.startsWith('portal') ? safeNext : 'portal.html');
   }));
   $('[data-magic]', root).hidden = true;
 }

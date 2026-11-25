@@ -65,7 +65,8 @@ async function render(fromStore = false) {
     else if (r.name === 'search') await searchView(decodeURIComponent(r.id || ''));
     else if (r.name === 'today') await today();
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
-    else await board(r.name === 'list');
+    else if (r.name === 'board' || r.name === 'list') await board(r.name === 'list');
+    else await today(); // the start screen (owner, 25.11.2026)
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
   Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && (dirty.has(id) || (!el.value && el.tagName !== 'SELECT'))) { el.value = v; if (dirty.has(id)) el.dataset.dirty = '1'; } });
   if (focused) document.getElementById(focused)?.focus();
@@ -183,7 +184,7 @@ async function today() {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
@@ -332,7 +333,7 @@ async function detail(id) {
   const suggested = STAGES[nextIdx]?.id || p.stage;
   app.innerHTML = `
     <div class="container section-tight">
-      <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
+      <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/board">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
       <div class="detail-head">
         <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${headClient(p, d.invites)}</p></div>
       </div>

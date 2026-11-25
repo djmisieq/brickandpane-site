@@ -1077,7 +1077,7 @@ function editorPage(q) {
   const body = { client: stepClient, products: stepProducts, install: stepInstall, terms: stepTerms, offer: (x) => sendPanel(x) + estimate(x) }[step](q);
   return `<div class="container-wide section-tight q-desk">
     <div class="q-top no-print">
-      <nav class="breadcrumb" aria-label="${t('Breadcrumb', 'Ścieżka')}"><ol><li><a href="#/">${t('Pipeline', 'Lejek')}</a></li><li><a href="#/quotes">${t('Quotes', 'Oferty')}</a></li><li aria-current="page" id="q-crumb">${esc(q.customerName.trim() || t('New quote', 'Nowa oferta'))}</li></ol></nav>
+      <nav class="breadcrumb" aria-label="${t('Breadcrumb', 'Ścieżka')}"><ol><li><a href="#/board">${t('Pipeline', 'Lejek')}</a></li><li><a href="#/quotes">${t('Quotes', 'Oferty')}</a></li><li aria-current="page" id="q-crumb">${esc(q.customerName.trim() || t('New quote', 'Nowa oferta'))}</li></ol></nav>
       <div class="btn-row">
         <div class="seg q-lang" role="group" aria-label="${t('Language of the quote for the client', 'Język oferty dla klienta')}">${['en', 'pl'].map((l) => `<button type="button" data-act="lang" data-v="${l}" aria-pressed="${q.docLang === l}" class="${q.docLang === l ? 'is-on' : ''}">${l.toUpperCase()}</button>`).join('')}</div>
         <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print', 'Drukuj')}</button>

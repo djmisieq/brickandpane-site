@@ -17,7 +17,7 @@ test('architect and staff see each other’s changes live', async ({ page, conte
   await expect(page.locator('.now-card')).toContainText('Quote issued');
 
   const staff = await context.newPage();
-  await staff.goto('/admin.html');
+  await staff.goto('/admin.html#/board');
   await staff.locator('[data-demo-login="staff"]').click();
   await expect(staff.locator('.board')).toBeVisible();
 
@@ -295,6 +295,18 @@ test('CRM: the source enquiry sits on the project card; one search in the app ba
   await expect(res.locator('.today-sec').first()).toContainText('Nothing found.');
 });
 
+test('CRM: opens on Today; the board is one click away and its breadcrumb leads back to it', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await expect(page.locator('h1')).toHaveText('Today');
+  await expect(page.locator('.seg a.is-on')).toHaveText('Today');
+  await page.locator('.seg a[href="#/board"]').click();
+  await expect(page.locator('.board')).toBeVisible();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('.breadcrumb a[href="#/board"]').click();
+  await expect(page.locator('.board')).toBeVisible();
+});
+
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('bp-openings-list', JSON.stringify([
     { ref: 'D01', system: 'bifold', material: 'alu', width_mm: 4200, height_mm: 2400, qty: 1, note: '3 leaves' },
@@ -390,7 +402,7 @@ test('homeowner sees delivery dates and payments; developer demo shows the schem
 
 test('an internal note stays internal when the page updates live', async ({ page, context }) => {
   await page.locator('[data-demo-login="staff"]').click();
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('[data-tab="messages"]').click();
   await page.locator('.composer-mode input[value="internal"]').check();
@@ -509,7 +521,7 @@ test('portal pages: CSP, frame guard, password settings and size checks', async 
 });
 
 test('costs: staff add a supplier quote in £, accept it and see the margin; the client sees none of it', async ({ page, context }) => {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await expect(page.locator('.key-numbers')).toContainText('£23,900'); // value on top of the card, no scrolling
@@ -543,7 +555,7 @@ test('costs: staff add a supplier quote in £, accept it and see the margin; the
 });
 
 test('costs: supplier quotes compare at one net figure; a supplier asked waits on the list until the price comes in', async ({ page }) => {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('[data-fold="costs"] > summary').click();
@@ -587,7 +599,7 @@ test('costs: supplier quotes compare at one net figure; a supplier asked waits o
 });
 
 test('mail: the client’s email shows on the project, the rest waits in Email; the client sees none of it', async ({ page, context }) => {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   const panel = page.locator('[data-mail-panel]');
@@ -616,7 +628,7 @@ test('mail: the client’s email shows on the project, the rest waits in Email; 
   await page.locator('#mc-label').press('Enter'); // on the phone layout the page still moves under a click here
   await expect(page.locator('.toast').last()).toContainText('Contact added.');
   await expect(page.locator('.callout')).toContainText('Every email is on a project.');
-  await page.goto('/admin.html#/');
+  await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await expect(page.locator('[data-mail-panel]')).toContainText('Offer for frames');
 
@@ -650,7 +662,7 @@ test('Today lists what needs doing now: new enquiries, overdue projects; Mine fi
 
 test('a quote started on a project goes out without a HubSpot deal: PDF in Documents, value, payments, stage', async ({ page, context }) => {
   await page.locator('[data-demo-login="staff"]').click();
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
   const box = page.locator('[data-project-quotes]');
   await expect(box).toContainText('No quote yet.');
@@ -723,7 +735,7 @@ test('quote builder: freight cost and a reserve lower the margin, markup shows b
 });
 
 test('quote builder: our cost comes from a supplier quote on the project, the prices from cost + markup', async ({ page }) => {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('[data-fold="costs"] > summary').click();
@@ -756,7 +768,7 @@ test('quote builder: the PDF is made in the browser and sent, no print and uploa
   test.setTimeout(90000);
   page.on('console', (m) => console.log('CONSOLE', m.type(), m.text())); page.on('pageerror', (e) => console.log('PAGEERR', e.message));
   await page.locator('[data-demo-login="staff"]').click();
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
   await page.locator('[data-new-quote]').click();
   await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
@@ -886,7 +898,7 @@ test('quote builder: one request for quotes to suppliers from the items, without
 
 test('Today: a sent quote about to lapse is on the chase list', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
   await page.locator('[data-new-quote]').click();
   await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
