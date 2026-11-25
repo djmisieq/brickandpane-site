@@ -757,6 +757,8 @@ test('quote builder: Uw with the Part L limit, installation cost from the fitter
   await expect(offer).toContainText('1.3 W/m²K');
   await expect(offer).not.toContainText('£1,200');
   await expect(offer).not.toContainText('Day rate');
+});
+
 test('quote builder: an extra is a line in the total, an option is priced beside it; our cost stays off the print', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');
