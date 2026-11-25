@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -766,4 +766,29 @@ test('owner dashboard: enquiries, quotes, wins, reply time, money and workload i
   for (const who of [A, C, O]) { await as(who); await fails('select public.owner_dashboard(90)'); }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select public.owner_dashboard(90)');
+});
+
+// 0044: companies, people and the companies on a project are the team's alone.
+test('companies and people: staff keep them and link them to projects; nobody else sees them', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const co = (await db.query(`insert into public.companies (name, kind, website) values ('JSA Architects', 'architect', 'jsa.example') returning id`)).rows[0].id;
+  await fails(`insert into public.companies (name, kind) values ('  jsa architects ', 'architect')`); // the same practice twice
+  await db.query(`insert into public.companies (name, kind) values ('JSA Architects', 'supplier')`); // another kind is another record
+  await db.query(`insert into public.people (company_id, full_name, email) values ($1, 'Jane Smith', 'jane@jsa.example')`, [co]);
+  await db.query(`insert into public.project_companies (project_id, company_id, role) values ($1, $2, 'architect')`, [P, co]);
+  await fails(`insert into public.project_companies (project_id, company_id, role) values ($1, $2, 'landlord')`, [P, co]);
+  await db.query(`insert into public.supplier_quotes (project_id, supplier, amount, company_id) values ($1, 'JSA Architects', 10, $2)`, [P, co]);
+  await db.query('delete from public.companies where id = $1', [co]);
+  assert.equal((await db.query('select company_id from public.people')).rows[0].company_id, null);
+  assert.equal((await db.query('select count(*)::int n from public.project_companies')).rows[0].n, 0);
+  for (const who of [A, C, O]) {
+    await as(who);
+    for (const t of ['companies', 'people', 'project_companies']) assert.equal((await db.query(`select * from public.${t}`)).rows.length, 0);
+    await fails(`insert into public.companies (name) values ('x')`);
+  }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.companies');
 });

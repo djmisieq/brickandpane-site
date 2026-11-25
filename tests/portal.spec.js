@@ -87,7 +87,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/, /Dashboard/]);
+  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/, /Companies/, /Dashboard/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -369,6 +369,58 @@ test('owner dashboard: one page with enquiries, quotes, wins, money and workload
   await client.locator('[data-demo-login="client"]').click();
   await client.goto('/admin.html#/owner');
   await expect(client.locator('#app')).toContainText('This area is for Brick & Pane staff');
+});
+
+test('companies: a practice with its people, linked to a project in a role, found by the one search; clients see none of it', async ({ page, context }) => {
+  await page.goto('/admin.html#/companies');
+  await page.locator('[data-demo-login="staff"]').click();
+  await expect(page.locator('h1')).toHaveText('Companies');
+  await page.locator('#co-name').fill('JSA Architects');
+  await page.locator('#co-kind').selectOption('architect');
+  await page.locator('[data-co-new] button[type="submit"]').click();
+  await expect(page).toHaveURL(/#\/company\//);
+  await expect(page.locator('h1')).toHaveText('JSA Architects');
+  await page.locator('#co-pname').fill('Jane Smith');
+  await page.locator('#co-ptitle').fill('Associate');
+  await page.locator('#co-pemail').fill('jane@jsa.example');
+  await page.locator('[data-person-add] button[type="submit"]').click();
+  await expect(page.locator('[data-person]')).toContainText('Jane Smith');
+  // The same practice twice is refused.
+  await page.goto('/admin.html#/companies');
+  await page.locator('#co-name').fill('jsa architects');
+  await page.locator('#co-kind').selectOption('architect');
+  await page.locator('[data-co-new] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('already exists');
+  // On the project card, in a role.
+  await page.goto('/admin.html#/board');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="companies"] > summary').click();
+  await page.locator('#pco-role').selectOption('architect');
+  await page.locator('[data-pco-add] button[type="submit"]').click();
+  await expect(page.locator('[data-pco-item]')).toContainText('JSA Architects');
+  await page.locator('[data-pco-item] a').click();
+  await expect(page.locator('#company')).toContainText('Hartley Road');
+  // The one search finds the person.
+  await page.locator('#crm-gq').fill('jane');
+  await page.locator('#crm-gq').press('Enter');
+  await expect(page.locator('#search-results .today-sec', { hasText: 'Companies and people' })).toContainText('Jane Smith');
+  const client = await context.newPage();
+  await client.goto('/login.html');
+  await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html');
+  await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await expect(client.locator('.now-card')).toBeVisible();
+  for (const text of ['JSA Architects', 'Jane Smith']) await expect(client.locator('body')).not.toContainText(text);
+});
+
+test('CRM views never scroll sideways, whatever the width (8 tabs in the view switch)', async ({ page }) => {
+  await page.goto('/admin.html#/today');
+  await page.locator('[data-demo-login="staff"]').click();
+  for (const h of ['#/today', '#/board', '#/enquiries', '#/quotes', '#/companies', '#/owner']) {
+    await page.goto(`/admin.html${h}`);
+    await page.locator('h1').waitFor();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), h).toBeLessThanOrEqual(1);
+  }
 });
 
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
