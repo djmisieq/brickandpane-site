@@ -744,6 +744,8 @@ body.app .list-btn{display:none}
 .q-deal-search input{flex:1;min-width:0}
 .cost-sum{display:grid;gap:var(--s-xs);margin:0 0 var(--s-s)}.cost-sum div{display:flex;justify-content:space-between;gap:var(--s-s)}.cost-sum dt{color:var(--ink-2)}.cost-sum dd{margin:0;text-align:right}
 .cost-list{list-style:none;padding:0;margin:0 0 var(--s-m);display:grid;gap:var(--s-xs)}.cost-list li{display:grid;gap:var(--s-xs);padding:var(--s-s) 0;border-top:1px solid var(--line)}.cost-list .note{display:block}.cost-acts{display:flex;gap:var(--s-xs);flex-wrap:wrap}
+/* Supplier quotes side by side (0039): one group per category, the ones out of the running dimmed. */
+.cost-cat{margin-top:var(--s-s)}.cost-cat .note{font-weight:400}.cost-list li.is-out{opacity:.6}.cost-ask{margin:0 0 var(--s-m);padding-bottom:var(--s-s);border-bottom:1px solid var(--line)}
 /* Mail in the CRM (js/portal/mail.js) */
 .mail-panel{display:grid;gap:var(--s-s)}.mail-panel .panel-h{margin:0}
 .mail-list{display:grid;gap:var(--s-xs)}

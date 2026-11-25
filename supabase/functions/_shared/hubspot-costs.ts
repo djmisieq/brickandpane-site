@@ -163,7 +163,8 @@ export async function syncCosts(supabase: Db) {
   }
 
   // 1. CRM → HubSpot: new quotes, and quotes the team changed since the last sync.
-  const { data: rows } = await supabase.from('supplier_quotes').select('*').lt('hubspot_attempts', MAX_ATTEMPTS).order('created_at').limit(200);
+  // "Requested" (0039: asked, no price yet) stays in the CRM. HubSpot is being phased out (owner, 25.11.2026): nothing new goes to it.
+  const { data: rows } = await supabase.from('supplier_quotes').select('*').neq('status', 'requested').lt('hubspot_attempts', MAX_ATTEMPTS).order('created_at').limit(200);
   const costs = (rows ?? []) as Cost[];
   for (const c of costs) {
     const sale = saleOf.get(c.project_id);

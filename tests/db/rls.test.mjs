@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -680,4 +680,34 @@ test('quotes on a project: sent without a deal, counted in the margin, never cla
   await as(A);
   assert.equal((await db.query('select * from public.quotes')).rows.length, 0);
   await fails(`insert into public.quote_sends (quote_id, project_id, reference, total, pdf_path, snapshot) values ($1, $2, 'x', 1, 'p', '{}')`, [Q, P]);
+});
+
+// 0039: supplier quotes side by side. VAT inside the price, a discount and delivery on top come out as one comparable
+// net £ figure, the margin uses it, and "requested" keeps a supplier we are still waiting for.
+test('supplier quotes compare like for like: net of VAT, after discount, with delivery', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const net = async (id) => Number((await db.query('select net_gbp from public.supplier_quotes where id = $1', [id])).rows[0].net_gbp);
+  const old = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Plain', 5000) returning id`, [P])).rows[0].id;
+  assert.equal(await net(old), 5000); // rows from before 0039 keep their number
+  // £12,000 with VAT 20% in, 5% off, £250 delivery: 10,000 × 0.95 + 250.
+  const a = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount, vat_in_pct, discount_pct, delivery_gbp, lead_days, variant, status)
+    values ($1, 'Aluprof partner', 12000, 20, 5, 250, 21, 'MB-86', 'accepted') returning id`, [P])).rows[0].id;
+  assert.equal(await net(a), 9750);
+  const m = (await db.query('select public.project_margin($1) m', [P])).rows[0].m;
+  assert.equal(Number(m.cost_gbp), 9750);
+  // Asked, no price yet.
+  const r = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount, status, requested_on) values ($1, 'Okna Nowak', 0, 'requested', current_date) returning status`, [P])).rows[0];
+  assert.equal(r.status, 'requested');
+  await fails(`insert into public.supplier_quotes (project_id, supplier, amount, vat_in_pct) values ($1, 'x', 1, 50)`, [P]);
+  await fails(`insert into public.supplier_quotes (project_id, supplier, amount, net_gbp) values ($1, 'x', 1, 1)`, [P]); // computed
+  // An edit to a comparison field marks the quote changed for HubSpot.
+  const at = async () => (await db.query('select updated_at from public.supplier_quotes where id = $1', [a])).rows[0].updated_at.getTime();
+  const before = await at();
+  await db.query(`select pg_sleep(0.01)`);
+  await db.query('update public.supplier_quotes set delivery_gbp = 300 where id = $1', [a]);
+  assert.ok((await at()) > before);
+  assert.equal(await net(a), 9800);
 });
