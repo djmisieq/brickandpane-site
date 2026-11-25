@@ -349,6 +349,14 @@ export const store = {
       .filter((m) => (!pid || m.projects.includes(pid)) && (!unassigned || (!m.projects.length && !m.dismissed)))
       .sort((a, b) => b.sent_at.localeCompare(a.sent_at));
   },
+  // Sending in demo mode: nothing leaves the browser; the mail is filed on the project like a sent one.
+  async sendMail({ from, to, cc = '', subject, text, reply_to = null, project_id = null, confirm }) {
+    const s = load(); const u = needStaff(s); demoMail(s);
+    if (confirm !== true) throw new Error('Tick that you checked the recipients and the text.');
+    const list = (v) => String(v || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+    s.mail.unshift({ id: uid(), account: from, folder: 'CRM', direction: 'out', from_addr: from, from_name: u.full_name, to_addrs: list(to), cc_addrs: list(cc), subject, body_text: text, sent_at: now(), attachments: [], project_id, in_reply_to: reply_to, dismissed: false });
+    save(s); return { result: 'sent' };
+  },
   async mailAccounts() { return [{ address: 'contact@brickandpane.co.uk', mode: 'all', last_run_at: now(), last_error: null }, { address: 'kate@brickandpane.co.uk', mode: 'known', last_run_at: now(), last_error: null }]; },
   async assignMail(id, project_id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.project_id = project_id; save(s); } },
   async dismissMail(id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.dismissed = true; save(s); } },

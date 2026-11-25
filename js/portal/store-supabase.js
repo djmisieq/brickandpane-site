@@ -230,6 +230,13 @@ export const store = {
   async deleteTask(id) { ok(await sb.from('tasks').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
   async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },
+  // A reply from the CRM (migration 0045): the mail-send function checks the person is staff and that they ticked it.
+  async sendMail(payload) {
+    const { data, error } = await sb.functions.invoke('mail-send', { body: payload });
+    if (error) { let msg = error.message; try { msg = (await error.context?.json())?.error || msg; } catch { /* plain */ } throw new Error(msg); }
+    if (data?.error) throw new Error(data.error);
+    emit(); return data;
+  },
   async mailAccounts() { return ok(await sb.from('mail_accounts').select('address, mode, last_run_at, last_error').order('created_at')); },
   async assignMail(id, project_id) { ok(await sb.from('mail_messages').update({ project_id }).eq('id', id)); emit(); },
   async dismissMail(id) { ok(await sb.from('mail_messages').update({ dismissed: true }).eq('id', id)); emit(); },

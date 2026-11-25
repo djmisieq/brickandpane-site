@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -791,4 +791,18 @@ test('companies and people: staff keep them and link them to projects; nobody el
   }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.companies');
+});
+
+// 0045: the log of mail sent from the CRM: staff read it, nobody writes it but the mail-send function.
+test('mail outbox: staff read the log of sent mail; no one can write to it from the browser', async () => {
+  const { db, as, fails } = await setup();
+  await db.exec('reset role');
+  await db.query(`insert into public.mail_outbox (account, to_addrs, subject, status, approved_by) values ('kate@brickandpane.co.uk', '{jo@example.com}', 'Re: quote', 'sent', $1)`, [S]);
+  await as(S);
+  assert.equal((await db.query('select * from public.mail_outbox')).rows.length, 1);
+  await fails(`insert into public.mail_outbox (account, to_addrs, status) values ('kate@brickandpane.co.uk', '{x@y.z}', 'sent')`);
+  await fails(`update public.mail_outbox set status = 'failed'`);
+  for (const who of [A, C, O]) { await as(who); assert.equal((await db.query('select * from public.mail_outbox')).rows.length, 0); }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.mail_outbox');
 });
