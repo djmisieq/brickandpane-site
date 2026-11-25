@@ -699,27 +699,6 @@ test('quote builder: freight cost and a reserve lower the margin, markup shows b
   await expect(page.locator('.offer')).not.toContainText('Reserve');
 });
 
-test('quote builder: a homeowner quote prints the right to cancel; one for an architect does not', async ({ page }) => {
-  await page.locator('[data-demo-login="staff"]').click();
-  await page.goto('/admin.html#/quotes');
-  await page.locator('[data-act="sample"]').click();
-  await page.locator('[data-act="step"][data-v="client"]').click();
-  await page.locator('[data-act="audience"][data-v="home"]').click();
-  await page.locator('[data-act="step"][data-v="offer"]').click();
-  await expect(page.locator('.offer [data-cancel-notice]')).toContainText('cancel within 14 days');
-  // Switched off for this quote.
-  await page.locator('[data-act="step"][data-v="terms"]').click();
-  await page.locator('[data-b="q:cancelNotice"]').uncheck();
-  await page.locator('[data-act="step"][data-v="offer"]').click();
-  await expect(page.locator('.offer [data-cancel-notice]')).toHaveCount(0);
-  await page.locator('[data-act="step"][data-v="terms"]').click();
-  await page.locator('[data-b="q:cancelNotice"]').check();
-  await page.locator('[data-act="step"][data-v="client"]').click();
-  await page.locator('[data-act="audience"][data-v="architect"]').click();
-  await page.locator('[data-act="step"][data-v="offer"]').click();
-  await expect(page.locator('.offer [data-cancel-notice]')).toHaveCount(0);
-});
-
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');

@@ -128,7 +128,7 @@ function newQuote(all, f) {
     audience: 'home', preparedBy: f.preparedBy, leadTime: '', guarantee: '', projectNotes: '', internalNote: '',
     discount: 0, surveyDelivery: 0, vatRate: f.vatRegistered ? 20 : 0, products: [], installMode: 'none',
     installLines: newInstallLines(), siteNotes: '', exclusions: '', programme: '', certification: '',
-    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', cancelNotice: true, installCost: 0, deliveryCost: 0, contingencyPct: 0, updatedAt: Date.now(),
+    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', installCost: 0, deliveryCost: 0, contingencyPct: 0, updatedAt: Date.now(),
   };
 }
 function sampleQuote(all, f) {
@@ -390,10 +390,6 @@ function words(lang) {
     terms: p
       ? 'Ta oferta jest specyfikacją. Robimy system i materiał wpisane przy pozycji. Zmiany uzgadniamy przed produkcją. Czas liczy się od podpisanych rysunków. Przed produkcją mierzymy istniejące otwory.'
       : 'This quote is the specification. We make the system and material named on each line. Changes are agreed before production. Lead time runs from the drawings you sign. We survey the openings before we manufacture.',
-    // Homeowners only (owner's decision 25.11.2026). The statutory 14 days for a contract made at home or at a distance.
-    cancel: p
-      ? 'Prawo odstąpienia: jeśli przyjmą Państwo tę ofertę w domu, telefonicznie albo e-mailem, mogą Państwo odstąpić od umowy w ciągu 14 dni od jej przyjęcia bez podawania przyczyny (Consumer Contracts Regulations 2013). Jeśli poproszą Państwo o rozpoczęcie prac przed upływem 14 dni, a potem odstąpią, płacą Państwo za prace wykonane do tego momentu.'
-      : 'Your right to cancel: if you accept this quote at home, by phone or by email, you can cancel within 14 days of accepting it without giving a reason (Consumer Contracts Regulations 2013). If you ask us to start before the 14 days end and then cancel, you pay for the work done up to that point.',
     promise: {
       home: p ? 'Najpierw pomiar otworów, potem produkcja tego, co jest w tej ofercie.' : 'We survey the openings, then manufacture what this quote names.',
       architect: p ? 'Przegląd rysunków przed produkcją. Parametry tylko tam, gdzie są wpisane.' : 'Drawing review before manufacture. Performance figures only where this quote states them.',
@@ -493,7 +489,6 @@ function estimate(q) {
       <h3>${esc(w.next)}</h3>
       <div class="of-cols">${labelled(w.lead, q.leadTime.trim())}${labelled(w.guarantee, q.guarantee.trim())}</div>
       <p class="of-muted of-small of-gap">${esc(q.termsNote.trim() || w.terms)}</p>
-      ${q.audience === 'home' && q.cancelNotice ? `<p class="of-muted of-small" data-cancel-notice>${esc(w.cancel)}</p>` : ''}
       ${showRev ? `<p class="of-muted of-small">${esc(w.revision)} ${esc(q.revision)}</p>` : ''}
     </section>
     ${stages.length ? `<section class="of-keep of-pay">
@@ -750,7 +745,6 @@ function stepTerms(q) {
       ${field(pl ? 'Gwarancja' : 'Guarantee', text('q:guarantee', q.guarantee, pl ? 'Według systemu, z instrukcją pielęgnacji' : 'As stated for the system, with the care notes'), '', 'wide')}
       ${field(pl ? 'Uwaga widoczna w ofercie' : 'Note on the estimate', area('q:projectNotes', q.projectNotes, '', 2), '', 'wide')}
       ${field(pl ? 'Zdanie o warunkach' : 'Terms sentence', area('q:termsNote', q.termsNote, '', 2), t('Blank: the quote keeps the sentence that we make the system in this quote and that time runs from the signed drawings.', 'Puste: w ofercie zostaje zdanie, że robimy system z tej wyceny, a czas liczy się od podpisanych rysunków.'), 'wide')}
-      ${q.audience === 'home' ? `<div class="wide q-box">${check('q:cancelNotice', q.cancelNotice, t('Right to cancel on the quote (homeowners)', 'Prawo odstąpienia w ofercie (klient domowy)'), t('14 days for a quote accepted at home, by phone or by email. Have a solicitor check the wording: made-to-measure goods can be an exception.', '14 dni przy ofercie przyjętej w domu, telefonicznie albo e-mailem. Treść warto dać do sprawdzenia prawnikowi: towar na wymiar bywa wyjątkiem.'))}</div>` : ''}
     </div>
     <div class="q-subrow"><h3 class="q-sub">${t('Payment stages', 'Etapy płatności')}</h3>${q.vatRate > 0 ? check('q:paymentOnGross', q.paymentOnGross, t('Of the gross', 'Od brutto')) : ''}</div>
     ${paySumLine(q)}
