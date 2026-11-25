@@ -87,7 +87,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Board/, /List/, /Enquiries/, /Quotes/, /Email/]);
+  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -569,7 +569,8 @@ test('Today lists what needs doing now: new enquiries, overdue projects; Mine fi
   await expect(page.locator('#t-fresh')).toContainText('Jo Bennett');
   await expect(page.locator('#t-overdue')).toContainText('Northfield Terrace');
   await expect(page.locator('#t-overdue .today-row').first()).toHaveClass(/is-late/);
-  await page.locator('[data-jump="overdue"]').click();
+  const jump = page.locator('[data-jump="overdue"]'); // counters are hidden on phones: each list shows its own
+  if (await jump.isVisible()) await jump.click();
   await page.locator('#t-overdue .today-row', { hasText: 'Northfield Terrace' }).click();
   await expect(page).toHaveURL(/#\/p\//);
   await page.goto('/admin.html#/today');
