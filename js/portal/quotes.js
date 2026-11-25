@@ -10,6 +10,7 @@
 import { store } from './store.js';
 import { esc, $$, toast, STAGES } from './core.js';
 import { LANG } from './i18n.js';
+import { netOf } from './cost-net.js';
 
 const t = (en, pl) => (LANG === 'pl' ? pl : en);
 
@@ -128,7 +129,7 @@ function newQuote(all, f) {
     audience: 'home', preparedBy: f.preparedBy, leadTime: '', guarantee: '', projectNotes: '', internalNote: '',
     discount: 0, surveyDelivery: 0, vatRate: f.vatRegistered ? 20 : 0, products: [], installMode: 'none',
     installLines: newInstallLines(), siteNotes: '', exclusions: '', programme: '', certification: '',
-    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', installCost: 0, deliveryCost: 0, contingencyPct: 0, updatedAt: Date.now(),
+    payments: newPayments(), paymentOnGross: true, docLang: 'en', termsNote: '', installCost: 0, deliveryCost: 0, contingencyPct: 0, markupPct: 30, updatedAt: Date.now(),
   };
 }
 function sampleQuote(all, f) {
@@ -219,6 +220,7 @@ function normQuote(raw, f) {
     // Each quote keeps its own rate (audit 24.11.2026): switching VAT registration on one quote must not rewrite the others.
     vatRate: Number(raw.vatRate) || 0,
     installCost: Number(raw.installCost) || 0, deliveryCost: Number(raw.deliveryCost) || 0, contingencyPct: Number(raw.contingencyPct) || 0,
+    markupPct: raw.markupPct == null || raw.markupPct === '' || !Number.isFinite(Number(raw.markupPct)) ? 30 : Number(raw.markupPct),
     installMode: ['included', 'separate'].includes(raw.installMode) ? raw.installMode : 'none',
     updatedAt: Number(raw.updatedAt) || Date.now(),
   };
@@ -247,7 +249,7 @@ const statusName = (s) => t(STATUS[s]?.en ?? s, STATUS[s]?.pl ?? s);
 const statusTag = (q) => { const m = metaOf(q), last = sendsOf(q)[0]; return `<span class="tag q-st q-st-${esc(m.status)}">${esc(statusName(m.status))}${m.status !== 'draft' && last ? ` · rev ${esc(last.revision)}` : ''}</span>`; };
 // What the client sees, so the CRM can tell a changed quote from the one sent: no timestamps, private note or UI flags.
 const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
-const content = (q) => { const { updatedAt, revision, internalNote, projectId, installCost, deliveryCost, contingencyPct, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; void installCost; void deliveryCost; void contingencyPct; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, unitCost, ref, ...p }) => { void showSpec; void unitCost; return ref ? { ...p, ref } : p; }) }); }; // an empty code is the same as none (older sends had no code)
+const content = (q) => { const { updatedAt, revision, internalNote, projectId, installCost, deliveryCost, contingencyPct, markupPct, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; void installCost; void deliveryCost; void contingencyPct; void markupPct; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, unitCost, ref, ...p }) => { void showSpec; void unitCost; return ref ? { ...p, ref } : p; }) }); }; // an empty code is the same as none (older sends had no code)
 export const nextRevision = (r) => {
   const s = String(r ?? '').trim();
   if (/^\d+$/.test(s)) return String(Number(s) + 1).padStart(Math.max(2, s.length), '0');
@@ -337,6 +339,7 @@ async function load() {
   quotes = list.flatMap((r) => { const q = normQuote(r, firm); return q ? [q] : []; });
   hub = { on: !!h?.hubspot, demo: !!h?.demo, meta: new Map((h?.meta || []).map((m) => [m.id, m])), sends: h?.sends || [] };
   projectsList = await store.listProjects().catch(() => []);
+  projCosts.clear(); // supplier quotes entered on the project since are read again
 }
 function flush() {
   clearTimeout(saveTimer);
@@ -699,7 +702,8 @@ function stepProducts(q) {
       </article>`;
     }).join('')}</div>
     <button type="button" class="btn q-gap" data-act="add-item">+ ${t('Add a window or door', 'Dodaj okno lub drzwi')}</button>
-    ${rfqBox(q)}`;
+    ${rfqBox(q)}
+    ${costBox(q)}`;
 }
 
 function stepInstall(q) {
@@ -798,6 +802,54 @@ function marginBox(q) {
     <p class="q-margin-v">${esc(money(m.margin, 'en'))}${m.pct == null ? '' : ` <span>${esc(String(m.pct))}%</span>`}</p>
     <ul class="q-sum-list"><li><span>${t('Sale, net', 'Sprzedaż, netto')}</span><span>${esc(money(m.sale, 'en'))}</span></li><li><span>${t('Our cost', 'Nasz koszt')}</span><span>${esc(money(m.base, 'en'))}</span></li>${m.reserve ? `<li><span>${t('Reserve', 'Rezerwa')} ${esc(String(q.contingencyPct))}%</span><span>${esc(money(m.reserve, 'en'))}</span></li>` : ''}${m.markup == null ? '' : `<li><span>${t('Markup on cost', 'Narzut na koszt')}</span><span>${esc(String(m.markup))}%</span></li>`}</ul>
     ${low ? `<p class="q-warn">${t('Below 20%.', 'Poniżej 20%.')}</p>` : ''}</div>`;
+}
+
+// ---------- our cost from a supplier quote on the project, then the price as cost + markup (analysis item 6) ----------
+// The supplier quotes the whole job; the builder needs a cost per line. The chosen quote's comparable net (0039) is
+// spread over the lines by their price (by size when nothing is priced yet); installation and transport quotes fill
+// those costs. Then one click prices every line at its cost plus the markup. Staff only, never printed.
+const projCosts = new Map(); // project id → priced supplier quotes, or 'loading'
+let costPick = null;
+const COST_CAT = { production: ['Production', 'Produkcja'], transport: ['Transport', 'Transport'], installation: ['Installation', 'Montaż'], other: ['Other', 'Inne'] };
+function projectCosts(q) {
+  const pid = projectOf(q); if (!pid || !store.listCosts) return null;
+  if (!projCosts.has(pid)) {
+    projCosts.set(pid, 'loading');
+    store.listCosts(pid).catch(() => []).then((list) => {
+      projCosts.set(pid, (list || []).filter((c) => c.status === 'received' || c.status === 'accepted'));
+      if (current() && projectOf(current()) === pid && root?.querySelector('#q-costs')) { const y = scrollY; draw(); scrollTo(0, y); }
+    });
+  }
+  return projCosts.get(pid);
+}
+function pickedCost(list) {
+  const prod = list.filter((c) => c.category === 'production').sort((a, b) => netOf(a) - netOf(b));
+  return list.find((c) => c.id === costPick) || prod.find((c) => c.status === 'accepted') || prod[0] || list[0] || null;
+}
+function costBox(q) {
+  if (!q.products.length) return '';
+  const list = projectCosts(q), head3 = `<h3 class="q-sub">${t('Our cost from a supplier quote', 'Koszt z oferty dostawcy')}</h3>`;
+  if (list == null) return `<section class="q-box no-print" id="q-costs">${head3}<p class="hint">${t('Link the quote to a project in step 01 to use the supplier quotes entered on it.', 'Połącz ofertę z projektem w kroku 01, żeby użyć ofert dostawców wpisanych na projekcie.')}</p></section>`;
+  if (list === 'loading') return `<section class="q-box no-print" id="q-costs">${head3}<p class="hint">${t('Loading the supplier quotes…', 'Wczytuję oferty dostawców…')}</p></section>`;
+  if (!list.length) return `<section class="q-box no-print" id="q-costs">${head3}<p class="hint">${t('No priced supplier quote on the project yet. Enter them on the project card, under Costs & margin.', 'Na projekcie nie ma jeszcze wycenionej oferty dostawcy. Wpisz je na karcie projektu, w Kosztach i marży.')}</p></section>`;
+  const pick = pickedCost(list);
+  return `<section class="q-box no-print" id="q-costs">${head3}
+    <p class="hint">${t('Choose the quote: production is spread over the lines by their price, installation and transport fill those costs. Then set the prices from the cost.', 'Wybierz ofertę: produkcja rozkłada się na pozycje według ich cen, montaż i transport wpisują się w te koszty. Potem ustaw ceny od kosztu.')}</p>
+    <div class="q-stack q-gap">${list.map((c) => `<button type="button" class="q-card q-cost-pick" data-act="cost-pick" data-v="${esc(c.id)}" aria-pressed="${pick?.id === c.id}"><strong>${esc(c.supplier)}${c.variant ? ` · ${esc(c.variant)}` : ''}</strong><span>${esc(t(...(COST_CAT[c.category] || COST_CAT.other)))} · ${esc(money(netOf(c), 'en'))} ${t('net', 'netto')}${c.status === 'accepted' ? ` · ${t('accepted', 'przyjęta')}` : ''}</span></button>`).join('')}</div>
+    <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="cost-spread">${t('Use this cost', 'Użyj tego kosztu')}</button></div>
+    <div class="q-grid q-gap">${field(t('Markup on cost, %', 'Narzut na koszt, %'), num('q:markupPct', q.markupPct), t('30% markup is a 23% margin.', 'Narzut 30% to marża 23%.'), 'q-cost')}</div>
+    <div class="btn-row q-gap"><button type="button" class="btn btn-sm btn-ghost" data-act="cost-price">${t('Set the prices: cost + markup', 'Ustaw ceny: koszt + narzut')}</button></div>
+  </section>`;
+}
+function spreadCost(q, c) {
+  const net = netOf(c);
+  if (c.category === 'installation') { q.installCost = net; return t('Installation cost set.', 'Wpisano koszt montażu.'); }
+  if (c.category === 'transport') { q.deliveryCost = net; return t('Freight cost set.', 'Wpisano koszt transportu.'); }
+  const ps = q.products.filter((p) => p.qty > 0);
+  const byPrice = ps.map((p) => p.qty * (Number(p.unitPrice) || 0)), bySize = ps.map((p) => p.qty * ((Number(p.widthMm) || 0) * (Number(p.heightMm) || 0) || 1));
+  const w = byPrice.some((x) => x > 0) ? byPrice : bySize, all = w.reduce((s, x) => s + x, 0);
+  ps.forEach((p, i) => { p.unitCost = r2((net * w[i]) / all / p.qty); });
+  return t(`Cost spread over ${ps.length} lines.`, `Koszt rozłożony na ${ps.length} pozycje.`);
 }
 
 // ---------- request for quotes to suppliers (supplier-mail review, 25.11.2026) ----------
@@ -935,6 +987,20 @@ async function act(btn) {
   if (['new', 'sample', 'dup', 'del-ask', 'del-yes', 'del-no'].includes(a)) return listAct(a, btn);
   const q = current(); if (!q) return;
   if (/^(deal|send|st)-/.test(a)) return hubAct(a, v, q);
+  if (a === 'cost-pick') { costPick = v; const y = scrollY; draw(); scrollTo(0, y); return; }
+  if (a === 'cost-spread' || a === 'cost-price') {
+    const list = projectCosts(q); const c = Array.isArray(list) ? pickedCost(list) : null;
+    let msg;
+    if (a === 'cost-spread') { if (!c) return; msg = spreadCost(q, c); }
+    else {
+      const m = Number(q.markupPct) || 0, lines = q.products.filter((p) => Number(p.unitCost) > 0);
+      if (!lines.length) { toast(t('Type or spread the cost on the lines first.', 'Najpierw wpisz albo rozłóż koszt na pozycje.')); return; }
+      lines.forEach((p) => { p.unitPrice = r2(p.unitCost * (1 + m / 100)); });
+      msg = t(`Prices set on ${lines.length} lines.`, `Ceny ustawione na ${lines.length} pozycjach.`);
+    }
+    touch(q); const y = scrollY; draw(); scrollTo(0, y); toast(msg);
+    return;
+  }
   if (a === 'rfq') {
     rfqLang = v; const y = scrollY; draw(); scrollTo(0, y);
     const box = root.querySelector('#q-rfq-text'); box?.select();

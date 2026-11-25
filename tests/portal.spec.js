@@ -699,6 +699,36 @@ test('quote builder: freight cost and a reserve lower the margin, markup shows b
   await expect(page.locator('.offer')).not.toContainText('Reserve');
 });
 
+test('quote builder: our cost comes from a supplier quote on the project, the prices from cost + markup', async ({ page }) => {
+  await page.goto('/admin.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-fold="costs"] > summary').click();
+  const costs = page.locator('[data-costs]');
+  await costs.locator('#cost-sup').fill('Frames Ltd (demo)');
+  await costs.locator('#cost-amt').fill('12000');
+  await costs.locator('#cost-vat').selectOption('20'); // £10,000 net
+  await costs.locator('[data-cost-add] button[type="submit"]').click();
+  await expect(costs.locator('[data-cost]', { hasText: 'Frames Ltd (demo)' })).toContainText('£10,000.00 net');
+  await page.locator('[data-new-quote]').first().click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  const box = page.locator('#q-costs');
+  await expect(box.locator('[data-act="cost-pick"]', { hasText: 'Frames Ltd (demo)' })).toHaveAttribute('aria-pressed', 'true');
+  await box.locator('[data-act="cost-spread"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Cost spread over');
+  await page.locator('#q-costs [data-b="q:markupPct"]').fill('25');
+  await page.locator('#q-costs [data-act="cost-price"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Prices set on');
+  const margin = page.locator('#q-margin');
+  await expect(margin).toContainText('Markup on cost');
+  await expect(margin).toContainText(/Our cost£(9,999\.9\d|10,000\.0\d)/);
+  await expect(margin).toContainText(/2[45]\.\d%|25%/);
+  // Never on the printed quote.
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer')).not.toContainText('Frames Ltd');
+});
+
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');
