@@ -448,7 +448,6 @@ test('demo mode shows no provider buttons', async ({ page }) => {
 
 test('portal pages: CSP, frame guard, password settings and size checks', async ({ page }) => {
   const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('/login.html');
   await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /frame-src ('none'|https:\/\/challenges\.cloudflare\.com);/); // Turnstile only, when on
   await expect(page.locator('#no-frame')).toHaveCount(0); // top window: the page is shown
@@ -727,6 +726,28 @@ test('quote builder: our cost comes from a supplier quote on the project, the pr
   // Never on the printed quote.
   await page.locator('[data-act="step"][data-v="offer"]').click();
   await expect(page.locator('.offer')).not.toContainText('Frames Ltd');
+});
+
+test('quote builder: the PDF is made in the browser and sent, no print and upload', async ({ page }) => {
+  test.setTimeout(90000);
+  page.on('console', (m) => console.log('CONSOLE', m.type(), m.text())); page.on('pageerror', (e) => console.log('PAGEERR', e.message));
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-new-quote]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  const ref = await page.locator('[data-b="q:reference"]').inputValue();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await page.locator('#q-send [data-act="send-open"]').click();
+  await page.locator('#q-send [data-act="send-make"]').click();
+  await expect(page.locator('#q-send')).toContainText(`Chosen: Brick-and-Pane-${ref}-rev00.pdf`, { timeout: 60000 });
+  await expect(page.locator('#q-send [data-act="send-make-open"]')).toBeVisible();
+  await expect(page.locator('#q-send-sure')).toHaveCount(0); // the name carries the reference
+  await page.locator('#q-send [data-act="send-go"]').click();
+  await expect(page.locator('#q-send')).toContainText('rev 00');
+  await expect(page.locator('.offer')).toBeVisible();
+  await expect(page.locator('.offer.is-pdf')).toHaveCount(0);
 });
 
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {

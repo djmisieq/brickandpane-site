@@ -266,6 +266,29 @@ function sendPlan(q) {
   return { kind: q.revision.trim() === last.revision ? 'resend' : 'revision', last, bump: false };
 }
 const pdfBase = (q) => `Brick-and-Pane-${q.reference}-rev${q.revision.trim() || '00'}`.replace(/[^\w.-]+/g, '-');
+// The PDF made in the browser from the estimate on screen (no print dialog, no download and upload again).
+// html2pdf.js 0.14.0 (MIT, html2canvas + jsPDF) is kept in js/vendor and loaded only when a PDF is made: the CRM's
+// CSP runs scripts from this site alone. The pages are images of the estimate, A4, with items kept whole.
+let pdfLib = null;
+const loadPdfLib = () => (pdfLib ||= new Promise((ok, fail) => {
+  if (window.html2pdf) { ok(window.html2pdf); return; }
+  const s = document.createElement('script'); s.src = new URL('../vendor/html2pdf.bundle.min.js', import.meta.url).href;
+  s.onload = () => ok(window.html2pdf); s.onerror = () => { pdfLib = null; fail(new Error('pdf')); }; document.head.append(s);
+}));
+async function makePdf(q) {
+  const html2pdf = await loadPdfLib(), el = root.querySelector('.offer');
+  if (!el) throw new Error('no estimate');
+  el.classList.add('is-pdf');
+  try {
+    const blob = await html2pdf().set({
+      margin: [12, 12, 14, 12], image: { type: 'jpeg', quality: 0.9 },
+      html2canvas: { scale: 2, backgroundColor: '#ffffff', ignoreElements: (n) => n.classList?.contains('no-print') },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.of-item', '.of-keep', '.of-row'] },
+    }).from(el).outputPdf('blob');
+    return new File([blob], `${pdfBase(q)}.pdf`, { type: 'application/pdf' });
+  } finally { el.classList.remove('is-pdf'); }
+}
 const onDeal = (dealId) => (quotes || []).filter((x) => metaOf(x).hubspot_deal_id === dealId);
 // HubSpot says the client accepted, but two or more quotes on the deal are live: staff say which.
 function needsChoice(q) {
@@ -595,7 +618,7 @@ function sendPanel(q) {
   const choice = needsChoice(q) ? `<div class="callout q-gap"><p>${t(`In HubSpot the deal is at “${stageText(m.hubspot_dealstage)}”, and it has more than one quote sent. Did the client accept this one?`, `W HubSpocie deal jest na etapie „${stageText(m.hubspot_dealstage)}”, a ma kilka wysłanych ofert. Czy klient przyjął tę?`)}</p>
     <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="st-accepted">${t('Yes, this one', 'Tak, tę')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('No, another one', 'Nie, inną')}</button></div></div>` : '';
   const statusBtns = m.status === 'draft' ? '' : `<div class="btn-row q-gap">${m.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-accepted">${t('Mark accepted', 'Oznacz: przyjęta')}</button>` : ''}${m.status !== 'declined' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-declined">${t('Mark declined', 'Oznacz: odrzucona')}</button>` : ''}${m.status !== 'sent' ? `<button type="button" class="btn btn-sm btn-ghost" data-act="st-sent">${t('Back to sent', 'Wróć do: wysłana')}</button>` : ''}</div>
-    <p class="hint">${m.status_source === 'hubspot' ? t('Status taken from the deal stage in HubSpot.', 'Status wzięty z etapu deala w HubSpocie.') : t('The status follows the HubSpot deal (every 15 min) unless you set it here.', 'Status idzie za dealem w HubSpocie (co 15 min), chyba że ustawisz go tutaj.')}</p>`;
+    <p class="hint"${hub.on ? "" : " hidden"}>${m.status_source === 'hubspot' ? t('Status taken from the deal stage in HubSpot.', 'Status wzięty z etapu deala w HubSpocie.') : t('The status follows the HubSpot deal (every 15 min) unless you set it here.', 'Status idzie za dealem w HubSpocie (co 15 min), chyba że ustawisz go tutaj.')}</p>`;
   const what = plan.kind === 'new' ? t('New quote', 'Nowa oferta')
     : plan.kind === 'resend' ? t(`The same revision ${q.revision} again, with no changes`, `Ta sama rewizja ${q.revision} jeszcze raz, bez zmian`)
     : t(`Revision ${q.revision}, replacing revision ${plan.last.revision} of ${fmtDay(plan.last.sent_on)}`, `Rewizja ${q.revision} w miejsce rewizji ${plan.last.revision} z ${fmtDay(plan.last.sent_on)}`);
@@ -605,7 +628,7 @@ function sendPanel(q) {
     form = `<div class="q-sendform q-gap">
       <p><strong>${esc(what)}</strong> · ${esc(money(q.vatRate > 0 ? totals(q).gross : totals(q).net, q.docLang))}</p>
       <ol class="q-steps-list">
-        <li>${t('Save the PDF the client gets:', 'Zapisz PDF, który dostaje klient:')} <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print → Save as PDF', 'Drukuj → Zapisz jako PDF')}</button><span class="hint">${t('File name', 'Nazwa pliku')}: ${esc(pdfBase(q))}.pdf</span></li>
+        <li>${t('Make the PDF the client gets:', 'Zrób PDF, który dostaje klient:')} <button type="button" class="btn btn-sm" data-act="send-make" ${sendForm.busy ? 'disabled' : ''}>${sendForm.making ? t('Making the PDF…', 'Robię PDF…') : t('Make the PDF', 'Zrób PDF')}</button>${f?.made ? ` <button type="button" class="btn btn-sm btn-ghost" data-act="send-make-open">${t('Look at it', 'Podgląd')}</button>` : ''}<span class="hint">${t('Made from the estimate below. Or print it yourself:', 'Z oferty poniżej. Albo wydrukuj samodzielnie:')}</span> <button type="button" class="btn btn-sm btn-ghost" data-act="print">${ICON.print}${t('Print → Save as PDF', 'Drukuj → Zapisz jako PDF')}</button><span class="hint">${t('File name', 'Nazwa pliku')}: ${esc(pdfBase(q))}.pdf</span></li>
         <li><label class="field q-field"><span class="q-lab">${t('The PDF sent to the client', 'PDF wysłany do klienta')}</span><input type="file" id="q-send-file" accept="application/pdf,.pdf"></label>
           ${f ? `<span class="hint">${t('Chosen', 'Wybrany')}: ${esc(f.name)} (${Math.round(f.size / 1024)} KB)</span>` : ''}
           ${nameOk ? '' : `<label class="q-check"><input type="checkbox" id="q-send-sure"><span>${t(`The file name has no ${q.reference}. It is the PDF of this quote.`, `W nazwie pliku nie ma ${q.reference}. To jest PDF tej oferty.`)}</span></label>`}</li>
@@ -620,9 +643,9 @@ function sendPanel(q) {
   const openBtn = sendForm?.quoteId === q.id ? '' : `<div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-open" ${canSend ? '' : 'disabled'}>${sends.length ? t('Send again or send a revision…', 'Wyślij ponownie albo rewizję…') : t('Send to the client…', 'Wyślij do klienta…')}</button></div>
     ${canSend ? '' : `<p class="hint">${t('Choose the project, or pin a HubSpot deal, first (step 01, Client).', 'Najpierw wybierz projekt albo przypnij deal w HubSpocie (krok 01, Klient).')}</p>`}`;
   return `<section class="q-box q-send no-print" id="q-send">
-    <div class="q-subrow"><h3 class="q-sub">${t('Sending and HubSpot', 'Wysyłka i HubSpot')}</h3>${statusTag(q)}</div>
+    <div class="q-subrow"><h3 class="q-sub">${hub.on ? t('Sending and HubSpot', 'Wysyłka i HubSpot') : t('Sending', 'Wysyłka')}</h3>${statusTag(q)}</div>
     ${pr ? `<p class="q-item-meta">${t('Project', 'Projekt')}: <a href="#/p/${esc(pr.id)}">${esc(pr.ref)} · ${esc(pr.name)}</a></p>` : ''}
-    <p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>
+    ${hub.on || m.hubspot_deal_id ? `<p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>` : ''}
     ${choice}${hist}${statusBtns}${openBtn}${form}
   </section>`;
 }
@@ -1118,6 +1141,14 @@ async function hubAct(a, v, q) {
       sendForm = { quoteId: q.id, file: null, error: '', busy: false }; redraw(); return;
     }
     if (a === 'send-cancel') { sendForm = null; redraw(); return; }
+    if (a === 'send-make') {
+      if (!sendForm || sendForm.busy) return;
+      sendForm.making = true; sendForm.busy = true; sendForm.error = ''; redraw();
+      try { await flush(); const file = await makePdf(q); file.made = true; sendForm.file = file; }
+      catch { sendForm.error = t('The PDF could not be made here. Print it and choose the file below.', 'Nie udało się zrobić PDF. Wydrukuj go i wybierz plik poniżej.'); }
+      sendForm.making = false; sendForm.busy = false; redraw(); return;
+    }
+    if (a === 'send-make-open') { const f = sendForm?.file; if (f) { const u = URL.createObjectURL(f); open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60000); } return; }
     if (a === 'send-retry') {
       const r = await store.retryQuoteSend(v);
       const s = hub.sends.find((x) => x.id === v);
