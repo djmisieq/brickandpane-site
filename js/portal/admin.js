@@ -8,6 +8,7 @@ import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
 import { dashboardView, SOURCES } from './dashboard.js';
+import { companiesView, companyView, loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, KINDS as CO_KINDS } from './companies.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -66,6 +67,8 @@ async function render(fromStore = false) {
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'companies') await companiesView(app, viewSwitch('companies', await listRequests()));
+    else if (r.name === 'company' && r.id) await companyView(app, r.id);
     else if (r.name === 'owner') await dashboardView(app, viewSwitch('owner', await listRequests()));
     else if (r.name === 'search') await searchView(decodeURIComponent(r.id || ''));
     else if (r.name === 'today') await today();
@@ -193,14 +196,14 @@ async function today() {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
 async function searchView(raw) {
   const q = raw.trim().toLowerCase();
   document.title = `${tr('Search')} | CRM`;
-  const [all, reqs, qs] = await Promise.all([store.listProjects(), listRequests(), findQuotes(q).catch(() => [])]);
+  const [all, reqs, qs, cos, ppl] = await Promise.all([store.listProjects(), listRequests(), findQuotes(q).catch(() => []), store.listCompanies ? store.listCompanies().catch(() => []) : [], store.listPeople ? store.listPeople().catch(() => []) : []]);
   const has = (...xs) => q && xs.filter(Boolean).join(' ').toLowerCase().includes(q);
   const ps = all.filter((p) => has(p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company, p.assignee?.full_name));
   const rs = reqs.filter((r) => has(r.ref, r.name, r.email, r.company, r.location, r.phone, r.message));
@@ -210,6 +213,7 @@ async function searchView(raw) {
     <h1 class="app-h1">${q ? tr('Search: {q}', { q: esc(raw.trim()) }) : tr('Search')}</h1>
     ${q ? `${sec('Projects', ps, (p) => li(`#/p/${esc(p.id)}`, `${esc(p.ref)} · ${esc(p.name)}`, `${stageBadge(p.stage, 'staff')} ${esc(p.location || '')}`))}
     ${sec('Enquiries', rs, (r) => li('#/enquiries', esc(r.name || r.email || ''), `${esc(fmtDate(r.created_at))} · ${esc(r.location || r.email || '')}`))}
+    ${sec('Companies and people', [...cos.filter((c) => has(c.name, c.email, c.phone, c.website)).map((c) => ({ c })), ...ppl.filter((p) => has(p.full_name, p.email, p.phone, p.job_title)).map((p) => ({ p, c: cos.find((c) => c.id === p.company_id) }))], (x) => x.p ? li(x.c ? `#/company/${esc(x.c.id)}` : '#/companies', esc(x.p.full_name), esc([x.p.job_title, x.c?.name, x.p.email].filter(Boolean).join(' · '))) : li(`#/company/${esc(x.c.id)}`, esc(x.c.name), esc(tr(CO_KINDS[x.c.kind] || x.c.kind))))}
     ${sec('Quotes', qs, (x) => li(`#/quotes/${esc(x.id)}`, esc(x.reference), esc([x.customer, x.site].filter(Boolean).join(' · '))))}` : `<p class="hint">${tr('Type a name, a reference, an email or a postcode in the search box above.')}</p>`}
   </div>`;
 }
@@ -338,7 +342,7 @@ function bindReqFiles() {
 
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs, mail, pq, reqs, tasks] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id })]);
+  const [d, staff, costs, mail, pq, reqs, tasks, pco] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id }), loadProjectCompanies(id)]);
   const openTasks = (tasks || []).filter((t) => !t.done_at), lateTasks = openTasks.filter(taskLate).length;
   // The enquiry the project came from (audit, phase 1): what the client wrote and sent, on the card itself.
   const src = (reqs || []).find((r) => r.project_id === id) || null;
@@ -437,6 +441,7 @@ async function detail(id) {
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
           </form></details>
 
+          <details class="ctl fold" data-fold="companies" ${openFolds.has('companies') ? 'open' : ''}><summary class="panel-h">${tr('Companies')} ${pco?.links?.length ? `<span class="tag">${pco.links.length}</span>` : ''}</summary><div class="fold-body">${projectCompaniesBox(pco)}</div></details>
           <details class="ctl fold" data-fold="tasks" ${openFolds.has('tasks') || lateTasks ? 'open' : ''}><summary class="panel-h">${tr('Tasks')} ${openTasks.length ? `<span class="tag${lateTasks ? ' tag-late' : ''}">${openTasks.length}</span>` : ''}</summary><div class="fold-body">${tasksBox(tasks, staff, user, { projectId: id }, 'tk-p')}</div></details>
           <details class="ctl fold" data-fold="costs" ${openFolds.has('costs') ? 'open' : ''}><summary class="panel-h">${tr('Costs & margin')} <span class="tag">${tr('staff only')}</span></summary>${costsPanel(costs)}</details>
         </aside>
@@ -446,6 +451,7 @@ async function detail(id) {
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
   bindTasks(app, user);
+  bindProjectCompanies(app, id);
   bindMail(app, id);
   $('[data-new-quote]', app)?.addEventListener('click', async (e) => {
     const b = e.currentTarget; if (b.disabled) return; b.disabled = true;

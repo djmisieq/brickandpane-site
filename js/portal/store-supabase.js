@@ -206,6 +206,27 @@ export const store = {
   },
   // The owner's dashboard: every figure from one function (migration 0043, staff only).
   async ownerDashboard(days = 90) { return ok(await sb.rpc('owner_dashboard', { days })); },
+  // Companies and people (migration 0044, CRM audit phase 5; staff only).
+  async listCompanies() { return ok(await sb.from('companies').select('*').order('name').limit(2000)) || []; },
+  async listPeople() { return ok(await sb.from('people').select('*').order('full_name').limit(5000)) || []; },
+  async getCompany(id) {
+    const [c, people, links, quotes] = await Promise.all([
+      sb.from('companies').select('*').eq('id', id).maybeSingle(), sb.from('people').select('*').eq('company_id', id).order('full_name'),
+      sb.from('project_companies').select('role, project:projects(id, ref, name, stage)').eq('company_id', id),
+      sb.from('supplier_quotes').select('id, project_id, supplier, reference, amount, net_gbp, status, created_at').eq('company_id', id).order('created_at', { ascending: false }),
+    ]);
+    return { company: ok(c), people: ok(people) || [], projects: (ok(links) || []).filter((l) => l.project).map((l) => ({ ...l.project, role: l.role })), quotes: ok(quotes) || [] };
+  },
+  async saveCompany({ id = null, ...c }) {
+    const row = id ? ok(await sb.from('companies').update(c).eq('id', id).select().single()) : ok(await sb.from('companies').insert(c).select().single());
+    emit(); return row;
+  },
+  async deleteCompany(id) { ok(await sb.from('companies').delete().eq('id', id)); emit(); },
+  async savePerson({ id = null, ...p }) { const row = id ? ok(await sb.from('people').update(p).eq('id', id).select().single()) : ok(await sb.from('people').insert(p).select().single()); emit(); return row; },
+  async deletePerson(id) { ok(await sb.from('people').delete().eq('id', id)); emit(); },
+  async projectCompanies(pid) { return (ok(await sb.from('project_companies').select('role, company:companies(*)').eq('project_id', pid)) || []).filter((x) => x.company); },
+  async linkCompany(pid, companyId, role) { ok(await sb.from('project_companies').insert({ project_id: pid, company_id: companyId, role })); emit(); },
+  async unlinkCompany(pid, companyId, role) { ok(await sb.from('project_companies').delete().eq('project_id', pid).eq('company_id', companyId).eq('role', role)); emit(); },
   async deleteTask(id) { ok(await sb.from('tasks').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
   async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },

@@ -300,6 +300,39 @@ export const store = {
       workload: staff.map((u) => ({ id: u.id, name: u.full_name, projects: s.projects.filter((p) => p.assignee_id === u.id && !['completed', 'closed', 'on_hold'].includes(p.stage)).length, tasks: (s.tasks || []).filter((x) => x.assignee_id === u.id && !x.done_at).length })),
     };
   },
+  // Companies and people in demo mode (live: migration 0044).
+  async listCompanies() { const s = load(); needStaff(s); return [...(s.companies || [])].sort((a, b) => a.name.localeCompare(b.name)); },
+  async listPeople() { const s = load(); needStaff(s); return [...(s.people || [])].sort((a, b) => a.full_name.localeCompare(b.full_name)); },
+  async getCompany(id) {
+    const s = load(); needStaff(s); const company = (s.companies || []).find((c) => c.id === id) || null;
+    const projects = (s.projectCompanies || []).filter((l) => l.company_id === id).map((l) => ({ ...s.projects.find((p) => p.id === l.project_id), role: l.role })).filter((p) => p.id);
+    return { company, people: (s.people || []).filter((p) => p.company_id === id), projects, quotes: (s.costs || []).filter((c) => c.company_id === id) };
+  },
+  async saveCompany({ id = null, ...c }) {
+    const s = load(); needStaff(s); s.companies ||= [];
+    const key = (x) => `${x.name.trim().toLowerCase()}|${x.kind}`;
+    if (s.companies.some((x) => x.id !== id && key(x) === key({ kind: 'other', ...c }))) throw new Error('A company with this name and kind already exists.');
+    let row = id && s.companies.find((x) => x.id === id);
+    if (row) Object.assign(row, c, { updated_at: now() }); else { row = { id: uid(), kind: 'other', website: '', email: '', phone: '', address: '', notes: '', ...c, created_at: now(), updated_at: now() }; s.companies.push(row); }
+    save(s); return row;
+  },
+  async deleteCompany(id) {
+    const s = load(); needStaff(s); s.companies = (s.companies || []).filter((c) => c.id !== id);
+    (s.people || []).forEach((p) => { if (p.company_id === id) p.company_id = null; }); s.projectCompanies = (s.projectCompanies || []).filter((l) => l.company_id !== id); save(s);
+  },
+  async savePerson({ id = null, ...p }) {
+    const s = load(); needStaff(s); s.people ||= []; let row = id && s.people.find((x) => x.id === id);
+    if (row) Object.assign(row, p); else { row = { id: uid(), job_title: '', email: '', phone: '', notes: '', ...p, created_at: now() }; s.people.push(row); }
+    save(s); return row;
+  },
+  async deletePerson(id) { const s = load(); needStaff(s); s.people = (s.people || []).filter((p) => p.id !== id); save(s); },
+  async projectCompanies(pid) { const s = load(); needStaff(s); return (s.projectCompanies || []).filter((l) => l.project_id === pid).map((l) => ({ role: l.role, company: (s.companies || []).find((c) => c.id === l.company_id) })).filter((x) => x.company); },
+  async linkCompany(pid, companyId, role) {
+    const s = load(); needStaff(s); s.projectCompanies ||= [];
+    if (s.projectCompanies.some((l) => l.project_id === pid && l.company_id === companyId && l.role === role)) throw new Error('This company is already on the project in that role.');
+    s.projectCompanies.push({ project_id: pid, company_id: companyId, role, created_at: now() }); save(s);
+  },
+  async unlinkCompany(pid, companyId, role) { const s = load(); needStaff(s); s.projectCompanies = (s.projectCompanies || []).filter((l) => !(l.project_id === pid && l.company_id === companyId && l.role === role)); save(s); },
   async deleteTask(id) { const s = load(); needStaff(s); s.tasks = (s.tasks || []).filter((x) => x.id !== id); save(s); },
   // Mail in demo mode: a few made-up mails, matched to projects the way mail_list does it (migration 0035).
   async listMail({ pid = null, unassigned = false } = {}) {
