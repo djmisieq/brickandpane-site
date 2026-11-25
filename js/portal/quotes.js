@@ -285,6 +285,14 @@ const QUOTE_ISSUED = STAGES.findIndex((s) => s.id === 'quote_issued');
 const KIND_OF = { 'lift-slide': 'liftslide', sliding: 'slimslide', bifold: 'bifold', hinged: 'french', windows: 'casement', facades: 'curtain', rooflights: 'lantern' };
 const FRAME_OF = { alu: 'aluminium', timber: 'timber', pvc: 'pvc', alutimber: 'timber-alu' };
 
+// Today's follow-ups (trade practice: quotes chased early win more): sent quotes still waiting for an answer.
+export async function sentQuotes() {
+  await flush(); await load();
+  return quotes.filter((q) => metaOf(q).status === 'sent').map((q) => {
+    const last = sendsOf(q)[0], pr = projectRow(q);
+    return { id: q.id, reference: q.reference, customer: q.customerName.trim(), project: pr ? `${pr.ref} · ${pr.name}` : '', sentAt: last?.created_at || null, validUntil: q.validUntil || null };
+  }).filter((x) => x.sentAt);
+}
 // The project card's list of its quotes.
 export async function projectQuotes(pid) {
   await flush(); await load();
@@ -690,7 +698,8 @@ function stepProducts(q) {
         </div>` : ''}
       </article>`;
     }).join('')}</div>
-    <button type="button" class="btn q-gap" data-act="add-item">+ ${t('Add a window or door', 'Dodaj okno lub drzwi')}</button>`;
+    <button type="button" class="btn q-gap" data-act="add-item">+ ${t('Add a window or door', 'Dodaj okno lub drzwi')}</button>
+    ${rfqBox(q)}`;
 }
 
 function stepInstall(q) {
@@ -791,6 +800,46 @@ function marginBox(q) {
     ${low ? `<p class="q-warn">${t('Below 20%.', 'Poniżej 20%.')}</p>` : ''}</div>`;
 }
 
+// ---------- request for quotes to suppliers (supplier-mail review, 25.11.2026) ----------
+// The team asked 2–7 suppliers per job and pasted the same description by hand each time; every supplier priced
+// differently (VAT in or out, delivery in or extra, minimums). One text per language with the items and the same
+// questions, plus a CSV of the schedule. No client name or address: only the postcode district for delivery.
+const RFQ_ASK = {
+  en: ['Price per item, net of VAT (say if VAT is included)', 'Delivery to the postcode above: included, a separate amount, or to be agreed; any minimum order', 'Lead time from the signed order', 'How long the price is valid', 'U-value of each item and the glass make-up', 'Trickle vents, cills and flashings: included or priced separately', 'If you offer an alternative system or glass, price it as a separate option'],
+  pl: ['Cena netto za pozycję (proszę napisać, czy z VAT)', 'Dostawa na kod pocztowy powyżej: w cenie, osobna kwota czy do ustalenia; minimum logistyczne', 'Czas realizacji od podpisanego zamówienia', 'Ważność oferty', 'Współczynnik U każdej pozycji i pakiet szybowy', 'Nawiewniki, parapety i obróbki: w cenie czy osobno', 'Jeśli proponują Państwo inny system albo szybę, proszę wycenić to jako osobną opcję'],
+};
+const itemCode = (p, i) => p.ref.trim() || `${String(i + 1).padStart(2, '0')}`;
+function rfqText(q, lang) {
+  const pl = lang === 'pl', district = String(q.postcode || '').trim().split(/\s+/)[0].toUpperCase();
+  const items = q.products.map((p, i) => `${itemCode(p, i)}: ${[named(FRAMES, p.frame, lang), itemTitle(p, lang), size(p.widthMm, p.heightMm, lang), `${pl ? 'ilość' : 'qty'} ${p.qty}`,
+    ...specRows(p, lang).map((s) => `${s.label.toLowerCase()}: ${s.value}`), p.drawingRef.trim() ? `${pl ? 'rysunek' : 'drawing'} ${p.drawingRef.trim()}` : '', p.notes.trim()].filter(Boolean).join('; ')}`);
+  const firmLines = [firm.legalEntity.trim(), firm.companyNo.trim() && `${pl ? 'Nr firmy' : 'Company no.'} ${firm.companyNo.trim()}`, firm.vatNo.trim() && `VAT ${firm.vatNo.trim()}`].filter(Boolean);
+  return [
+    pl ? 'Dzień dobry,' : 'Hello,', '',
+    pl ? `prosimy o wycenę poniższych pozycji (nasze oznaczenie ${q.reference}).` : `Please quote for the items below (our reference ${q.reference}).`,
+    district ? (pl ? `Dostawa: Wielka Brytania, kod ${district}.` : `Delivery: ${district}, UK.`) : '', '',
+    ...items, '',
+    pl ? 'Prosimy w ofercie podać:' : 'In your quote please state:', ...RFQ_ASK[pl ? 'pl' : 'en'].map((x) => `- ${x}`), '',
+    pl ? 'Rysunki i zestawienie w załączniku.' : 'Drawings and the schedule are attached.', '',
+    pl ? 'Pozdrawiamy,' : 'Kind regards,', q.preparedBy.trim() || firm.preparedBy.trim(), 'Brick & Pane', ...firmLines,
+  ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+}
+const csvCell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function rfqCsv(q) {
+  const head = ['code', 'material', 'type', 'name', 'width_mm', 'height_mm', 'qty', ...SPEC.map((s) => s.key), 'drawing', 'notes'];
+  const rows = q.products.map((p, i) => [itemCode(p, i), named(FRAMES, p.frame, 'en'), named(KINDS, p.kind, 'en'), p.system, p.widthMm, p.heightMm, p.qty, ...SPEC.map((s) => p[s.key] ?? ''), p.drawingRef, p.notes]);
+  return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+}
+let rfqLang = null; // the language of the request shown under the products, or null
+function rfqBox(q) {
+  if (!q.products.length) return '';
+  return `<section class="q-box no-print" id="q-rfq"><h3 class="q-sub">${t('Request for quotes to suppliers', 'Zapytanie do dostawców')}</h3>
+    <p class="hint">${t('The items above as one email text with the same questions for every supplier, and the schedule as CSV. No client name or address goes in it.', 'Pozycje powyżej jako jeden tekst maila z tymi samymi pytaniami do każdego dostawcy i zestawienie w CSV. Bez nazwiska i adresu klienta.')}</p>
+    <div class="btn-row q-gap"><button type="button" class="btn btn-sm btn-ghost" data-act="rfq" data-v="pl">${t('Text in Polish', 'Tekst po polsku')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="rfq" data-v="en">${t('Text in English', 'Tekst po angielsku')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="rfq-csv">${t('Schedule (CSV)', 'Zestawienie (CSV)')}</button></div>
+    ${rfqLang ? `<label class="field q-field q-gap"><span class="q-lab">${t('Copy into the email', 'Skopiuj do maila')}</span><textarea id="q-rfq-text" rows="14" readonly>${esc(rfqText(q, rfqLang))}</textarea></label>` : ''}
+  </section>`;
+}
+
 // ---------- pages ----------
 function listPage(nav) {
   const sorted = [...quotes].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -886,6 +935,17 @@ async function act(btn) {
   if (['new', 'sample', 'dup', 'del-ask', 'del-yes', 'del-no'].includes(a)) return listAct(a, btn);
   const q = current(); if (!q) return;
   if (/^(deal|send|st)-/.test(a)) return hubAct(a, v, q);
+  if (a === 'rfq') {
+    rfqLang = v; const y = scrollY; draw(); scrollTo(0, y);
+    const box = root.querySelector('#q-rfq-text'); box?.select();
+    navigator.clipboard?.writeText(box?.value || '').then(() => toast(t('Copied. Paste it into the email to each supplier.', 'Skopiowane. Wklej do maila do każdego dostawcy.')), () => {});
+    return;
+  }
+  if (a === 'rfq-csv') {
+    const blob = new Blob([`\ufeff${rfqCsv(q)}`], { type: 'text/csv' });
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${q.reference}-schedule.csv`; link.click(); URL.revokeObjectURL(link.href);
+    return;
+  }
   const pid = btn.closest('[data-pid]')?.dataset.pid, sid = btn.closest('[data-sid]')?.dataset.sid;
   const i = STEPS.findIndex((s) => s.id === step);
   switch (a) {
@@ -1130,6 +1190,6 @@ export async function quotesView(app, id, nav = '') {
   const q = quotes.find((x) => x.id === id);
   if (!q) { app.innerHTML = `<div class="container section-tight"><p class="callout">${t('This quote no longer exists.', 'Tej oferty już nie ma.')} <a href="#/quotes">${t('Back to quotes', 'Wróć do ofert')}</a></p></div>`; return; }
   // Opening a quote: a finished one shows the estimate, anything else starts at the client step (as in the Grok desk).
-  if (openId !== id) { openId = id; step = q.customerName.trim() && q.products.length ? 'offer' : 'client'; search = { q: '', results: null, busy: false, error: '' }; sendForm = null; }
+  if (openId !== id) { openId = id; step = q.customerName.trim() && q.products.length ? 'offer' : 'client'; search = { q: '', results: null, busy: false, error: '' }; sendForm = null; rfqLang = null; }
   draw();
 }

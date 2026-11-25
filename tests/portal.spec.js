@@ -654,3 +654,45 @@ test('quote builder: freight cost and a reserve lower the margin, markup shows b
   await expect(page.locator('.offer .of-no').first()).toHaveText('D01');
   await expect(page.locator('.offer')).not.toContainText('Reserve');
 });
+
+test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await page.locator('[data-pid]').first().locator('[data-b$=":ref"]').fill('D01');
+  await page.locator('[data-act="rfq"][data-v="pl"]').click();
+  const text = page.locator('#q-rfq-text');
+  await expect(text).toHaveValue(/prosimy o wycenę/);
+  await expect(text).toHaveValue(/D01: Aluminium; Lift and slide; 4200 × 2400 mm; ilość 1/);
+  await expect(text).toHaveValue(/Dostawa na kod pocztowy/);
+  await expect(text).toHaveValue(/kod E8\./);
+  await expect(text).not.toHaveValue(/Hannah|Lantern Mews|hannah@/);
+  await page.locator('[data-act="rfq"][data-v="en"]').click();
+  await expect(text).toHaveValue(/Please quote for the items below/);
+  const download = page.waitForEvent('download');
+  await page.locator('[data-act="rfq-csv"]').click();
+  expect((await download).suggestedFilename()).toMatch(/-schedule\.csv$/);
+});
+
+test('Today: a sent quote about to lapse is on the chase list', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-new-quote]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  const ref = await page.locator('[data-b="q:reference"]').inputValue();
+  const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+  await page.locator('[data-b="q:validUntil"]').fill(soon);
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await page.locator('#q-send [data-act="send-open"]').click();
+  await page.locator('#q-send-file').setInputFiles({ name: `Brick-and-Pane-${ref}-rev00.pdf`, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%demo\n') });
+  await page.locator('#q-send [data-act="send-go"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Saved');
+  await page.goto('/admin.html#/today');
+  const sec = page.locator('#t-quotes');
+  await expect(sec).toContainText(ref);
+  await expect(sec).toContainText('valid 2 more days');
+  await expect(sec.locator('.today-row').first()).toHaveClass(/is-late/);
+});

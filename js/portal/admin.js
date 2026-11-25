@@ -3,7 +3,7 @@ import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
-import { quotesView, projectQuotes, newQuoteFor } from './quotes.js';
+import { quotesView, projectQuotes, newQuoteFor, sentQuotes } from './quotes.js';
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 
@@ -124,7 +124,7 @@ let todayMine = false;
 
 async function today() {
   document.title = `${tr('Today')} | CRM`;
-  const [all, requests, mail] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : []]);
+  const [all, requests, mail, sent] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : [], sentQuotes().catch(() => [])]);
   const open = all.filter((p) => !['completed', 'closed', 'on_hold'].includes(p.stage));
   const mine = todayMine ? open.filter((p) => p.assignee_id === user.id) : open;
   const oldest = (f) => (a, b) => new Date(f(a)) - new Date(f(b));
@@ -136,6 +136,8 @@ async function today() {
   (mail || []).forEach((m) => (m.projects || []).forEach((pid) => { if (!last.has(pid)) last.set(pid, m); }));
   const answer = mine.filter((p) => last.get(p.id)?.direction === 'in').map((p) => ({ p, m: last.get(p.id) })).sort(oldest((x) => x.m.sent_at));
   const waiting = mine.filter((p) => stage(p.stage).court === 'you' && daysSince(p.stage_changed_at) >= WAIT_DAYS).sort(oldest((p) => p.stage_changed_at));
+  // Sent quotes: chase after 3 days without an answer, and before they lapse (validity in the next 5 days).
+  const chase = sent.filter((x) => daysSince(x.sentAt) >= 3 || (x.validUntil && new Date(`${x.validUntil}T23:59:59`) - Date.now() < 5 * DAY)).sort(oldest((x) => x.sentAt));
   const loose = (mail || []).filter((m) => m.direction === 'in' && !m.dismissed && !(m.projects || []).length).length;
 
   const pname = (p) => `${esc(p.ref)} · ${esc(p.name)}`;
@@ -145,6 +147,10 @@ async function today() {
     ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: '#/enquiries', title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: esc(r.location || r.email || ''), age: days(r.created_at), late: daysSince(r.created_at) >= 1 }), 'No new enquiries.'],
     ['overdue', 'Overdue (with us)', overdue, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Overdue {date}', { date: fmtDay(p.due_at) })), late: true }), 'Nothing overdue.'],
     ['answer', 'Email came in, our move', answer, ({ p, m }) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: esc(`${m.from_name || m.from_addr}: ${m.subject || tr('(no subject)')}`), age: days(m.sent_at), late: daysSince(m.sent_at) >= 2 }), 'No email waiting for a reply.'],
+    ['quotes', 'Quotes sent, no answer: chase', chase, (x) => {
+      const lapse = x.validUntil ? Math.floor((new Date(`${x.validUntil}T23:59:59`) - Date.now()) / DAY) : null; // whole days left after today
+      return row({ href: `#/quotes/${esc(x.id)}`, title: esc(`${x.reference}${x.customer ? ` · ${x.customer}` : ''}`), sub: `${esc(x.project)}${lapse != null && lapse <= 5 ? ` · <strong>${esc(lapse < 0 ? tr('expired') : tr('valid {n} more days', { n: lapse }))}</strong>` : ''}`, age: days(x.sentAt), late: daysSince(x.sentAt) >= 7 || (lapse != null && lapse <= 5) });
+    }, 'No quote waiting for an answer.'],
     ['soon', 'Due in the next 3 days', soon, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Due {date}', { date: fmtDay(p.due_at) })) }), 'Nothing due in the next 3 days.'],
     ['waiting', `Waiting on the client for ${WAIT_DAYS}+ days: chase`, waiting, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: stageBadge(p.stage, 'staff'), age: days(p.stage_changed_at) }), 'No client has kept us waiting that long.'],
   ];
