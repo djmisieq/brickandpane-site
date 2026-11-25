@@ -8,6 +8,7 @@ import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
 import { dashboardView, SOURCES } from './dashboard.js';
+import { replyBox, bindEnquiryReply } from './enquiry-reply.js';
 import { companiesView, companyView, loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, KINDS as CO_KINDS } from './companies.js';
 
 const app = $('#app');
@@ -45,6 +46,7 @@ const headClient = (p, invites = []) => {
   return esc(tr(inv.make_owner && !inv.emailed_at ? 'Awaiting client sign-up: {email}' : 'Client invited: {email}', { email: inv.email }));
 };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
+let enqFocused = null; // the enquiry a #/enquiries/<id> link already opened and scrolled to
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 
 // CRM-only styles (css: body.crm): tool density, red reserved for what needs action.
@@ -157,8 +159,8 @@ async function today() {
   const days = (iso) => (daysSince(iso) < 1 ? esc(ago(iso)) : tr('{n} d', { n: daysSince(iso) }));
   const row = ({ href, title, sub, age, late }) => `<li><a class="today-row${late ? ' is-late' : ''}" href="${href}"><span class="today-t">${title}</span><span class="today-s">${sub}</span><span class="today-age">${age}</span></a></li>`;
   const SECTIONS = [
-    ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: '#/enquiries', title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: `${esc(r.location || r.email || '')}${Date.now() - new Date(r.created_at) > 2 * DAY ? ` · <strong>${esc(tr('no reply for over 48 h'))}</strong>` : ''}`, age: days(r.created_at), late: Date.now() - new Date(r.created_at) > DAY }), 'No new enquiries.'],
-    ['tasks', 'Tasks for today and late', dueT, (t) => { const p = t.project_id && pOf(t.project_id); return row({ href: p ? `#/p/${esc(p.id)}` : t.request_id ? '#/enquiries' : '#/today', title: esc(t.title), sub: p ? pname(p) : esc(tr(t.request_id ? 'Enquiry' : 'General')), age: esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Today')), late: taskLate(t) }); }, 'No task due today.'],
+    ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: `#/enquiries/${esc(r.id)}`, title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: `${esc(r.location || r.email || '')}${Date.now() - new Date(r.created_at) > 2 * DAY ? ` · <strong>${esc(tr('no reply for over 48 h'))}</strong>` : ''}`, age: days(r.created_at), late: Date.now() - new Date(r.created_at) > DAY }), 'No new enquiries.'],
+    ['tasks', 'Tasks for today and late', dueT, (t) => { const p = t.project_id && pOf(t.project_id); return row({ href: p ? `#/p/${esc(p.id)}` : t.request_id ? `#/enquiries/${esc(t.request_id)}` : '#/today', title: esc(t.title), sub: p ? pname(p) : esc(tr(t.request_id ? 'Enquiry' : 'General')), age: esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Today')), late: taskLate(t) }); }, 'No task due today.'],
     ['overdue', 'Overdue (with us)', overdue, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Overdue {date}', { date: fmtDay(p.due_at) })), late: true }), 'Nothing overdue.'],
     ['answer', 'Email came in, our move', answer, ({ p, m }) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: esc(`${m.from_name || m.from_addr}: ${m.subject || tr('(no subject)')}`), age: days(m.sent_at), late: daysSince(m.sent_at) >= 2 }), 'No email waiting for a reply.'],
     ['quotes', 'Quotes sent, no answer: chase', chase, (x) => {
@@ -212,7 +214,7 @@ async function searchView(raw) {
   app.innerHTML = `<div class="container-wide section-tight" id="search-results">
     <h1 class="app-h1">${q ? tr('Search: {q}', { q: esc(raw.trim()) }) : tr('Search')}</h1>
     ${q ? `${sec('Projects', ps, (p) => li(`#/p/${esc(p.id)}`, `${esc(p.ref)} · ${esc(p.name)}`, `${stageBadge(p.stage, 'staff')} ${esc(p.location || '')}`))}
-    ${sec('Enquiries', rs, (r) => li('#/enquiries', esc(r.name || r.email || ''), `${esc(fmtDate(r.created_at))} · ${esc(r.location || r.email || '')}`))}
+    ${sec('Enquiries', rs, (r) => li(`#/enquiries/${esc(r.id)}`, esc(r.name || r.email || ''), `${esc(fmtDate(r.created_at))} · ${esc(r.location || r.email || '')}`))}
     ${sec('Companies and people', [...cos.filter((c) => has(c.name, c.email, c.phone, c.website)).map((c) => ({ c })), ...ppl.filter((p) => has(p.full_name, p.email, p.phone, p.job_title)).map((p) => ({ p, c: cos.find((c) => c.id === p.company_id) }))], (x) => x.p ? li(x.c ? `#/company/${esc(x.c.id)}` : '#/companies', esc(x.p.full_name), esc([x.p.job_title, x.c?.name, x.p.email].filter(Boolean).join(' · '))) : li(`#/company/${esc(x.c.id)}`, esc(x.c.name), esc(tr(CO_KINDS[x.c.kind] || x.c.kind))))}
     ${sec('Quotes', qs, (x) => li(`#/quotes/${esc(x.id)}`, esc(x.reference), esc([x.customer, x.site].filter(Boolean).join(' · '))))}` : `<p class="hint">${tr('Type a name, a reference, an email or a postcode in the search box above.')}</p>`}
   </div>`;
@@ -229,9 +231,10 @@ async function enquiries() {
   document.title = `${tr('Enquiries')} | CRM`;
   const [all, tasks, staff] = await Promise.all([listRequests(), loadTasks({}), store.listStaff().catch(() => [])]);
   const tasksOf = (rid) => (tasks || []).filter((t) => t.request_id === rid);
+  const focus = route().id || null; // #/enquiries/<id>: that enquiry is always listed and opened
   const q = queries.enquiries.toLowerCase();
   const shown = all
-    .filter((r) => (reqFilter === 'open' ? isOpenReq(r) : reqFilter === 'all' || r.status === reqFilter))
+    .filter((r) => r.id === focus || (reqFilter === 'open' ? isOpenReq(r) : reqFilter === 'all' || r.status === reqFilter))
     .filter((r) => !q || [r.ref, r.name, r.email, r.company, r.location, r.phone].join(' ').toLowerCase().includes(q));
   const row = (label, value) => (value ? `<tr><th scope="row">${esc(tr(label))}</th><td>${value}</td></tr>` : '');
   const list = (arr, map) => (arr || []).map((v) => esc(tr(map[v] || (v === 'unsure' ? 'Not sure' : v)))).join(', ');
@@ -246,7 +249,7 @@ async function enquiries() {
       <div class="enq-body">
         <table class="spec spec-compact"><tbody>
           ${row('Received', esc(fmtDate(r.created_at, true)))}
-          ${row('Email', `<a href="mailto:${esc(r.email)}?subject=${encodeURIComponent(r.ref)}">${esc(r.email)}</a>`)}
+          ${row('Email address', `<a href="mailto:${esc(r.email)}?subject=${encodeURIComponent(r.ref)}">${esc(r.email)}</a>`)}
           ${row('Phone', r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : '')}
           ${row('Location', esc(r.location || ''))}
           ${row('Products', list(r.systems, SYSTEMS))}
@@ -267,6 +270,7 @@ async function enquiries() {
           ? `<a class="btn btn-sm btn-ghost" href="#/p/${esc(r.project_id)}">${tr('Open the project')}</a>`
           : `<button type="button" class="btn btn-sm" data-req-convert>${tr('Turn into a project')}</button> <label class="enq-invite"><input type="checkbox" data-req-invite checked> ${tr('Email the client an invitation to the portal')}</label> <span class="note">${tr('Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.')}</span>`}</p>
         ${r.files?.length || r.files_link ? `<p class="enq-files">${(r.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${r.files_link ? ` <a href="${esc(r.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
+        ${replyBox(r)}
         <form class="ctl" data-req-form>
           <div class="field"><label for="rq-status-${esc(r.id)}">${tr('Status')}</label><select id="rq-status-${esc(r.id)}" name="status">${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
           <div class="field"><label for="rq-note-${esc(r.id)}">${tr('Team note')} <span class="tag">${tr('staff only')}</span></label><textarea id="rq-note-${esc(r.id)}" name="staff_note" rows="2">${esc(r.staff_note || '')}</textarea></div>
@@ -276,6 +280,8 @@ async function enquiries() {
       </div>
     </details>`;
   const openIds = new Set($$('details.enq[open]', app).map((d) => d.dataset.req));
+  // #/enquiries/<id> opens that enquiry (links from Today and the search), once per visit of the address.
+  if (focus && enqFocused !== focus) openIds.add(focus);
   app.innerHTML = `
     <div class="container section-tight">
       <div class="dash-head">
@@ -301,6 +307,8 @@ async function enquiries() {
   const qi = $('#crm-q', app);
   qi.addEventListener('input', () => { queries.enquiries = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => enquiries().then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
   bindTasks(app, user);
+  bindEnquiryReply(app, user, (rid) => all.find((x) => x.id === rid), () => enquiries());
+  if (focus && enqFocused !== focus) { enqFocused = focus; document.querySelector(`details.enq[data-req="${CSS.escape(focus)}"]`)?.scrollIntoView({ block: 'start' }); }
   $$('[data-req-form]', app).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
@@ -382,8 +390,9 @@ async function detail(id) {
             <div class="field"><label for="ctl-stage">${tr('New stage')}</label><select id="ctl-stage" name="stage" required><option value="">${tr('Choose the new stage…')}</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(tr(s.staffLabel || s.label))}${s.id === suggested ? ` ${tr('(next)')}` : ''}</option>`).join('')}</select><span class="hint">${tr('Current:')} ${esc(tr(stage(p.stage).staffLabel || stage(p.stage).label))}</span></div>
             <div class="field"><label for="ctl-note">${tr('Note to client')}</label><textarea id="ctl-note" name="note" rows="2" placeholder="${tr('e.g. Quotation Q1 is in Documents.')}"></textarea></div>
             <div class="field"><label for="ctl-next">${tr('Next step (shown to client)')}</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
-            <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date"><span class="hint">${tr('Blank = no date.')}</span></div>
-            <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client and notify them')}</span></label>
+            <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date" value="${p.due_at ? esc(new Date(p.due_at).toISOString().slice(0, 10)) : ''}"><span class="hint">${tr('Kept as it is unless you change it; blank = no date.')}</span></div>
+            <label class="consent"><input type="checkbox" name="visible"> <span>${tr('Visible to client and notify them')}</span></label>
+            <p class="hint" data-stage-preview>${tr('Only the team sees this change.')}</p>
             <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
           </form>
 
@@ -459,6 +468,20 @@ async function detail(id) {
   });
   $$('[data-fold]', app).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openFolds.add(el.dataset.fold); else openFolds.delete(el.dataset.fold); }));
   bindReqFiles();
+  // Audit 25.11: the client is told only when someone ticks it, and sees in advance what they will get; the date
+  // stays as it is unless changed, and a stage on our side suggests two working days.
+  const sf = $('[data-stage]', app);
+  if (sf) {
+    const workdays = (n) => { const d = new Date(); while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) n--; } return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const preview = () => {
+      const s = sf.stage.value ? stage(sf.stage.value) : null, out = $('[data-stage-preview]', sf);
+      if (!out) return;
+      out.textContent = !sf.visible.checked ? tr('Only the team sees this change.')
+        : tr('The client sees “{stage}”{note} and gets an email.', { stage: s ? tr(s.homeLabel || s.label || s.id) : '…', note: sf.note.value.trim() ? tr(' with your note') : '' });
+    };
+    sf.stage.addEventListener('change', () => { const s = stage(sf.stage.value); if (s?.court === 'us' && !sf.due.value) sf.due.value = workdays(2); preview(); });
+    sf.visible.addEventListener('change', preview); sf.note.addEventListener('input', preview);
+  }
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     if (!f.stage.value) { f.stage.focus(); toast(tr('Choose the new stage first.')); return; }

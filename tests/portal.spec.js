@@ -446,6 +446,53 @@ test('mail: a reply is written on the project and goes only after the tick that 
   await expect(panel.locator('details.mail.is-out').first()).toContainText('Re: Hartley Road: threshold detail');
 });
 
+test('stage change: the client is told only when ticked, with a preview; the date stays unless changed', async ({ page }) => {
+  await page.goto('/admin.html#/board');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  const f = page.locator('[data-stage]');
+  await expect(f.locator('input[name="visible"]')).not.toBeChecked();
+  await expect(f.locator('[data-stage-preview]')).toHaveText('Only the team sees this change.');
+  const before = await f.locator('#ctl-due').inputValue();
+  await f.locator('#ctl-stage').selectOption('accepted');
+  await f.locator('input[name="visible"]').check();
+  await expect(f.locator('[data-stage-preview]')).toContainText('and gets an email');
+  if (before) await expect(f.locator('#ctl-due')).toHaveValue(before);
+});
+
+test('enquiry: Today links to the enquiry itself; a templated reply goes after the tick and marks it replied', async ({ page }) => {
+  await page.goto('/admin.html#/today');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('#t-fresh .today-row').first().click();
+  await expect(page).toHaveURL(/#\/enquiries\/[\w-]+$/);
+  const enq = page.locator('details.enq[open]');
+  await expect(enq).toHaveCount(1);
+  await enq.locator('[data-req-reply]').click();
+  const form = enq.locator('[data-req-reply-form]');
+  await expect(form.locator('textarea[name="text"]')).toHaveValue(/To prepare the quotation we need/);
+  await form.locator('select[name="lang"]').selectOption('pl');
+  await expect(form.locator('textarea[name="text"]')).toHaveValue(/Do przygotowania wyceny potrzebujemy/);
+  await form.locator('button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Tick that you checked');
+  await form.locator('input[name="confirm"]').check();
+  await form.locator('button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('marked as replied');
+  await expect(page.locator('details.enq[open] .badge')).toHaveText('Replied');
+});
+
+test('companies: a person marked do not contact shows it, and can be allowed again', async ({ page }) => {
+  await page.goto('/admin.html#/companies');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('#co-name').fill('Prospect Ltd');
+  await page.locator('[data-co-new] button[type="submit"]').click();
+  await page.locator('#co-pname').fill('Pat Prospect');
+  await page.locator('[data-person-add] button[type="submit"]').click();
+  await page.locator('[data-person] [data-person-dnc]').click();
+  await expect(page.locator('[data-person]')).toContainText('do not contact');
+  await page.locator('[data-person] [data-person-dnc]').click();
+  await expect(page.locator('[data-person]')).not.toContainText('do not contact');
+});
+
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('bp-openings-list', JSON.stringify([
     { ref: 'D01', system: 'bifold', material: 'alu', width_mm: 4200, height_mm: 2400, qty: 1, note: '3 leaves' },

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -805,4 +805,29 @@ test('mail outbox: staff read the log of sent mail; no one can write to it from 
   for (const who of [A, C, O]) { await as(who); assert.equal((await db.query('select * from public.mail_outbox')).rows.length, 0); }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select * from public.mail_outbox');
+});
+
+// 0047: cold-list prospects not contacted for 12 months are removed; "do not contact" ones stay as the suppression list;
+// anything on a project or with a portal account is never touched.
+test('cold list: removed after 12 months without contact, except do-not-contact and anything on a project', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await db.exec('reset role');
+  const add = async (name, extra = '') => (await db.query(`insert into public.companies (name, kind, source, created_at${extra ? ', ' + extra.split('=')[0] : ''}) values ($1, 'other', 'cold', now() - interval '13 months'${extra ? ', ' + extra.split('=')[1] : ''}) returning id`, [name])).rows[0].id;
+  const old = await add('Old Ltd');
+  await db.query(`insert into public.people (company_id, full_name, email) values ($1, 'Old Person', 'old@x.com')`, [old]);
+  const dnc = await add('Stop Ltd', 'do_not_contact=true');
+  const recent = await add('Recent Ltd', 'last_contacted_at=now()');
+  const onProject = await add('Client Ltd');
+  await db.query(`insert into public.project_companies (project_id, company_id, role) values ($1, $2, 'client')`, [P, onProject]);
+  const fresh = (await db.query(`insert into public.companies (name, source) values ('Fresh Ltd', 'cold') returning id`)).rows[0].id;
+  await as(S);
+  await fails('select public.purge_cold_prospects()'); // the schedule runs it, not people
+  await db.exec('reset role');
+  const r = (await db.query('select public.purge_cold_prospects() r')).rows[0].r;
+  assert.deepEqual(r, { people: 1, companies: 1 });
+  const left = (await db.query('select id from public.companies')).rows.map((x) => x.id);
+  for (const id of [dnc, recent, onProject, fresh]) assert.ok(left.includes(id));
+  assert.ok(!left.includes(old));
 });
