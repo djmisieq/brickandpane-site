@@ -560,3 +560,20 @@ test('mail: the client’s email shows on the project, the rest waits in Email; 
   await expect(client.locator('.now-card')).toBeVisible();
   for (const text of ['threshold detail', 'Offer for frames', 'Zimbra']) await expect(client.locator('body')).not.toContainText(text);
 });
+
+test('Today lists what needs doing now: new enquiries, overdue projects; Mine filters to my projects', async ({ page }) => {
+  await page.goto('/login.html');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/today');
+  await expect(page.locator('h1')).toHaveText('Today');
+  await expect(page.locator('#t-fresh')).toContainText('Jo Bennett');
+  await expect(page.locator('#t-overdue')).toContainText('Northfield Terrace');
+  await expect(page.locator('#t-overdue .today-row').first()).toHaveClass(/is-late/);
+  await page.locator('[data-jump="overdue"]').click();
+  await page.locator('#t-overdue .today-row', { hasText: 'Northfield Terrace' }).click();
+  await expect(page).toHaveURL(/#\/p\//);
+  await page.goto('/admin.html#/today');
+  await page.locator('[data-mine="1"]').click();
+  await expect(page.locator('[data-mine="1"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#t-fresh')).toContainText('Jo Bennett'); // enquiries have no owner yet: always shown
+});

@@ -62,6 +62,7 @@ async function render(fromStore = false) {
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'today') await today();
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else await board(r.name === 'list');
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
@@ -114,10 +115,68 @@ async function board(asList) {
   qi.addEventListener('input', () => { queries.board = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
 }
 
+// "Today" (CRM audit K1, 24.11.2026): what needs doing now, built only from data the CRM already has (no new tables).
+// Each list is sorted oldest first: the longest wait is the first thing to deal with.
+const DAY = 86400e3;
+const WAIT_DAYS = 7; // a project waiting on the client this long needs a nudge
+const daysSince = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : 0);
+let todayMine = false;
+
+async function today() {
+  document.title = `${tr('Today')} | CRM`;
+  const [all, requests, mail] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : []]);
+  const open = all.filter((p) => !['completed', 'closed', 'on_hold'].includes(p.stage));
+  const mine = todayMine ? open.filter((p) => p.assignee_id === user.id) : open;
+  const oldest = (f) => (a, b) => new Date(f(a)) - new Date(f(b));
+  const fresh = requests.filter((r) => r.status === 'new').sort(oldest((r) => r.created_at));
+  const overdue = mine.filter(isOverdue).sort(oldest((p) => p.due_at));
+  const soon = mine.filter((p) => !isOverdue(p) && p.due_at && stage(p.stage).court === 'us' && new Date(p.due_at) - Date.now() < 3 * DAY).sort(oldest((p) => p.due_at));
+  // The newest email on each project (mail_list is newest first). If it came in, the next move is ours.
+  const last = new Map();
+  (mail || []).forEach((m) => (m.projects || []).forEach((pid) => { if (!last.has(pid)) last.set(pid, m); }));
+  const answer = mine.filter((p) => last.get(p.id)?.direction === 'in').map((p) => ({ p, m: last.get(p.id) })).sort(oldest((x) => x.m.sent_at));
+  const waiting = mine.filter((p) => stage(p.stage).court === 'you' && daysSince(p.stage_changed_at) >= WAIT_DAYS).sort(oldest((p) => p.stage_changed_at));
+  const loose = (mail || []).filter((m) => m.direction === 'in' && !m.dismissed && !(m.projects || []).length).length;
+
+  const pname = (p) => `${esc(p.ref)} · ${esc(p.name)}`;
+  const days = (iso) => (daysSince(iso) < 1 ? esc(ago(iso)) : tr('{n} d', { n: daysSince(iso) }));
+  const row = ({ href, title, sub, age, late }) => `<li><a class="today-row${late ? ' is-late' : ''}" href="${href}"><span class="today-t">${title}</span><span class="today-s">${sub}</span><span class="today-age">${age}</span></a></li>`;
+  const SECTIONS = [
+    ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: '#/enquiries', title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: esc(r.location || r.email || ''), age: days(r.created_at), late: daysSince(r.created_at) >= 1 }), 'No new enquiries.'],
+    ['overdue', 'Overdue (with us)', overdue, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Overdue {date}', { date: fmtDay(p.due_at) })), late: true }), 'Nothing overdue.'],
+    ['answer', 'Email came in, our move', answer, ({ p, m }) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: esc(`${m.from_name || m.from_addr}: ${m.subject || tr('(no subject)')}`), age: days(m.sent_at), late: daysSince(m.sent_at) >= 2 }), 'No email waiting for a reply.'],
+    ['soon', 'Due in the next 3 days', soon, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Due {date}', { date: fmtDay(p.due_at) })) }), 'Nothing due in the next 3 days.'],
+    ['waiting', `Waiting on the client for ${WAIT_DAYS}+ days: chase`, waiting, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: stageBadge(p.stage, 'staff'), age: days(p.stage_changed_at) }), 'No client has kept us waiting that long.'],
+  ];
+  app.innerHTML = `
+    <div class="container-wide section-tight">
+      <div class="dash-head">
+        <div><span class="eyebrow">${esc(fmtDay(new Date().toISOString()))}</span><h1 class="app-h1">${tr('Today')}</h1></div>
+        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat${items.length && ['fresh', 'overdue', 'answer'].includes(id) ? ' is-you' : ''}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
+      </div>
+      <div class="board-tools">
+        ${viewSwitch('today', requests)}
+        <div class="seg" role="group" aria-label="${tr('Projects of')}">
+          <button type="button" class="${todayMine ? 'is-on' : ''}" aria-pressed="${todayMine}" data-mine="1">${tr('Mine')}</button>
+          <button type="button" class="${todayMine ? '' : 'is-on'}" aria-pressed="${!todayMine}" data-mine="">${tr('Everyone')}</button>
+        </div>
+      </div>
+      <div class="today">${SECTIONS.map(([id, label, items, html, empty]) => `
+        <section class="today-sec" id="t-${id}" aria-labelledby="th-${id}">
+          <h2 class="panel-h" id="th-${id}">${tr(label)} <span class="today-n">${items.length}</span></h2>
+          ${items.length ? `<ul class="today-list">${items.map(html).join('')}</ul>` : `<p class="note">${tr(empty)}</p>`}
+        </section>`).join('')}
+        ${loose ? `<p class="note"><a href="#/mail">${tr('{n} emails are not on any project yet', { n: loose })}</a></p>` : ''}
+      </div>
+    </div>`;
+  $$('[data-jump]', app).forEach((b) => b.addEventListener('click', () => document.getElementById(`t-${b.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+  $$('[data-mine]', app).forEach((b) => b.addEventListener('click', () => { todayMine = !!b.dataset.mine; today(); }));
+}
+
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
 }
 
 async function enquiries() {
