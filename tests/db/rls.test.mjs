@@ -455,7 +455,7 @@ test('quote sends: staff may insert exactly the columns the portal client sends'
   await as(S);
   await db.query(`insert into public.quotes (id, reference, data) values ($1, 'BP-2026-114', '{}')`, [Q]);
   const value = { quote_id: `'${Q}'::uuid`, hubspot_deal_id: "'538396856520'", reference: "'BP-2026-114'", revision: "'00'",
-    kind: "'new'", total: '100', vat_rate: '0', pdf_path: `'${Q}/x.pdf'`, pdf_name: "'q.pdf'", snapshot: `'{}'::jsonb`, sent_on: 'current_date' };
+    kind: "'new'", total: '100', vat_rate: '0', pdf_path: `'${Q}/x.pdf'`, pdf_name: "'q.pdf'", snapshot: `'{}'::jsonb`, sent_on: 'current_date', project_id: 'null' /* 0038 */ };
   for (const c of cols) assert.ok(value[c] !== undefined, `client sends column "${c}", which migration 0026 does not grant to staff`);
   await db.query(`insert into public.quote_sends (${cols.join(', ')}) values (${cols.map((c) => value[c]).join(', ')})`);
   assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'sent');
