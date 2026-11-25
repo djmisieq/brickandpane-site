@@ -341,6 +341,13 @@ const QUOTE_ISSUED = STAGES.findIndex((s) => s.id === 'quote_issued');
 const KIND_OF = { 'lift-slide': 'liftslide', sliding: 'slimslide', bifold: 'bifold', hinged: 'french', windows: 'casement', facades: 'curtain', rooflights: 'lantern' };
 const FRAME_OF = { alu: 'aluminium', timber: 'timber', pvc: 'pvc', alutimber: 'timber-alu' };
 
+// The CRM's one search (app bar): quotes by reference, client, email or site.
+export async function findQuotes(q) {
+  if (!q) return [];
+  await flush(); await load();
+  return quotes.filter((x) => [x.reference, x.customerName, x.email, x.company, x.siteAddress, x.postcode].filter(Boolean).join(' ').toLowerCase().includes(q))
+    .map((x) => ({ id: x.id, reference: x.reference, customer: x.customerName.trim(), site: [x.siteAddress, x.postcode].filter((s) => String(s || '').trim()).join(', ') }));
+}
 // Today's follow-ups (trade practice: quotes chased early win more): sent quotes still waiting for an answer.
 export async function sentQuotes() {
   await flush(); await load();

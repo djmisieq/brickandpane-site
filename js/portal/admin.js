@@ -3,7 +3,7 @@ import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
-import { quotesView, projectQuotes, newQuoteFor, sentQuotes } from './quotes.js';
+import { quotesView, projectQuotes, newQuoteFor, sentQuotes, findQuotes } from './quotes.js';
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 
@@ -54,7 +54,7 @@ async function render(fromStore = false) {
   // A live update redraws the page: fields the user has changed keep their values (lists too), others refill empty ones.
   const keep = {}, dirty = new Set(); if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); });
   const focused = document.activeElement?.id;
-  await renderAppBar(bar, user, 'admin');
+  await renderAppBar(bar, user, 'admin'); bindSearch();
   const r = route();
   // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
   if (fromStore && r.name === 'quotes') return;
@@ -62,6 +62,7 @@ async function render(fromStore = false) {
     if (r.name === 'p' && r.id) await detail(r.id);
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
+    else if (r.name === 'search') await searchView(decodeURIComponent(r.id || ''));
     else if (r.name === 'today') await today();
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else await board(r.name === 'list');
@@ -88,7 +89,7 @@ async function board(asList) {
   app.innerHTML = `
     <div class="container-wide section-tight">
       <div class="dash-head">
-        <div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Pipeline')}</h1></div>
+        <div><h1 class="app-h1">${tr('Pipeline')}</h1></div>
         <dl class="stats">
           <div class="stat ${open.filter(isOverdue).length ? 'is-you' : ''}"><dt>${tr('Overdue (with us)')}</dt><dd>${open.filter(isOverdue).length}</dd></div>
           <div class="stat"><dt>${tr('With us')}</dt><dd>${open.filter((p) => stage(p.stage).court === 'us').length}</dd></div>
@@ -185,6 +186,29 @@ function viewSwitch(on, requests) {
   return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}</div>`;
 }
 
+// One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
+async function searchView(raw) {
+  const q = raw.trim().toLowerCase();
+  document.title = `${tr('Search')} | CRM`;
+  const [all, reqs, qs] = await Promise.all([store.listProjects(), listRequests(), findQuotes(q).catch(() => [])]);
+  const has = (...xs) => q && xs.filter(Boolean).join(' ').toLowerCase().includes(q);
+  const ps = all.filter((p) => has(p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company, p.assignee?.full_name));
+  const rs = reqs.filter((r) => has(r.ref, r.name, r.email, r.company, r.location, r.phone, r.message));
+  const li = (href, title, sub) => `<li><a class="today-row" href="${href}"><span class="today-t">${title}</span><span class="today-s">${sub}</span></a></li>`;
+  const sec = (label, list, html) => `<section class="today-sec"><h2 class="panel-h">${tr(label)} <span class="tag">${list.length}</span></h2>${list.length ? `<ul class="today-list">${list.map(html).join('')}</ul>` : `<p class="hint">${tr('Nothing found.')}</p>`}</section>`;
+  app.innerHTML = `<div class="container-wide section-tight" id="search-results">
+    <h1 class="app-h1">${q ? tr('Search: {q}', { q: esc(raw.trim()) }) : tr('Search')}</h1>
+    ${q ? `${sec('Projects', ps, (p) => li(`#/p/${esc(p.id)}`, `${esc(p.ref)} · ${esc(p.name)}`, `${stageBadge(p.stage, 'staff')} ${esc(p.location || '')}`))}
+    ${sec('Enquiries', rs, (r) => li('#/enquiries', esc(r.name || r.email || ''), `${esc(fmtDate(r.created_at))} · ${esc(r.location || r.email || '')}`))}
+    ${sec('Quotes', qs, (x) => li(`#/quotes/${esc(x.id)}`, esc(x.reference), esc([x.customer, x.site].filter(Boolean).join(' · '))))}` : `<p class="hint">${tr('Type a name, a reference, an email or a postcode in the search box above.')}</p>`}
+  </div>`;
+}
+function bindSearch() {
+  const f = $('[data-gsearch]', bar); if (!f) return;
+  const r = route(); if (r.name === 'search') f.q.value = decodeURIComponent(r.id || '');
+  f.addEventListener('submit', (e) => { e.preventDefault(); const v = f.q.value.trim(); location.hash = `#/search/${encodeURIComponent(v)}`; });
+}
+
 async function enquiries() {
   document.title = `${tr('Enquiries')} | CRM`;
   const all = await listRequests();
@@ -237,7 +261,7 @@ async function enquiries() {
   app.innerHTML = `
     <div class="container section-tight">
       <div class="dash-head">
-        <div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Enquiries')}</h1></div>
+        <div><h1 class="app-h1">${tr('Enquiries')}</h1></div>
         <dl class="stats">
           <div class="stat ${all.some((r) => r.status === 'new') ? 'is-you' : ''}"><dt>${tr('New')}</dt><dd>${all.filter((r) => r.status === 'new').length}</dd></div>
           <div class="stat"><dt>${tr('Replied')}</dt><dd>${all.filter((r) => r.status === 'replied').length}</dd></div>
@@ -271,9 +295,7 @@ async function enquiries() {
       location.hash = `#/p/${res.project_id}`;
     } catch (err) { b.disabled = false; toast(tr(err.message)); }
   }));
-  $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
-    try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }
-  }));
+  bindReqFiles();
 }
 
 // Which side panels of the project card are open; a live redraw keeps them as the user left them.
@@ -293,9 +315,17 @@ const keyNumbers = (p, d, { margin }) => {
   </dl>`;
 };
 
+function bindReqFiles() {
+  $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
+    try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }
+  }));
+}
+
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs, mail, pq] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => [])]);
+  const [d, staff, costs, mail, pq, reqs] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests()]);
+  // The enquiry the project came from (audit, phase 1): what the client wrote and sent, on the card itself.
+  const src = (reqs || []).find((r) => r.project_id === id) || null;
   const p = d.project;
   document.title = `${p.ref} · ${p.name} | CRM`;
   const nextIdx = STAGES.findIndex((s) => s.id === p.stage) + 1;
@@ -322,12 +352,12 @@ async function detail(id) {
           ${mailPanel(mail)}
         </div>
         <aside class="crm-side">
-          ${d.internal?.hubspot_deal_id ? `<form class="ctl" data-next-step novalidate>
-            <h2 class="panel-h">${tr('Stage')}</h2>
-            <p class="note">${tr('This project’s stage is set in HubSpot and updates here within 15 minutes.')} <a href="${HUBSPOT_DEAL}${encodeURIComponent(d.internal.hubspot_deal_id)}" target="_blank" rel="noopener">${tr('Open the deal in HubSpot')}</a></p>
-            <div class="field"><label for="ctl-next">${tr('Next step (shown to client)')}</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
-            <button class="btn btn-sm" type="submit">${tr('Save next step')}</button>
-          </form>` : `<form class="ctl" data-stage novalidate>
+          ${src ? `<details class="ctl fold" data-fold="enquiry" ${openFolds.has('enquiry') ? 'open' : ''}><summary class="panel-h">${tr('Source enquiry')}</summary><div class="fold-body enq-src">
+            <p class="note">${esc(fmtDate(src.created_at))} · ${esc(tr(REQ_TOPICS[src.topic] || src.topic || ''))}${src.ref ? ` · ${esc(src.ref)}` : ''}</p>
+            ${src.message ? `<p class="enq-msg">${esc(src.message)}</p>` : ''}
+            ${src.files?.length || src.files_link ? `<p class="enq-files">${(src.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${src.files_link ? ` <a href="${esc(src.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
+            <a class="note" href="#/enquiries">${tr('All enquiries')}</a></div></details>` : ''}
+          <form class="ctl" data-stage novalidate>
             <h2 class="panel-h">${tr('Move stage')}</h2>
             <div class="field"><label for="ctl-stage">${tr('New stage')}</label><select id="ctl-stage" name="stage" required><option value="">${tr('Choose the new stage…')}</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(tr(s.staffLabel || s.label))}${s.id === suggested ? ` ${tr('(next)')}` : ''}</option>`).join('')}</select><span class="hint">${tr('Current:')} ${esc(tr(stage(p.stage).staffLabel || stage(p.stage).label))}</span></div>
             <div class="field"><label for="ctl-note">${tr('Note to client')}</label><textarea id="ctl-note" name="note" rows="2" placeholder="${tr('e.g. Quotation Q1 is in Documents.')}"></textarea></div>
@@ -335,7 +365,7 @@ async function detail(id) {
             <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date"><span class="hint">${tr('Blank = no date.')}</span></div>
             <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client and notify them')}</span></label>
             <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
-          </form>`}
+          </form>
 
           <details class="ctl fold" data-fold="dates" ${openFolds.has('dates') ? 'open' : ''}><summary class="panel-h">${tr('Delivery & fitting')}</summary>
           <form class="fold-body" data-dates>
@@ -399,7 +429,7 @@ async function detail(id) {
     try { location.hash = `#/quotes/${await newQuoteFor(d)}`; } catch (err) { b.disabled = false; toast(tr(err.message)); }
   });
   $$('[data-fold]', app).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openFolds.add(el.dataset.fold); else openFolds.delete(el.dataset.fold); }));
-  $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
+  bindReqFiles();
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     if (!f.stage.value) { f.stage.focus(); toast(tr('Choose the new stage first.')); return; }

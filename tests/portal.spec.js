@@ -271,6 +271,30 @@ test('staff see website enquiries sent without an account and triage them', asyn
   await expect(page.locator('details.enq a', { hasText: 'Open the project' })).toBeVisible();
 });
 
+test('CRM: the source enquiry sits on the project card; one search in the app bar finds projects and enquiries', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/enquiries');
+  await page.locator('details.enq summary').first().click();
+  await page.locator('[data-req-convert]').click();
+  await expect(page).toHaveURL(/admin\.html#\/p\//);
+  // What the client wrote, without going back to Enquiries; the stage can be moved here.
+  await page.locator('[data-fold="enquiry"] > summary').click();
+  await expect(page.locator('[data-fold="enquiry"]')).toContainText('A quotation');
+  await expect(page.locator('[data-stage]')).toBeVisible();
+  await expect(page.locator('.eyebrow', { hasText: 'Internal' })).toHaveCount(0);
+  // One search from anywhere.
+  await page.locator('#crm-gq').fill('bennett');
+  await page.locator('#crm-gq').press('Enter');
+  await expect(page).toHaveURL(/#\/search\/bennett$/);
+  const res = page.locator('#search-results');
+  await expect(res.locator('.today-sec', { hasText: 'Projects' })).toContainText('Jo Bennett');
+  await expect(res.locator('.today-sec', { hasText: 'Enquiries' })).toContainText('Jo Bennett');
+  await expect(page.locator('#crm-gq')).toHaveValue('bennett');
+  await page.locator('#crm-gq').fill('nothing-like-this');
+  await page.locator('#crm-gq').press('Enter');
+  await expect(res.locator('.today-sec').first()).toContainText('Nothing found.');
+});
+
 test('openings listed on the public site fill a new portal project after sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('bp-openings-list', JSON.stringify([
     { ref: 'D01', system: 'bifold', material: 'alu', width_mm: 4200, height_mm: 2400, qty: 1, note: '3 leaves' },
