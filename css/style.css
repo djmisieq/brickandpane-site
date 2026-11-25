@@ -826,6 +826,8 @@ body.app .list-btn{display:none}
 .of-totals.of-plain{border-top:0;margin-top:var(--s-xs)}
 .of-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-m);padding:.3rem 0}
 .of-row span:first-child{color:var(--ink-2)}
+/* Extras and options in the builder (analysis item 7). */
+.q-x{display:grid;gap:var(--s-xs);padding:var(--s-s) 0;border-top:1px solid var(--line)}.q-x-kind{justify-self:start}.q-x>.btn{justify-self:start}
 .of-row span:last-child{font-family:var(--mono);white-space:nowrap}
 .of-row.is-strong{border-top:1px solid var(--ink);padding-top:.7rem;margin-top:.25rem}
 .of-row.is-strong span:first-child{color:var(--ink)}
