@@ -120,7 +120,7 @@ test('Polish staff CRM', async ({ page }) => {
   await expect(page).toHaveURL(/\/pl\/login\.html/);
   await page.locator('[data-demo-login="staff"]').click();
   await expect(page).toHaveURL(/\/pl\/admin\.html/);
-  await expect(page.locator('h1')).toHaveText('Lejek projektów');
+  await expect(page.locator('h1')).toHaveText('Projekty');
   await expect(page.locator('.appbar-title')).toHaveText('CRM projektów');
   await expect(page.locator('.stats')).toContainText('Czeka na klienta');
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();

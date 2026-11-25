@@ -626,6 +626,8 @@ body.app .list-btn{display:none}
 .seg{display:inline-flex;border:1px solid var(--field-line)}
 .seg a{padding:.55rem 1rem;font-size:var(--step--1);text-decoration:none}
 .seg a.is-on{background:var(--ink);color:var(--bg)}
+.seg button{min-height:40px;padding:.55rem 1rem;background:none;border:0;font:inherit;font-size:var(--step--1);color:var(--ink);cursor:pointer}
+.seg button.is-on{background:var(--ink);color:var(--bg)}
 /* openings list in the quote form */
 .op-rows{display:grid;gap:var(--s-s);margin:var(--s-s) 0}
 .op-row{display:grid;grid-template-columns:2.6rem 1fr 1fr 5.5rem;grid-template-areas:"ref sys mat rm" ". w h q" ". note note note";gap:var(--s-s);padding:var(--s-s);background:var(--surface);border:1px solid var(--line)}
@@ -1167,3 +1169,14 @@ html[lang="pl"] .pair-q::before{content:"„"}
 @media (max-width:639px){.photo-row{flex-direction:column}.photo-row .photo{flex:none;width:100%}}
 .photo-bg{background-image:linear-gradient(rgba(20,20,18,.74),rgba(20,20,18,.74)),var(--photo-bg);background-size:cover;background-position:center}
 .alt.photo-bg{background-image:linear-gradient(rgba(245,243,238,.88),rgba(245,243,238,.88)),var(--photo-bg)}
+
+/* CRM (body.crm, set by admin.js): a work tool, not a marketing page (audit 24.11.2026).
+   Red is kept for what needs action now (overdue, new enquiries); a stage waiting on the client is not our action. */
+.crm .badge-you{border-color:var(--line-strong);color:var(--ink-2)}
+.crm .badge-you::before{background:var(--muted)}
+.crm .col-you{background:var(--surface-2)}
+.crm .app-h1{font-size:var(--step-2);letter-spacing:-.02em}
+.crm .dash-head{margin-bottom:var(--s-m)}
+.crm .container-wide{max-width:var(--container);margin-inline:auto}
+.crm .col-empty{min-height:0}
+@media (max-width:600px){.crm .col-empty{display:none}}

@@ -12,7 +12,8 @@ const bar = $('#appbar');
 let user = null;
 let activeTab = 'messages';
 let lastId = null;
-let query = '';
+// Search text per view: a search typed on the board must not silently filter the enquiries (audit 24.11.2026).
+const queries = { board: '', enquiries: '' };
 let reqFilter = 'open';
 
 // Values the contact form stores in contact_requests (src/pages/contact.html).
@@ -43,6 +44,9 @@ const headClient = (p, invites = []) => {
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
 
+// CRM-only styles (css: body.crm): tool density, red reserved for what needs action.
+document.body.classList.add('crm');
+
 async function render(fromStore = false) {
   user = await store.getUser();
   if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + (/^#\/[\w/-]*$/.test(location.hash) ? location.hash : ''))}`; return; }
@@ -68,7 +72,7 @@ async function render(fromStore = false) {
 async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
   const [all, requests] = await Promise.all([store.listProjects(), listRequests()]);
-  const q = query.toLowerCase();
+  const q = queries.board.toLowerCase();
   const projects = q ? all.filter((p) => [p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company].join(' ').toLowerCase().includes(q)) : all;
   const open = all.filter((p) => !['completed', 'closed'].includes(p.stage));
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
@@ -95,10 +99,10 @@ async function board(asList) {
       <div class="board-tools">
         ${viewSwitch(asList ? 'list' : 'board', requests)}
         <label class="visually-hidden" for="crm-q">${tr('Search projects')}</label>
-        <input id="crm-q" type="search" placeholder="${tr('Search ref, name, client, location')}" value="${esc(query)}">
+        <input id="crm-q" type="search" placeholder="${tr('Search ref, name, client, location')}" value="${esc(queries.board)}">
       </div>
       ${asList ? `
-        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Project')}</th><th scope="col">${tr('Client')}</th><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Owner')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Value')}</th><th scope="col">${tr('Updated')}</th></tr></thead><tbody>
+        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Project')}</th><th scope="col">${tr('Client')}</th><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Account manager')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Value')}</th><th scope="col">${tr('Updated')}</th></tr></thead><tbody>
           ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(clientName(p))}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
@@ -107,7 +111,7 @@ async function board(asList) {
         }).join('')}</div>`}
     </div>`;
   const qi = $('#crm-q', app);
-  qi.addEventListener('input', () => { query = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
+  qi.addEventListener('input', () => { queries.board = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
 }
 
 function viewSwitch(on, requests) {
@@ -119,7 +123,7 @@ function viewSwitch(on, requests) {
 async function enquiries() {
   document.title = `${tr('Enquiries')} | CRM`;
   const all = await listRequests();
-  const q = query.toLowerCase();
+  const q = queries.enquiries.toLowerCase();
   const shown = all
     .filter((r) => (reqFilter === 'open' ? isOpenReq(r) : reqFilter === 'all' || r.status === reqFilter))
     .filter((r) => !q || [r.ref, r.name, r.email, r.company, r.location, r.phone].join(' ').toLowerCase().includes(q));
@@ -180,7 +184,7 @@ async function enquiries() {
         <label class="visually-hidden" for="rq-filter">${tr('Show')}</label>
         <select id="rq-filter"><option value="open">${tr('Open (new and replied)')}</option><option value="all">${tr('All')}</option>${Object.entries(REQ_STATUS).map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select>
         <label class="visually-hidden" for="crm-q">${tr('Search enquiries')}</label>
-        <input id="crm-q" type="search" placeholder="${tr('Search ref, name, email, location')}" value="${esc(query)}">
+        <input id="crm-q" type="search" placeholder="${tr('Search ref, name, email, location')}" value="${esc(queries.enquiries)}">
       </div>
       ${shown.length ? `<div class="enq-list">${shown.map(item).join('')}</div>` : `<p class="callout">${tr(all.length ? 'No enquiries match.' : 'No enquiries yet.')}</p>`}
     </div>`;
@@ -188,7 +192,7 @@ async function enquiries() {
   const sel = $('#rq-filter', app); sel.value = reqFilter;
   sel.addEventListener('change', () => { reqFilter = sel.value; enquiries(); });
   const qi = $('#crm-q', app);
-  qi.addEventListener('input', () => { query = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => enquiries().then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
+  qi.addEventListener('input', () => { queries.enquiries = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => enquiries().then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
   $$('[data-req-form]', app).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
@@ -266,8 +270,8 @@ async function detail(id) {
           </form>
 
           <form class="ctl" data-assign>
-            <h2 class="panel-h">${tr('Owner')}</h2>
-            <div class="field"><label for="ctl-owner" class="visually-hidden">${tr('Owner')}</label><select id="ctl-owner" name="assignee_id"><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></div>
+            <h2 class="panel-h">${tr('Account manager')}</h2>
+            <div class="field"><label for="ctl-owner" class="visually-hidden">${tr('Account manager')}</label><select id="ctl-owner" name="assignee_id"><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></div>
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save owner')}</button>
           </form>
 
@@ -310,7 +314,7 @@ async function detail(id) {
     const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : null;
     try { await store.setStage(id, f.stage.value, { note: f.note.value.trim(), visible: f.visible.checked, next_step: f.next_step.value.trim(), due_at: due }); toast(tr(f.visible.checked ? 'Stage updated. Client notified.' : 'Stage updated (hidden from client).')); } catch (err) { toast(tr(err.message)); }
   });
-  $('[data-assign]', app).addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { assignee_id: e.currentTarget.assignee_id.value || null }); toast(tr('Owner saved.')); } catch (err) { toast(tr(err.message)); } });
+  $('[data-assign]', app).addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { assignee_id: e.currentTarget.assignee_id.value || null }); toast(tr('Account manager saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-doc]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget; const file = f.file.files[0]; if (!file) return;
     try { await store.uploadFiles(id, [file], { kind: f.kind.value, version: f.version.value.trim(), title: f.title.value.trim(), amount: f.amount.value, approval: f.approval.checked, visible: f.visible.checked }); toast(tr(f.visible.checked ? 'Shared. Client notified.' : 'Uploaded (internal).')); } catch (err) { toast(tr(err.message)); }

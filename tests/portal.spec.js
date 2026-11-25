@@ -40,6 +40,8 @@ test('architect and staff see each other’s changes live', async ({ page, conte
   await staff.fill('#ctl-note', 'Order confirmed.');
   await staff.locator('[data-stage] button[type="submit"]').click();
   await staff.locator('[data-tab="messages"]').click();
+  // Staff start on an internal note, so a call note never reaches the client by accident (audit K6).
+  await expect(staff.locator('.composer-mode input[value="internal"]')).toBeChecked();
   await staff.locator('.composer-mode input[value="internal"]').check();
   await expect(staff.locator('[data-message] button[type="submit"]')).toHaveText('Save internal note');
   await staff.fill('#msg-body', 'Margin is fine at this price.');
