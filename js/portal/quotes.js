@@ -8,7 +8,7 @@
 // The estimate is a priced document whose amounts, discount and lead time the team types in itself, so
 // tests/audit.spec.js lets this file (and only this file) use those words.
 import { store } from './store.js';
-import { esc, $$, toast } from './core.js';
+import { esc, $$, toast, STAGES } from './core.js';
 import { LANG } from './i18n.js';
 
 const t = (en, pl) => (LANG === 'pl' ? pl : en);
@@ -234,7 +234,7 @@ const statusName = (s) => t(STATUS[s]?.en ?? s, STATUS[s]?.pl ?? s);
 const statusTag = (q) => { const m = metaOf(q), last = sendsOf(q)[0]; return `<span class="tag q-st q-st-${esc(m.status)}">${esc(statusName(m.status))}${m.status !== 'draft' && last ? ` · rev ${esc(last.revision)}` : ''}</span>`; };
 // What the client sees, so the CRM can tell a changed quote from the one sent: no timestamps, private note or UI flags.
 const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
-const content = (q) => { const { updatedAt, revision, internalNote, ...rest } = q; void updatedAt; void revision; void internalNote; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, ...p }) => { void showSpec; return p; }) }); };
+const content = (q) => { const { updatedAt, revision, internalNote, projectId, ...rest } = q; void updatedAt; void revision; void internalNote; void projectId; return stable({ ...rest, products: (rest.products || []).map(({ showSpec, ...p }) => { void showSpec; return p; }) }); };
 export const nextRevision = (r) => {
   const s = String(r ?? '').trim();
   if (/^\d+$/.test(s)) return String(Number(s) + 1).padStart(Math.max(2, s.length), '0');
@@ -261,6 +261,42 @@ function needsChoice(q) {
 }
 const stageText = (s) => STAGE_LABEL[s] || s || '';
 
+// ---------- the project a quote belongs to (migration 0038, CRM audit K2) ----------
+// The builder's JSON names it (projectId) once a person chose it; quotes.project_id on the server also holds the
+// backfill from a shared HubSpot deal.
+let projectsList = [];
+const projectOf = (q) => q.projectId || metaOf(q).project_id || null;
+const projectRow = (q) => projectsList.find((p) => p.id === projectOf(q)) || null;
+const QUOTE_ISSUED = STAGES.findIndex((s) => s.id === 'quote_issued');
+// Enquiry wording to the builder's: what the client's openings were, as the first product lines.
+const KIND_OF = { 'lift-slide': 'liftslide', sliding: 'slimslide', bifold: 'bifold', hinged: 'french', windows: 'casement', facades: 'curtain', rooflights: 'lantern' };
+const FRAME_OF = { alu: 'aluminium', timber: 'timber', pvc: 'pvc', alutimber: 'timber-alu' };
+
+// The project card's list of its quotes.
+export async function projectQuotes(pid) {
+  await flush(); await load();
+  return quotes.filter((q) => projectOf(q) === pid).sort((a, b) => b.updatedAt - a.updatedAt).map((q) => {
+    const tot = totals(q);
+    return { id: q.id, reference: q.reference, revision: q.revision, total: q.vatRate > 0 ? tot.gross : tot.net, status: metaOf(q).status, statusName: statusName(metaOf(q).status), lang: q.docLang };
+  });
+}
+// "New quote" on a project card: client, site and openings come along, so nobody types them twice.
+export async function newQuoteFor(d) {
+  if (!quotes) await load();
+  const p = d.project, c = p.owner && p.owner.role !== 'staff' ? p.owner : null, inv = (d.invites || [])[0];
+  const q = newQuote(quotes, firm);
+  Object.assign(q, {
+    projectId: p.id,
+    customerName: c?.company || c?.full_name || '', email: c?.email || inv?.email || '', phone: c?.phone || '',
+    siteAddress: p.location || '', sameAddress: !p.location,
+    audience: c?.account_type === 'homeowner' ? 'home' : c?.account_type === 'developer' ? 'developer' : 'architect',
+    products: (d.openings || []).map((o) => ({ ...newProduct(), kind: KIND_OF[o.system] || 'casement', location: o.ref || '', widthMm: o.width_mm ? String(o.width_mm) : '', heightMm: o.height_mm ? String(o.height_mm) : '', qty: Number(o.qty) || 1, notes: o.notes || '' })),
+  });
+  await store.saveQuote(q);
+  quotes.unshift(q);
+  return q.id;
+}
+
 // ---------- state and saving ----------
 let quotes = null; // loaded once, refreshed whenever the list is shown
 let firm = { ...FIRM_DEFAULT };
@@ -279,6 +315,7 @@ async function load() {
   firm = normFirm(settings);
   quotes = list.flatMap((r) => { const q = normQuote(r, firm); return q ? [q] : []; });
   hub = { on: !!h?.hubspot, demo: !!h?.demo, meta: new Map((h?.meta || []).map((m) => [m.id, m])), sends: h?.sends || [] };
+  projectsList = await store.listProjects().catch(() => []);
 }
 function flush() {
   clearTimeout(saveTimer);
@@ -522,9 +559,10 @@ function dealPanel(q) {
 }
 
 function sendPanel(q) {
-  const m = metaOf(q), sends = sendsOf(q), plan = sendPlan(q);
+  const m = metaOf(q), sends = sendsOf(q), plan = sendPlan(q), pr = projectRow(q);
   const hist = sends.length ? `<ol class="q-sends">${sends.map((s, i) => {
-    const hubLine = s.hubspot_note_id
+    const hubLine = !s.hubspot_deal_id ? `<span class="note">${t('No HubSpot deal: kept in the CRM only', 'Bez deala: tylko w CRM')}</span>`
+      : s.hubspot_note_id
       ? (s.hubspot_error ? `<span class="q-warn">${t('In HubSpot, with a problem', 'W HubSpocie, z problemem')}: ${esc(s.hubspot_error)}</span>` : `<span class="q-ok">${t('In HubSpot', 'W HubSpocie')}${s.hubspot_stage_moved ? ` · ${t('deal moved to Quote sent', 'deal przeszedł na Quote sent')}` : ''}</span>`)
       : `<span class="q-warn">${t('Not in HubSpot yet', 'Jeszcze nie w HubSpocie')}${s.hubspot_error ? `: ${esc(s.hubspot_error)}` : ''}</span> <button type="button" class="btn btn-sm btn-ghost" data-act="send-retry" data-v="${esc(s.id)}">${t('Retry', 'Ponów')}</button>`;
     return `<li${i ? ' class="is-old"' : ''}><div><strong>rev ${esc(s.revision)}</strong> · ${esc(fmtDay(s.sent_on))} · ${esc(money(Number(s.total) || 0, q.docLang))} · ${esc(t(KIND[s.kind]?.en ?? s.kind, KIND[s.kind]?.pl ?? s.kind))}${i ? ` · ${t('replaced', 'zastąpiona')}` : ''}</div>
@@ -549,15 +587,17 @@ function sendPanel(q) {
           ${nameOk ? '' : `<label class="q-check"><input type="checkbox" id="q-send-sure"><span>${t(`The file name has no ${q.reference}. It is the PDF of this quote.`, `W nazwie pliku nie ma ${q.reference}. To jest PDF tej oferty.`)}</span></label>`}</li>
         <li><label class="field q-field"><span class="q-lab">${t('Sent to the client on', 'Wysłana do klienta dnia')}</span><input type="date" id="q-send-date" value="${today()}" max="${today()}"></label></li>
       </ol>
+      ${projectOf(q) ? `<label class="q-check"><input type="checkbox" id="q-send-share" ${sendForm.share === false ? '' : 'checked'}><span>${t(`Put it on project ${pr?.ref || ''}`, `Wstaw do projektu ${pr?.ref || ''}`)}<small>${t('The PDF goes to Documents for the client to accept (they get an email). The value and the payment schedule fill in, and the stage moves to Quote issued.', 'PDF trafia do Dokumentów do akceptacji przez klienta (dostaje e-mail). Wartość i harmonogram płatności wypełnią się same, a etap zmieni się na Wycena wysłana.')}</small></span></label>` : ''}
       ${sendForm.error ? `<p class="q-warn">${esc(sendForm.error)}</p>` : ''}
-      <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-go" ${sendForm.busy ? 'disabled' : ''}>${sendForm.busy ? t('Sending…', 'Wysyłam…') : t('Save and add to HubSpot', 'Zapisz i dodaj do HubSpota')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="send-cancel">${t('Cancel', 'Anuluj')}</button></div>
+      <div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-go" ${sendForm.busy ? 'disabled' : ''}>${sendForm.busy ? t('Sending…', 'Wysyłam…') : hub.on && m.hubspot_deal_id ? t('Save and add to HubSpot', 'Zapisz i dodaj do HubSpota') : t('Save the send', 'Zapisz wysyłkę')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="send-cancel">${t('Cancel', 'Anuluj')}</button></div>
     </div>`;
   }
-  const canSend = hub.on && m.hubspot_deal_id;
+  const canSend = (hub.on && m.hubspot_deal_id) || projectOf(q);
   const openBtn = sendForm?.quoteId === q.id ? '' : `<div class="btn-row q-gap"><button type="button" class="btn btn-sm" data-act="send-open" ${canSend ? '' : 'disabled'}>${sends.length ? t('Send again or send a revision…', 'Wyślij ponownie albo rewizję…') : t('Send to the client…', 'Wyślij do klienta…')}</button></div>
-    ${canSend ? '' : `<p class="hint">${hub.on ? t('Pin the quote to a HubSpot deal first (step 01, Client).', 'Najpierw przypnij ofertę do deala w HubSpocie (krok 01, Klient).') : t('The HubSpot link is not switched on yet.', 'Połączenie z HubSpotem nie jest jeszcze włączone.')}</p>`}`;
+    ${canSend ? '' : `<p class="hint">${t('Choose the project, or pin a HubSpot deal, first (step 01, Client).', 'Najpierw wybierz projekt albo przypnij deal w HubSpocie (krok 01, Klient).')}</p>`}`;
   return `<section class="q-box q-send no-print" id="q-send">
     <div class="q-subrow"><h3 class="q-sub">${t('Sending and HubSpot', 'Wysyłka i HubSpot')}</h3>${statusTag(q)}</div>
+    ${pr ? `<p class="q-item-meta">${t('Project', 'Projekt')}: <a href="#/p/${esc(pr.id)}">${esc(pr.ref)} · ${esc(pr.name)}</a></p>` : ''}
     <p class="q-item-meta">${m.hubspot_deal_id ? `${t('Deal', 'Deal')}: ${esc(m.hubspot_deal_name || `#${m.hubspot_deal_id}`)}${m.hubspot_dealstage ? ` · ${esc(stageText(m.hubspot_dealstage))}` : ''}` : t('No HubSpot deal yet.', 'Bez deala w HubSpocie.')}</p>
     ${choice}${hist}${statusBtns}${openBtn}${form}
   </section>`;
@@ -572,7 +612,10 @@ function changedNote(q) {
 // ---------- the five steps ----------
 function stepClient(q) {
   const pl = q.docLang === 'pl';
+  const projectPick = `<section class="q-box" id="q-project"><h3 class="q-sub">${t('Project', 'Projekt')}</h3>
+      ${field(t('The CRM project this quote is for', 'Projekt w CRM, którego dotyczy oferta'), `<select data-b="q:projectId" data-re><option value="">${t('No project', 'Bez projektu')}</option>${projectsList.map((p) => `<option value="${esc(p.id)}" ${projectOf(q) === p.id ? 'selected' : ''}>${esc(p.ref)} · ${esc(p.name)}</option>`).join('')}</select>`, t('Sending then puts the PDF in the project’s Documents; no HubSpot deal needed.', 'Wysyłka wstawi wtedy PDF do Dokumentów projektu; deal w HubSpocie nie jest potrzebny.'))}</section>`;
   return `${head(t('01 / client', '01 / klient'), t('Who this quote is for', 'Dla kogo jest ta oferta'), t('Home, designer or site — the same as on the website. Then the address and the date. The language at the top is the language of the document.', 'Dom, projektant albo budowa — tak samo jak na stronie. Potem adres i termin. Język u góry jest językiem dokumentu.'))}
+    ${projectPick}
     ${dealPanel(q)}
     ${cards('audience', q.audience, [
       ['home', t('Home', 'Dom'), t('The owner. Survey of the openings, and installation if they want it.', 'Właściciel. Pomiar otworów i montaż, jeśli go chce.')],
@@ -932,7 +975,9 @@ async function sendGo(q, redraw) {
   const f = sendForm; if (!f || f.busy) return;
   const m = metaOf(q), plan = sendPlan(q);
   const fail = (msg) => { f.error = msg; redraw(); };
-  if (!m.hubspot_deal_id) return fail(t('Pin the quote to a HubSpot deal first.', 'Najpierw przypnij ofertę do deala w HubSpocie.'));
+  const pid = projectOf(q), dealId = hub.on ? m.hubspot_deal_id || null : null;
+  if (!dealId && !pid) return fail(t('Choose the project, or pin a HubSpot deal, first.', 'Najpierw wybierz projekt albo przypnij deal w HubSpocie.'));
+  const share = !!pid && !!root.querySelector('#q-send-share')?.checked; f.share = share;
   // Changed after the form opened: the number must move first, and the PDF be saved again with it.
   if (plan.bump) { q.revision = nextRevision(plan.last.revision); touch(q); return fail(t(`The quote changed, so it is now revision ${q.revision}. Save the PDF again with this number and choose it.`, `Oferta się zmieniła, więc teraz to rewizja ${q.revision}. Zapisz PDF jeszcze raz z tym numerem i wybierz go.`)); }
   if (!f.file) return fail(t('Choose the PDF you sent to the client.', 'Wybierz PDF wysłany do klienta.'));
@@ -944,16 +989,34 @@ async function sendGo(q, redraw) {
   try {
     await flush();
     const tot = totals(q);
-    const res = await store.sendQuote({ quoteId: q.id, dealId: m.hubspot_deal_id, reference: q.reference, revision: q.revision.trim() || '00', kind: plan.kind, total: q.vatRate > 0 ? tot.gross : tot.net, vatRate: q.vatRate, file: f.file, sentOn, snapshot: JSON.parse(JSON.stringify(q)) });
+    const res = await store.sendQuote({ quoteId: q.id, dealId, projectId: pid, reference: q.reference, revision: q.revision.trim() || '00', kind: plan.kind, total: q.vatRate > 0 ? tot.gross : tot.net, vatRate: q.vatRate, file: f.file, sentOn, snapshot: JSON.parse(JSON.stringify(q)) });
     hub.sends.unshift(res);
     const keep = ['accepted', 'declined'].includes(m.status);
     setMeta(q.id, { status: keep ? m.status : 'sent', status_source: keep ? m.status_source : 'crm', hubspot_dealstage: res.hubspot_stage_moved ? 'presentationscheduled' : m.hubspot_dealstage });
     sendForm = null;
-    toast(res.hubspot_note_id
+    if (share) await toProject(q, pid, f.file, tot);
+    toast(!dealId ? t(share ? 'Saved and on the project: the client can accept it in Documents.' : 'Saved.', share ? 'Zapisane i w projekcie: klient może ją zaakceptować w Dokumentach.' : 'Zapisane.')
+      : res.hubspot_note_id
       ? (res.hubspot_error ? t(`Saved and in HubSpot, but: ${res.hubspot_error}`, `Zapisane i w HubSpocie, ale: ${res.hubspot_error}`) : t('Saved. The note with the PDF is on the HubSpot deal.', 'Zapisane. Notatka z PDF jest na dealu w HubSpocie.'))
       : t('Saved. HubSpot did not answer; it will be retried within 15 minutes.', 'Zapisane. HubSpot nie odpowiedział; ponowimy w ciągu 15 minut.'));
     redraw();
   } catch (e) { f.busy = false; fail(hubError(e)); }
+}
+
+// The rest of "Send" on a project (audit K4): what the team used to do by hand after printing the quote.
+async function toProject(q, pid, file, tot) {
+  const rev = q.revision.trim() || '00';
+  await store.uploadFiles(pid, [file], { kind: 'quote', version: rev === '00' ? '' : `rev ${rev}`, title: `${q.docLang === 'pl' ? 'Oferta' : 'Quotation'} ${q.reference}`, amount: tot.net, approval: true, visible: true });
+  await store.updateInternal(pid, { value_gbp: tot.net });
+  const d = await store.getProject(pid);
+  // Payments only into an empty schedule: a revision must not double them.
+  if (!(d.payments || []).length && payOk(q)) {
+    const amounts = payAmounts(q.payments, q.paymentOnGross ? tot.gross : tot.net, true);
+    for (const [i, s] of q.payments.entries()) await store.addPayment(pid, { label: stageName(s, q.docLang), amount: amounts[i], due_date: null });
+  }
+  // A HubSpot-linked project takes its stage from the deal (migration 0019).
+  const at = STAGES.findIndex((s) => s.id === d.project.stage);
+  if (!d.internal?.hubspot_deal_id && at >= 0 && at < QUOTE_ISSUED) await store.setStage(pid, 'quote_issued', { note: 'Quotation is in Documents.', visible: true, next_step: 'Review the quotation and accept it, or ask for changes.' });
 }
 
 async function listAct(a, btn) {
@@ -1005,6 +1068,7 @@ function bind(app) {
   });
   app.addEventListener('change', (e) => {
     const el = e.target; if (!inDesk(el)) return;
+    if (el.id === 'q-send-share') { if (sendForm) sendForm.share = el.checked; return; }
     if (el.id === 'q-send-file') { if (sendForm) { sendForm.file = el.files?.[0] || null; sendForm.error = ''; const y = scrollY; draw(); scrollTo(0, y); } return; }
     if (el.dataset.act === 'vat') {
       const q = current(); firm.vatRegistered = el.checked; firmDirty = true;

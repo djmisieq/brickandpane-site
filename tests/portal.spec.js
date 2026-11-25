@@ -580,3 +580,36 @@ test('Today lists what needs doing now: new enquiries, overdue projects; Mine fi
   await expect(page.locator('[data-mine="1"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#t-fresh')).toContainText('Jo Bennett'); // enquiries have no owner yet: always shown
 });
+
+test('a quote started on a project goes out without a HubSpot deal: PDF in Documents, value, payments, stage', async ({ page, context }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html');
+  await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  const box = page.locator('[data-project-quotes]');
+  await expect(box).toContainText('No quote yet.');
+  await box.locator('[data-new-quote]').click();
+  await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
+  // The client, the project and its openings come along (it opens on the estimate, as any quote with products).
+  await expect(page.locator('.offer')).toContainText('Lift and slide');
+  await page.locator('[data-act="step"][data-v="client"]').click();
+  await expect(page.locator('[data-b="q:projectId"] option:checked')).toContainText('Garden room, Dulwich');
+  await expect(page.locator('[data-b="q:customerName"]')).not.toHaveValue('');
+  const ref = await page.locator('[data-b="q:reference"]').inputValue();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const send = page.locator('#q-send');
+  await expect(send).toContainText('Garden room, Dulwich');
+  await send.locator('[data-act="send-open"]').click();
+  await expect(send.locator('#q-send-share')).toBeChecked();
+  await page.locator('#q-send-file').setInputFiles({ name: `Brick-and-Pane-${ref}-rev00.pdf`, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%demo\n') });
+  await expect(send.locator('#q-send-share')).toBeChecked(); // a redraw keeps the choice
+  await send.locator('[data-act="send-go"]').click();
+  await expect(page.locator('.toast').last()).toContainText('the client can accept it in Documents');
+  await expect(send.locator('.q-sends li')).toContainText('No HubSpot deal');
+  // Back on the project: the quote is listed, the PDF is in Documents for approval, the stage moved.
+  await send.locator('a', { hasText: 'Garden room, Dulwich' }).click();
+  await expect(page.locator('[data-project-quotes]')).toContainText(ref);
+  await expect(page.locator('[data-project-quotes]')).toContainText('Sent');
+  await expect(page.locator('.key-numbers')).toContainText('Quote issued');
+  await page.locator('[data-tab="documents"]').click();
+  await expect(page.locator('#app')).toContainText(`Quotation ${ref}`);
+});

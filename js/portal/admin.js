@@ -3,7 +3,7 @@ import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
 import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
-import { quotesView } from './quotes.js';
+import { quotesView, projectQuotes, newQuoteFor } from './quotes.js';
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
 
@@ -289,7 +289,7 @@ const keyNumbers = (p, d, { margin }) => {
 
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs, mail] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id)]);
+  const [d, staff, costs, mail, pq] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => [])]);
   const p = d.project;
   document.title = `${p.ref} · ${p.name} | CRM`;
   const nextIdx = STAGES.findIndex((s) => s.id === p.stage) + 1;
@@ -304,6 +304,10 @@ async function detail(id) {
       <div class="crm-grid">
         <div class="crm-main">
           ${nowCard(p, 'staff')}
+          <section class="ctl pq" data-project-quotes>
+            <div class="pq-head"><h2 class="panel-h">${tr('Quotes')}</h2><button type="button" class="btn btn-sm" data-new-quote>+ ${tr('New quote')}</button></div>
+            ${pq.length ? `<ul class="pq-list">${pq.map((x) => `<li><a href="#/quotes/${esc(x.id)}">${esc(x.reference)}${x.revision && x.revision !== '00' ? ` rev ${esc(x.revision)}` : ''}</a> <span class="tag">${esc(x.statusName)}</span> <span class="pq-total">${esc(fmtMoney(x.total))}</span></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote yet. A new one takes the client, the site and the openings from this project.')}</p>`}
+          </section>
           ${pipeline(p, d.events, 'staff')}
           ${tabs(activeTab, counts(d, 'staff', user))}
           <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
@@ -384,6 +388,10 @@ async function detail(id) {
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
   bindMail(app, id);
+  $('[data-new-quote]', app)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget; if (b.disabled) return; b.disabled = true;
+    try { location.hash = `#/quotes/${await newQuoteFor(d)}`; } catch (err) { b.disabled = false; toast(tr(err.message)); }
+  });
   $$('[data-fold]', app).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openFolds.add(el.dataset.fold); else openFolds.delete(el.dataset.fold); }));
   $('[data-next-step]', app)?.addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { next_step: e.currentTarget.next_step.value.trim() }); toast(tr('Next step saved.')); } catch (err) { toast(tr(err.message)); } });
   $('[data-stage]', app)?.addEventListener('submit', async (e) => {
