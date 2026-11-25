@@ -729,6 +729,36 @@ test('quote builder: our cost comes from a supplier quote on the project, the pr
   await expect(page.locator('.offer')).not.toContainText('Frames Ltd');
 });
 
+test('quote builder: Uw with the Part L limit, installation cost from the fitters, a by-others list on the quote', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  const first = page.locator('[data-pid]').first();
+  await first.locator('[data-b$=":uw"]').fill('1.6');
+  await expect(first.locator('[data-uw-warn]')).toContainText('Above the Part L limit of 1.4');
+  await first.locator('[data-b$=":uw"]').fill('1.3');
+  await expect(first.locator('[data-uw-warn]')).toHaveText('');
+  await page.locator('[data-act="step"][data-v="install"]').click();
+  await page.locator('[data-act="mode"][data-v="included"]').click();
+  await page.locator('[data-b="q:fitDays"]').fill('2');
+  await page.locator('[data-b="q:fitCrew"]').fill('2');
+  await page.locator('[data-b="q:fitRate"]').fill('250');
+  await page.locator('[data-b="q:fitTravel"]').fill('80');
+  await page.locator('[data-b="q:fitSurvey"]').fill('120');
+  await expect(page.locator('#q-fit-sum')).toContainText('£1,200.00'); // 2 × 2 × 250 + 80 + 120
+  await expect(page.locator('#q-margin')).toContainText('£1,200.00');
+  await page.locator('[data-act-check="by-others"][data-v="decoration"]').check();
+  await page.locator('[data-act-check="by-others"][data-v="scaffolding"]').check();
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  const offer = page.locator('.offer');
+  await expect(offer).toContainText('By others');
+  await expect(offer).toContainText('Decoration; Scaffolding');
+  await expect(offer).toContainText('1.3 W/m²K');
+  await expect(offer).not.toContainText('£1,200');
+  await expect(offer).not.toContainText('Day rate');
+});
+
 test('quote builder: an extra is a line in the total, an option is priced beside it; our cost stays off the print', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');
