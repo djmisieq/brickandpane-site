@@ -187,6 +187,24 @@ export const store = {
   async setCostStatus(id, status) { ok(await sb.from('supplier_quotes').update({ status }).eq('id', id)); emit(); },
   async deleteCost(id) { ok(await sb.from('supplier_quotes').delete().eq('id', id)); emit(); },
   async costPdfUrl(path) { return ok(await sb.storage.from('supplier-quotes').createSignedUrl(path, 300))?.signedUrl; },
+  // Tasks and the conversation log (migration 0042, CRM audit phase 3; staff only).
+  async listTasks({ projectId = null, requestId = null, open = false } = {}) {
+    let q = sb.from('tasks').select('*').order('done_at', { ascending: false, nullsFirst: true }).order('due_on', { ascending: true, nullsFirst: false }).limit(300);
+    if (projectId) q = q.eq('project_id', projectId);
+    if (requestId) q = q.eq('request_id', requestId);
+    if (open) q = q.is('done_at', null);
+    return ok(await q) || [];
+  },
+  async addTask({ title, kind = 'task', note = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
+    const me = (await sb.auth.getUser()).data.user?.id ?? null;
+    ok(await sb.from('tasks').insert({ title, kind, note, due_on, assignee_id, project_id, request_id, done_at: done ? new Date().toISOString() : null, done_by: done ? me : null }));
+    emit();
+  },
+  async setTaskDone(id, done) {
+    const me = (await sb.auth.getUser()).data.user?.id ?? null;
+    ok(await sb.from('tasks').update({ done_at: done ? new Date().toISOString() : null, done_by: done ? me : null }).eq('id', id)); emit();
+  },
+  async deleteTask(id) { ok(await sb.from('tasks').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
   async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },
   async mailAccounts() { return ok(await sb.from('mail_accounts').select('address, mode, last_run_at, last_error').order('created_at')); },

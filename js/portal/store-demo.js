@@ -258,6 +258,19 @@ export const store = {
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },
   async deleteCost(id) { const s = load(); needStaff(s); s.costs = (s.costs || []).filter((x) => x.id !== id); save(s); },
   async costPdfUrl() { return null; },
+  // Tasks in demo mode: kept with the projects in this browser (live order in migration 0042).
+  async listTasks({ projectId = null, requestId = null, open = false } = {}) {
+    const s = load(); needStaff(s);
+    return (s.tasks || []).filter((t) => (!projectId || t.project_id === projectId) && (!requestId || t.request_id === requestId) && (!open || !t.done_at))
+      .sort((a, b) => (!!a.done_at - !!b.done_at) || String(a.due_on || '9999').localeCompare(String(b.due_on || '9999')) || b.created_at.localeCompare(a.created_at));
+  },
+  async addTask({ title, kind = 'task', note = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
+    const s = load(); needStaff(s); s.tasks ||= []; const me = needStaff(s).id;
+    s.tasks.push({ id: uid(), title, kind, note, due_on, assignee_id, project_id, request_id, done_at: done ? now() : null, done_by: done ? me : null, created_by: me, created_at: now(), updated_at: now() });
+    save(s);
+  },
+  async setTaskDone(id, done) { const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (t) { t.done_at = done ? now() : null; t.done_by = done ? (needStaff(s).id) : null; save(s); } },
+  async deleteTask(id) { const s = load(); needStaff(s); s.tasks = (s.tasks || []).filter((x) => x.id !== id); save(s); },
   // Mail in demo mode: a few made-up mails, matched to projects the way mail_list does it (migration 0035).
   async listMail({ pid = null, unassigned = false } = {}) {
     const s = load(); needStaff(s); demoMail(s);

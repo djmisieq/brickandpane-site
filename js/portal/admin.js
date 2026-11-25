@@ -6,6 +6,7 @@ import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsP
 import { quotesView, projectQuotes, newQuoteFor, sentQuotes, findQuotes } from './quotes.js';
 import { loadCosts, costsPanel, bindCosts } from './costs.js';
 import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
+import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
 
 const app = $('#app');
 const bar = $('#appbar');
@@ -128,7 +129,10 @@ let todayMine = false;
 
 async function today() {
   document.title = `${tr('Today')} | CRM`;
-  const [all, requests, mail, sent] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : [], sentQuotes().catch(() => [])]);
+  const [all, requests, mail, sent, openT] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : [], sentQuotes().catch(() => []), loadTasks({ open: true })]);
+  // Tasks due today or late (phase 3); "mine" = given to me, or made by me for nobody in particular.
+  const dueT = (openT || []).filter(taskDue).filter((t) => !todayMine || t.assignee_id === user.id || (!t.assignee_id && t.created_by === user.id)).sort((a, b) => a.due_on.localeCompare(b.due_on));
+  const pOf = (pid) => all.find((p) => p.id === pid);
   const open = all.filter((p) => !['completed', 'closed', 'on_hold'].includes(p.stage));
   const mine = todayMine ? open.filter((p) => p.assignee_id === user.id) : open;
   const oldest = (f) => (a, b) => new Date(f(a)) - new Date(f(b));
@@ -148,7 +152,8 @@ async function today() {
   const days = (iso) => (daysSince(iso) < 1 ? esc(ago(iso)) : tr('{n} d', { n: daysSince(iso) }));
   const row = ({ href, title, sub, age, late }) => `<li><a class="today-row${late ? ' is-late' : ''}" href="${href}"><span class="today-t">${title}</span><span class="today-s">${sub}</span><span class="today-age">${age}</span></a></li>`;
   const SECTIONS = [
-    ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: '#/enquiries', title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: esc(r.location || r.email || ''), age: days(r.created_at), late: daysSince(r.created_at) >= 1 }), 'No new enquiries.'],
+    ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: '#/enquiries', title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: `${esc(r.location || r.email || '')}${Date.now() - new Date(r.created_at) > 2 * DAY ? ` · <strong>${esc(tr('no reply for over 48 h'))}</strong>` : ''}`, age: days(r.created_at), late: Date.now() - new Date(r.created_at) > DAY }), 'No new enquiries.'],
+    ['tasks', 'Tasks for today and late', dueT, (t) => { const p = t.project_id && pOf(t.project_id); return row({ href: p ? `#/p/${esc(p.id)}` : t.request_id ? '#/enquiries' : '#/today', title: esc(t.title), sub: p ? pname(p) : esc(tr(t.request_id ? 'Enquiry' : 'General')), age: esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Today')), late: taskLate(t) }); }, 'No task due today.'],
     ['overdue', 'Overdue (with us)', overdue, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Overdue {date}', { date: fmtDay(p.due_at) })), late: true }), 'Nothing overdue.'],
     ['answer', 'Email came in, our move', answer, ({ p, m }) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: esc(`${m.from_name || m.from_addr}: ${m.subject || tr('(no subject)')}`), age: days(m.sent_at), late: daysSince(m.sent_at) >= 2 }), 'No email waiting for a reply.'],
     ['quotes', 'Quotes sent, no answer: chase', chase, (x) => {
@@ -162,7 +167,7 @@ async function today() {
     <div class="container-wide section-tight">
       <div class="dash-head">
         <div><span class="eyebrow">${esc(fmtDay(new Date().toISOString()))}</span><h1 class="app-h1">${tr('Today')}</h1></div>
-        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat${items.length && ['fresh', 'overdue', 'answer'].includes(id) ? ' is-you' : ''}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
+        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat${items.length && ['fresh', 'tasks', 'overdue', 'answer'].includes(id) ? ' is-you' : ''}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
       </div>
       <div class="board-tools">
         ${viewSwitch('today', requests)}
@@ -216,7 +221,8 @@ function bindSearch(typed) {
 
 async function enquiries() {
   document.title = `${tr('Enquiries')} | CRM`;
-  const all = await listRequests();
+  const [all, tasks, staff] = await Promise.all([listRequests(), loadTasks({}), store.listStaff().catch(() => [])]);
+  const tasksOf = (rid) => (tasks || []).filter((t) => t.request_id === rid);
   const q = queries.enquiries.toLowerCase();
   const shown = all
     .filter((r) => (reqFilter === 'open' ? isOpenReq(r) : reqFilter === 'all' || r.status === reqFilter))
@@ -260,6 +266,7 @@ async function enquiries() {
           <div class="field"><label for="rq-note-${esc(r.id)}">${tr('Team note')} <span class="tag">${tr('staff only')}</span></label><textarea id="rq-note-${esc(r.id)}" name="staff_note" rows="2">${esc(r.staff_note || '')}</textarea></div>
           <button class="btn btn-sm" type="submit">${tr('Save')}</button>
         </form>
+        <section class="ctl"><h3 class="panel-h">${tr('Tasks')}</h3>${tasksBox(tasks == null ? null : tasksOf(r.id), staff, user, { requestId: r.id }, `tk-${esc(r.id).slice(0, 8)}`)}</section>
       </div>
     </details>`;
   const openIds = new Set($$('details.enq[open]', app).map((d) => d.dataset.req));
@@ -287,6 +294,7 @@ async function enquiries() {
   sel.addEventListener('change', () => { reqFilter = sel.value; enquiries(); });
   const qi = $('#crm-q', app);
   qi.addEventListener('input', () => { queries.enquiries = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => enquiries().then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
+  bindTasks(app, user);
   $$('[data-req-form]', app).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
@@ -328,7 +336,8 @@ function bindReqFiles() {
 
 async function detail(id) {
   if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs, mail, pq, reqs] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests()]);
+  const [d, staff, costs, mail, pq, reqs, tasks] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id })]);
+  const openTasks = (tasks || []).filter((t) => !t.done_at), lateTasks = openTasks.filter(taskLate).length;
   // The enquiry the project came from (audit, phase 1): what the client wrote and sent, on the card itself.
   const src = (reqs || []).find((r) => r.project_id === id) || null;
   const p = d.project;
@@ -421,6 +430,7 @@ async function detail(id) {
             <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
           </form></details>
 
+          <details class="ctl fold" data-fold="tasks" ${openFolds.has('tasks') || lateTasks ? 'open' : ''}><summary class="panel-h">${tr('Tasks')} ${openTasks.length ? `<span class="tag${lateTasks ? ' tag-late' : ''}">${openTasks.length}</span>` : ''}</summary><div class="fold-body">${tasksBox(tasks, staff, user, { projectId: id }, 'tk-p')}</div></details>
           <details class="ctl fold" data-fold="costs" ${openFolds.has('costs') ? 'open' : ''}><summary class="panel-h">${tr('Costs & margin')} <span class="tag">${tr('staff only')}</span></summary>${costsPanel(costs)}</details>
         </aside>
       </div>
@@ -428,6 +438,7 @@ async function detail(id) {
 
   bindDetail(app, d, (t) => { activeTab = t; detail(id); });
   bindCosts(app, id);
+  bindTasks(app, user);
   bindMail(app, id);
   $('[data-new-quote]', app)?.addEventListener('click', async (e) => {
     const b = e.currentTarget; if (b.disabled) return; b.disabled = true;
