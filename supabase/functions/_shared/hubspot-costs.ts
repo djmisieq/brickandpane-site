@@ -7,7 +7,7 @@
 //                  deal turns up in the CRM as a supplier quote.
 // Costs never reach the client deal's notes, the client portal or anything the client reads.
 // Pipeline, stage and association ids were set up by the leads bot on 11.11.2026.
-import { escape, hs, HubSpotError } from './hubspot.ts';
+import { escape, hs, HubSpotError, hubspotToken } from './hubspot.ts';
 
 export const PIPELINE = '4327288052';
 export const STAGE = {
@@ -148,7 +148,7 @@ async function addNote(supabase: Db, token: string, c: Cost, dealId: string, pro
 const MAX_ATTEMPTS = 5;
 
 export async function syncCosts(supabase: Db) {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return { skipped: 'no token' };
   if (Deno.env.get('HUBSPOT_COSTS') === 'off') return { skipped: 'off' };
   const counts = { created: 0, updated: 0, pushed: 0, pulled: 0, imported: 0, waiting: 0, failed: 0 };

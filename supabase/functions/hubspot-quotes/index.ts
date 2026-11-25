@@ -11,7 +11,7 @@
 // Secrets: HUBSPOT_TOKEN (needs crm.objects.deals.read/write, contacts.read, and "files" for the PDF; notes on deals
 // as for hubspot-events). Optional HUBSPOT_QUOTES=off to pause. Logs only actions and counts.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { HubSpotError } from '../_shared/hubspot.ts';
+import { HubSpotError, hubspotToken } from '../_shared/hubspot.ts';
 import { dealCard, dealFiles, fileUrl, processSend, searchDeals, syncQuotes } from '../_shared/hubspot-quotes.ts';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   }
   if (!['search', 'deal', 'file', 'send'].includes(action)) return reply(400, { error: 'action' });
   if (!(await isStaff(req))) return reply(401, { error: 'staff only' });
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return reply(200, { error: 'no token' });
 
   try {

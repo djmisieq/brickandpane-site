@@ -14,6 +14,9 @@ declare global {
 
 const API = 'https://api.hubapi.com';
 export const SITE = 'https://brickandpane.co.uk';
+// One switch for every HubSpot path (owner, 25.11.2026: HubSpot is being dropped for the company's own CRM).
+// Secret HUBSPOT=off: no function talks to HubSpot, every one returns as if there were no token. Unset it to undo.
+export const hubspotToken = () => (Deno.env.get('HUBSPOT') === 'off' ? undefined : Deno.env.get('HUBSPOT_TOKEN'));
 // Website deals belong to Kate (owner decision 01.11.2026); a new contact gets her only if it has no owner yet.
 const owner = () => Deno.env.get('HUBSPOT_OWNER_ID') ?? '39646197';
 
@@ -226,7 +229,7 @@ const TEST = /^TEST\b|\(TEST\)/;
 export const isTestEnquiry = (r: { name?: string | null; company?: string | null }) => TEST.test(r.name ?? '') || TEST.test(r.company ?? '');
 
 export async function syncEnquiry(supabase: Db, id: string) {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return;
   const { data: r } = await supabase.from('contact_requests').select('*').eq('id', id).single() as { data: (Enquiry & Attempts) | null };
   if (!r || r.hubspot_deal_id || r.status === 'spam') return;
@@ -276,7 +279,7 @@ type Request = { ref: string; email: string; hubspot_deal_id: string | null; hub
 
 // Returns what happened, for the function's count-only log.
 export async function linkProject(supabase: Db, projectId: string): Promise<string> {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return 'no token';
   const { data: p } = await supabase.from('projects').select('id, ref, stage').eq('id', projectId).maybeSingle() as { data: Project | null };
   const { data: r } = await supabase.from('contact_requests').select('ref, email, hubspot_deal_id, hubspot_contact_id')
@@ -312,7 +315,7 @@ async function markPortalAccount(supabase: Db, token: string, contactId: string,
 // deno-lint-ignore no-explicit-any
 type DbAuth = Db & { auth: { admin: { getUserById: (id: string) => Promise<{ data: { user: any } }> } } };
 export async function linkProfile(supabase: DbAuth, profileId: string): Promise<string> {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return 'no token';
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', profileId).maybeSingle();
   const { data: { user } } = await supabase.auth.admin.getUserById(profileId);
@@ -354,7 +357,7 @@ const CURSOR = 'stage_sync';
 
 // Returns counts only. A deal is applied only to the project whose internal record points back at it.
 export async function syncStages(supabase: Db, now = Date.now()) {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return { skipped: 'no token' };
   const { data: state } = await supabase.from('hubspot_sync_state').select('at').eq('key', CURSOR).maybeSingle();
   // 5 min overlap for HubSpot's search index lag; re-reading a deal is harmless (stageMove compares).
@@ -501,7 +504,7 @@ const eventDetails = async (supabase: Db, ev: QueuedEvent) => {
 // Sends queued events of the last 7 days whose project has a deal. Events of unlinked projects wait (the project may
 // still be linked) and drop out after 7 days. Returns counts only.
 export async function sendEvents(supabase: Db) {
-  const token = Deno.env.get('HUBSPOT_TOKEN');
+  const token = hubspotToken();
   if (!token) return { skipped: 'no token' };
   if (Deno.env.get('HUBSPOT_EVENTS') === 'off') return { skipped: 'off' };
   const { data } = await supabase.from('hubspot_events').select('id, kind, project_id, source_id, created_at, note_id')
