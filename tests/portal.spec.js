@@ -812,6 +812,34 @@ test('quote builder: an extra is a line in the total, an option is priced beside
   await expect(page.locator('.offer')).not.toContainText('£600');
 });
 
+test('quote builder: an item saved to the library goes into another quote; a schedule pasted from Excel becomes lines', async ({ page }) => {
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="sample"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await page.locator('[data-pid]').first().locator('[data-act="lib-save"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Saved to the library');
+  // A new, empty quote takes it from the library.
+  await page.goto('/admin.html#/quotes');
+  await page.locator('[data-act="new"]').click();
+  await page.locator('[data-act="step"][data-v="products"]').click();
+  await expect(page.locator('#q-lib-pick option')).toHaveCount(1);
+  await page.locator('#q-lib [data-act="lib-add"]').click();
+  await expect(page.locator('[data-pid]')).toHaveCount(1);
+  await expect(page.locator('[data-pid]').first().locator('[data-b$=":unitPrice"]')).not.toHaveValue('');
+  // Cells copied from Excel, with a header row.
+  await page.locator('#q-import').fill('Code\tDescription\tWidth\tHeight\tQty\nW01\tTimber sash window\t920\t1450\t2\nD01\tAluminium bi-fold door\t3600\t2100\t1\n');
+  await page.locator('#q-lib [data-act="import"]').click();
+  await expect(page.locator('.toast').last()).toContainText('2 lines added');
+  const cards = page.locator('[data-pid]');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(1).locator('[data-b$=":ref"]')).toHaveValue('W01');
+  await expect(cards.nth(1).locator('[data-b$=":widthMm"]')).toHaveValue('920');
+  await expect(cards.nth(2).locator('[data-b$=":ref"]')).toHaveValue('D01');
+  await page.locator('[data-act="step"][data-v="offer"]').click();
+  await expect(page.locator('.offer')).toContainText('Aluminium bi-fold door');
+});
+
 test('quote builder: one request for quotes to suppliers from the items, without the client’s name or address', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/quotes');

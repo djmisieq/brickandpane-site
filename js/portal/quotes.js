@@ -740,6 +740,7 @@ function stepProducts(q) {
             <button type="button" class="q-icon" data-act="up" aria-label="${t('Move up', 'Wyżej')}" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
             <button type="button" class="q-icon" data-act="down" aria-label="${t('Move down', 'Niżej')}" ${i === q.products.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
             <button type="button" class="q-icon" data-act="copy-item" aria-label="${t('Copy item', 'Kopiuj pozycję')}" title="${t('Copy item', 'Kopiuj pozycję')}">⧉</button>
+            <button type="button" class="q-icon" data-act="lib-save" aria-label="${t('Save to the library', 'Zapisz w bibliotece')}" title="${t('Save to the library', 'Zapisz w bibliotece')}">☆</button>
             <button type="button" class="q-icon" data-act="del-item" aria-label="${t('Remove item', 'Usuń pozycję')}">${ICON.bin}</button>
           </div></div>
         <div class="q-grid">
@@ -764,6 +765,7 @@ function stepProducts(q) {
       </article>`;
     }).join('')}</div>
     <button type="button" class="btn q-gap" data-act="add-item">+ ${t('Add a window or door', 'Dodaj okno lub drzwi')}</button>
+    ${libraryBox(q)}
     ${extrasBox(q)}
     ${rfqBox(q)}
     ${costBox(q)}`;
@@ -872,6 +874,48 @@ function summary(q) {
 }
 
 // The margin box beside the steps: staff only (the aside is never printed).
+// ---------- item library and a schedule pasted from Excel (analysis item 10) ----------
+// The library: items the team prices again and again (a standard casement, a lantern size), saved with the firm
+// settings (quote_settings, staff only), so no table is needed. Price and our cost go with it; code, location and
+// quantity do not. The schedule: cells copied from Excel (tab separated) or a CSV, with or without a header row;
+// the CSV of a request for quotes reads back the same way.
+const libItems = () => (Array.isArray(firm.library) ? firm.library : []);
+const libName = (p) => [p.system.trim() || named(KINDS, p.kind, 'en'), named(FRAMES, p.frame, 'en'), p.widthMm && p.heightMm ? `${p.widthMm}×${p.heightMm}` : ''].filter(Boolean).join(' · ');
+function libraryBox(q) {
+  const lib = libItems();
+  return `<section class="q-box no-print" id="q-lib"><h3 class="q-sub">${t('Library and schedule', 'Biblioteka i zestawienie')}</h3>
+    ${lib.length ? `<div class="q-lib-row"><label class="field q-field"><span class="q-lab">${t('From the library', 'Z biblioteki')}</span><select id="q-lib-pick">${lib.map((x, i) => `<option value="${i}">${esc(x.name)}${x.unitPrice ? ` · ${esc(money(x.unitPrice, 'en'))}` : ''}</option>`).join('')}</select></label>
+      <div class="btn-row"><button type="button" class="btn btn-sm" data-act="lib-add">${t('Add to the quote', 'Dodaj do oferty')}</button><button type="button" class="btn btn-sm btn-ghost" data-act="lib-del">${t('Remove from the library', 'Usuń z biblioteki')}</button></div></div>`
+    : `<p class="hint">${t('Save an item with ☆ on its card to use it again in any quote.', 'Zapisz pozycję gwiazdką ☆ na jej karcie, żeby użyć jej w każdej ofercie.')}</p>`}
+    <label class="field q-field q-gap"><span class="q-lab">${t('Paste a schedule from Excel', 'Wklej zestawienie z Excela')}</span><textarea id="q-import" rows="4" placeholder="${esc(t('code  description  width  height  qty', 'kod  opis  szerokość  wysokość  ilość'))}"></textarea><span class="hint">${t('Copy the cells in Excel and paste them here, or choose a CSV. With a header row the columns are found by name (code, description, width, height, qty, price, notes); without one they are read in that order.', 'Skopiuj komórki w Excelu i wklej tutaj albo wybierz CSV. Z wierszem nagłówków kolumny są rozpoznawane po nazwie (kod, opis, szerokość, wysokość, ilość, cena, uwagi); bez niego czytane w tej kolejności.')}</span></label>
+    <div class="btn-row"><button type="button" class="btn btn-sm" data-act="import">${t('Add the lines', 'Dodaj pozycje')}</button><label class="btn btn-sm btn-ghost q-file">${t('Choose a CSV', 'Wybierz CSV')}<input type="file" id="q-import-file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden></label></div>
+  </section>`;
+}
+const COLS = { ref: /^(code|ref|item|kod|nr|no\.?)$/i, system: /^(description|name|type|item name|opis|nazwa|typ|system)$/i, widthMm: /^(width|width_mm|w|szer(okość)?|szerokosc)/i, heightMm: /^(height|height_mm|h|wys(okość)?|wysokosc)/i, qty: /^(qty|quantity|ilość|ilosc|szt|pcs)/i, unitPrice: /^(price|unit price|cena)/i, notes: /^(notes?|uwagi|remarks)$/i, material: /^(material|materiał|frame)$/i };
+const ORDER = ['ref', 'system', 'widthMm', 'heightMm', 'qty'];
+const guessKind = (s) => { const x = s.toLowerCase(); return /lantern|świetlik/.test(x) ? 'lantern' : /rooflight|dachow/.test(x) ? 'rooflight' : /lift|unosz/.test(x) ? 'liftslide' : /bi-?fold|harmonij/.test(x) ? 'bifold' : /slid|przesuw/.test(x) ? 'slimslide' : /sash|skrzynk/.test(x) ? 'sash' : /french|francus/.test(x) ? 'french' : /entrance|wejści/.test(x) ? 'entrance' : /door|drzwi/.test(x) ? 'garden' : /tilt|uchyl/.test(x) ? 'tilt' : /fixed|stał|fix/.test(x) ? 'fixed' : /curtain|kurtyn/.test(x) ? 'curtain' : 'casement'; };
+const guessFrame = (s) => { const x = s.toLowerCase(); return /alu.?clad|timber.?alu|drewno.?alu/.test(x) ? 'timber-alu' : /u?pvc/.test(x) ? 'pvc' : /timber|wood|oak|accoya|drewn|sosn|dąb/.test(x) ? 'timber' : 'aluminium'; };
+function parseSchedule(textIn) {
+  const rows = String(textIn || '').replace(/^\ufeff/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (!rows.length) return [];
+  const sep = rows[0].includes('\t') ? '\t' : (rows[0].match(/;/g) || []).length > (rows[0].match(/,/g) || []).length ? ';' : ',';
+  const split = (l) => { if (sep === '\t') return l.split('\t'); const out = []; let cur = '', inQ = false; for (let i = 0; i < l.length; i++) { const c = l[i]; if (inQ) { if (c === '"' && l[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') inQ = false; else cur += c; } else if (c === '"') inQ = true; else if (c === sep) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out; };
+  let cells = rows.map((l) => split(l).map((c) => c.trim()));
+  const head = cells[0].map((h) => Object.keys(COLS).find((k) => COLS[k].test(h)) || null);
+  const named2 = head.filter(Boolean).length >= 2;
+  const map = named2 ? head : ORDER;
+  if (named2) cells = cells.slice(1);
+  const numOf = (v) => { const n = Number(String(v ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  return cells.flatMap((r) => {
+    const v = {}; map.forEach((k, i) => { if (k && r[i] != null && r[i] !== '') v[k] = r[i]; });
+    if (!v.system && !v.ref && !v.widthMm) return [];
+    const desc = [v.system, v.material].filter(Boolean).join(' ');
+    return [{ ...newProduct(), ref: (v.ref || '').slice(0, 20), system: v.system || '', material: v.material || '', kind: guessKind(desc), frame: guessFrame(desc),
+      widthMm: v.widthMm ? String(Math.round(numOf(v.widthMm))) : '', heightMm: v.heightMm ? String(Math.round(numOf(v.heightMm))) : '',
+      qty: Math.max(1, Math.round(numOf(v.qty)) || 1), unitPrice: r2(numOf(v.unitPrice)), notes: v.notes || '' }];
+  });
+}
+
 // ---------- extras and options (analysis item 7) ----------
 // An extra is a priced line in the total (scaffolding, a skip, a parking permit, out-of-hours work). An option is an
 // alternative or add-on priced beside the quote (triple glazing, a second colour, laminated glass) that stays out of
@@ -1140,6 +1184,20 @@ async function act(btn) {
     case 'mode': q.installMode = v; break;
     case 'valid30': q.validUntil = addDays(q.date || today(), 30); break;
     case 'add-item': q.products.push(newProduct()); break;
+    case 'lib-save': {
+      const p = q.products.find((x) => x.id === pid); if (!p) return;
+      const { id, ref, location, qty, showSpec, ...item } = JSON.parse(JSON.stringify(p)); void id; void ref; void location; void qty; void showSpec;
+      const name = libName(p), lib = libItems().filter((x) => x.name !== name);
+      firm.library = [...lib, { ...item, name }].slice(-200); firmDirty = true; later();
+      toast(t(`Saved to the library: ${name}.`, `Zapisano w bibliotece: ${name}.`)); const y = scrollY; draw(); scrollTo(0, y); return;
+    }
+    case 'lib-add': { const x = libItems()[Number(root.querySelector('#q-lib-pick')?.value)]; if (!x) return; const { name, ...item } = x; void name; q.products.push({ ...newProduct(), ...item, id: uid(), ref: '', qty: 1 }); break; }
+    case 'lib-del': { const i = Number(root.querySelector('#q-lib-pick')?.value); if (!libItems()[i]) return; firm.library = libItems().filter((_, j) => j !== i); firmDirty = true; later(); const y = scrollY; draw(); scrollTo(0, y); return; }
+    case 'import': {
+      const lines = parseSchedule(root.querySelector('#q-import')?.value);
+      if (!lines.length) { toast(t('Nothing to add: paste the cells with at least a description or a size.', 'Nic do dodania: wklej komórki z opisem albo wymiarem.')); return; }
+      q.products.push(...lines); toast(t(`${lines.length} lines added. Check the type and material of each.`, `Dodano pozycje: ${lines.length}. Sprawdź typ i materiał każdej.`)); break;
+    }
     case 'add-x': (q.extras ||= []).push({ id: uid(), kind: v === 'option' ? 'option' : 'extra', label: '', amount: 0, cost: 0 }); break;
     case 'x-kind': { const x = (q.extras || []).find((e) => e.id === btn.closest('[data-xid]')?.dataset.xid); if (x) x.kind = v === 'option' ? 'option' : 'extra'; break; }
     case 'del-x': q.extras = (q.extras || []).filter((e) => e.id !== btn.closest('[data-xid]')?.dataset.xid); break;
@@ -1348,6 +1406,7 @@ function bind(app) {
   app.addEventListener('change', (e) => {
     const el = e.target; if (!inDesk(el)) return;
     if (el.id === 'q-send-share') { if (sendForm) sendForm.share = el.checked; return; }
+    if (el.id === 'q-import-file') { const file = el.files?.[0]; if (file) file.text().then((txt) => { const box = root.querySelector('#q-import'); if (box) { box.value = txt; box.focus(); } }); return; }
     if (el.dataset.actCheck === 'by-others') { const q = current(); if (!q) return; const set = new Set(q.byOthers || []); if (el.checked) set.add(el.dataset.v); else set.delete(el.dataset.v); q.byOthers = Object.keys(BY_OTHERS).filter((k) => set.has(k)); touch(q); return; }
     if (el.id === 'q-send-file') { if (sendForm) { sendForm.file = el.files?.[0] || null; sendForm.error = ''; const y = scrollY; draw(); scrollTo(0, y); } return; }
     if (el.dataset.act === 'vat') {

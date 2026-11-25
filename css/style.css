@@ -828,6 +828,8 @@ body.app .list-btn{display:none}
 .of-totals.of-plain{border-top:0;margin-top:var(--s-xs)}
 .of-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-m);padding:.3rem 0}
 .of-row span:first-child{color:var(--ink-2)}
+/* Item library and pasted schedule (analysis item 10). */
+.q-lib-row{display:grid;gap:var(--s-xs)}.q-file{cursor:pointer}
 /* Fitters cost and by-others list in the builder (analysis item 9). */
 .q-checks{display:grid;gap:var(--s-xs)}.q-fit-sum{margin:var(--s-s) 0 0}
 /* Extras and options in the builder (analysis item 7). */
