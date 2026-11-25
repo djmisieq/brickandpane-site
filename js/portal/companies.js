@@ -29,7 +29,7 @@ export async function companiesView(app, nav) {
       <div class="field"><label for="co-kind">${tr('Kind')}</label><select id="co-kind" name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${kindFilter === k ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div></div>
       <button class="btn btn-sm" type="submit">${tr('Add company')}</button></form>
     ${shown.length ? `<table class="dash-table co-table"><thead><tr><th scope="col">${tr('Company')}</th><th scope="col">${tr('Kind')}</th><th scope="col">${tr('People')}</th><th scope="col">${tr('Contact')}</th></tr></thead><tbody>
-      ${shown.map((c) => `<tr><th scope="row"><a href="#/company/${esc(c.id)}">${esc(c.name)}</a></th><td>${esc(tr(KINDS[c.kind] || c.kind))}${c.source === 'cold' ? ` <span class="tag">${tr('cold')}</span>` : ''}</td><td>${count(c.id)}</td><td>${esc(c.email || c.phone || '')}</td></tr>`).join('')}</tbody></table>`
+      ${shown.map((c) => `<tr><th scope="row"><a href="#/company/${esc(c.id)}">${esc(c.name)}</a></th><td>${esc(tr(KINDS[c.kind] || c.kind))}${c.source === 'cold' ? ` <span class="tag">${tr('cold')}</span>` : ''}${c.do_not_contact ? ` <span class="tag">${tr('do not contact')}</span>` : ''}</td><td>${count(c.id)}</td><td>${esc(c.email || c.phone || '')}</td></tr>`).join('')}</tbody></table>`
       : `<p class="callout">${tr(list.length ? 'No company matches.' : 'No companies yet. Add the practices, contractors and suppliers you work with.')}</p>`}
   </div>`;
   $$('[data-kind]', app).forEach((b) => b.addEventListener('click', () => { kindFilter = b.dataset.kind; companiesView(app, nav); }));
@@ -53,7 +53,7 @@ export async function companyView(app, id) {
     <div class="crm-grid">
       <div>
         <section class="ctl"><h2 class="panel-h">${tr('People')}</h2>
-          ${people.length ? `<ul class="task-list">${people.map((p) => `<li class="task" data-person="${esc(p.id)}"><span><strong>${esc(p.full_name)}</strong>${p.job_title ? ` · ${esc(p.job_title)}` : ''}<span class="note">${[p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`, p.phone && esc(p.phone)].filter(Boolean).join(' · ')}</span></span><button type="button" class="q-icon" data-person-del aria-label="${esc(tr('Remove person'))}" title="${esc(tr('Remove person'))}">×</button></li>`).join('')}</ul>` : `<p class="hint">${tr('No people yet.')}</p>`}
+          ${people.length ? `<ul class="task-list">${people.map((p) => `<li class="task" data-person="${esc(p.id)}" data-dnc="${p.do_not_contact ? '1' : ''}"><span><strong>${esc(p.full_name)}</strong>${p.job_title ? ` · ${esc(p.job_title)}` : ''}${p.do_not_contact ? ` <span class="tag">${tr('do not contact')}</span>` : ''}<span class="note">${[p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`, p.phone && esc(p.phone)].filter(Boolean).join(' · ')}</span></span><button type="button" class="btn btn-sm btn-ghost" data-person-dnc>${p.do_not_contact ? tr('Allow contact') : tr('Do not contact')}</button><button type="button" class="q-icon" data-person-del aria-label="${esc(tr('Remove person'))}" title="${esc(tr('Remove person'))}">×</button></li>`).join('')}</ul>` : `<p class="hint">${tr('No people yet.')}</p>`}
           <form class="task-form" data-person-add novalidate>
             <div class="field-row">${fld('pname', 'Name', '')}${fld('ptitle', 'Job title', '', 'text', 120)}</div>
             <div class="field-row">${fld('pemail', 'Email', '', 'email')}${fld('pphone', 'Phone', '', 'tel', 60)}</div>
@@ -68,13 +68,14 @@ export async function companyView(app, id) {
           ${fld('website', 'Website', c.website, 'text', 300)}${fld('email', 'Email', c.email, 'email')}${fld('phone', 'Phone', c.phone, 'tel', 60)}
           <div class="field"><label for="co-address">${tr('Address')}</label><textarea id="co-address" name="address" rows="2" maxlength="500">${esc(c.address)}</textarea></div>
           <div class="field"><label for="co-notes">${tr('Notes')}</label><textarea id="co-notes" name="notes" rows="3" maxlength="4000">${esc(c.notes)}</textarea></div>
+          <label class="consent"><input type="checkbox" name="dnc" ${c.do_not_contact ? 'checked' : ''}> <span>${tr('Do not contact (no campaign mail; kept so they are not added again)')}</span></label>
           <button class="btn btn-sm" type="submit">${tr('Save')}</button></form>
         <form class="ctl" data-co-del novalidate><label class="consent"><input type="checkbox" name="sure"> <span>${tr('Delete this company (its people stay, without a company)')}</span></label><button class="btn btn-sm btn-ghost" type="submit">${tr('Delete company')}</button></form>
       </aside>
     </div></div>`;
   $('[data-co-edit]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget, name = f.name.value.trim(); if (!name) { f.name.focus(); toast(tr('Enter the company name.')); return; }
-    try { await store.saveCompany({ id, name, kind: f.kind.value, website: f.website.value.trim(), email: f.email.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), notes: f.notes.value.trim() }); toast(tr('Saved.')); } catch (err) { toast(friendly(err)); }
+    try { await store.saveCompany({ id, name, kind: f.kind.value, website: f.website.value.trim(), email: f.email.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim(), notes: f.notes.value.trim(), do_not_contact: f.dnc.checked }); toast(tr('Saved.')); } catch (err) { toast(friendly(err)); }
   });
   $('[data-co-del]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); if (!e.currentTarget.sure.checked) { toast(tr('Tick the box to delete the company.')); return; }
@@ -84,6 +85,7 @@ export async function companyView(app, id) {
     e.preventDefault(); const f = e.currentTarget, full_name = f.pname.value.trim(); if (!full_name) { f.pname.focus(); toast(tr('Enter the name.')); return; }
     try { await store.savePerson({ company_id: id, full_name, job_title: f.ptitle.value.trim(), email: f.pemail.value.trim(), phone: f.pphone.value.trim() }); toast(tr('Person added.')); } catch (err) { toast(tr(err.message)); }
   });
+  $$('[data-person-dnc]', app).forEach((b) => b.addEventListener('click', async () => { const li = b.closest('[data-person]'); try { await store.savePerson({ id: li.dataset.person, do_not_contact: !li.dataset.dnc }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); } }));
   $$('[data-person-del]', app).forEach((b) => b.addEventListener('click', async () => { try { await store.deletePerson(b.closest('[data-person]').dataset.person); toast(tr('Person removed.')); } catch (err) { toast(tr(err.message)); } }));
 }
 

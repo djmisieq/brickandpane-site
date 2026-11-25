@@ -1259,3 +1259,5 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .crm .dash-head>*{min-width:0;max-width:100%}.crm .dash-head .board-tools{max-width:100%}.crm .seg{max-width:100%;overflow-x:auto;flex-wrap:nowrap}
 /* Replying from the CRM (migration 0045). */
 .mail-compose{margin-top:var(--s-s)}.mail-compose textarea{font-family:inherit}.mail-confirm{margin:var(--s-xs) 0}
+/* The first answer to an enquiry from the CRM (audit 25.11.2026). */
+.enq-reply{margin:var(--s-s) 0}

@@ -6,6 +6,8 @@
 //   { action: "reply", email, name?, company?, subject?, message, campaign? }
 //        a reply to the cold campaign: person and company recorded, and a task for the team on Today (due today,
 //        Kate). Nothing is sent to anyone; the team answers from the CRM after checking it.
+//   { action: "optout", email?, company? }      → do not contact again (UK GDPR; 0047). Lookup then says do_not_contact.
+//   { action: "contacted", email, company? }   → we contacted them today (keeps them off the 12-month deletion).
 // Only ADDS or fills empty fields; never deletes, never overwrites what the team typed. Header x-leads-key = secret
 // LEADS_KEY (set by the owner, given to the bot); without it: 403. LEADS_INTAKE=off stops it.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -59,15 +61,16 @@ Deno.serve(async (req) => {
   try {
     if (b.action === 'lookup') {
       const e = email(b.email), d = clip(b.domain || (e ? e.split('@')[1] : ''), 200).toLowerCase(), n = clip(b.name, 200);
-      const { data: ppl } = e ? await supabase.from('people').select('id, full_name, company_id, profile_id').ilike('email', e) : { data: [] };
+      const { data: ppl } = e ? await supabase.from('people').select('id, full_name, company_id, profile_id, do_not_contact').ilike('email', e) : { data: [] };
       const coIds = new Set((ppl ?? []).map((p: { company_id: string | null }) => p.company_id).filter(Boolean));
       if (d) for (const c of (await supabase.from('companies').select('id').or(`website.ilike.%${d.replace(/[,()%_]/g, '')}%,email.ilike.%@${d.replace(/[,()%_]/g, '')}`)).data ?? []) coIds.add(c.id);
       if (n) for (const c of (await supabase.from('companies').select('id').ilike('name', n.replace(/[%_]/g, '\\$&'))).data ?? []) coIds.add(c.id);
-      const { data: cos } = coIds.size ? await supabase.from('companies').select('id, name, kind, source').in('id', [...coIds]) : { data: [] };
+      const { data: cos } = coIds.size ? await supabase.from('companies').select('id, name, kind, source, do_not_contact').in('id', [...coIds]) : { data: [] };
       const { data: links } = coIds.size ? await supabase.from('project_companies').select('company_id, role').in('company_id', [...coIds]) : { data: [] };
       const { data: req0 } = e ? await supabase.from('contact_requests').select('id').ilike('email', e).limit(1) : { data: [] };
       const client = (links ?? []).length > 0 || (ppl ?? []).some((p: { profile_id: string | null }) => p.profile_id) || (req0 ?? []).length > 0;
-      return reply(200, { known: (ppl ?? []).length > 0 || (cos ?? []).length > 0, client, people: ppl ?? [], companies: (cos ?? []).map((c: Row) => ({ ...c, projects: (links ?? []).filter((l: { company_id: string }) => l.company_id === c.id).length })) });
+      const do_not_contact = (ppl ?? []).some((p: { do_not_contact: boolean }) => p.do_not_contact) || (cos ?? []).some((c: { do_not_contact: boolean }) => c.do_not_contact);
+      return reply(200, { known: (ppl ?? []).length > 0 || (cos ?? []).length > 0, client, do_not_contact, people: ppl ?? [], companies: (cos ?? []).map((c: Row) => ({ ...c, projects: (links ?? []).filter((l: { company_id: string }) => l.company_id === c.id).length })) });
     }
     if (b.action === 'company') return reply(200, { result: 'ok', company: await company(b) });
     if (b.action === 'person') {
@@ -86,7 +89,16 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return reply(200, { result: 'ok', person: p, company: co, task: 'on Today' });
     }
-    return reply(400, { error: 'action: lookup, company, person or reply' });
+    if (b.action === 'optout' || b.action === 'contacted') {
+      const e = email(b.email), name = clip(b.company, 200), now = new Date().toISOString();
+      if (!e && !name) return reply(400, { error: 'email or company' });
+      const patch = b.action === 'optout' ? { do_not_contact: true } : { last_contacted_at: now };
+      let people = 0, companies = 0;
+      if (e) { const { data } = await supabase.from('people').update(patch).ilike('email', e).select('id'); people = data?.length ?? 0; if (!people && b.action === 'optout') { await person({ email: e }); await supabase.from('people').update(patch).ilike('email', e); people = 1; } }
+      if (name) { const { data } = await supabase.from('companies').update(patch).ilike('name', name.replace(/[%_]/g, '\\$&')).select('id'); companies = data?.length ?? 0; }
+      return reply(200, { result: 'ok', people, companies });
+    }
+    return reply(400, { error: 'action: lookup, company, person, reply, optout or contacted' });
   } catch (e) {
     const message = String((e as Error)?.message ?? e).slice(0, 300);
     console.log(JSON.stringify({ error: 'intake', action: b.action, message }));
