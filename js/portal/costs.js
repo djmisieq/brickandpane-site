@@ -54,6 +54,8 @@ function asQuoted(c) {
   return bits.length ? `${tr('quoted {v}', { v: money(c.amount, c.currency) })}, ${bits.join(', ')}` : '';
 }
 
+// Colour audit 26.11.2026: supplier quote statuses.
+const COST_TONE = { requested: 'neutral', received: 'info', accepted: 'ok', rejected: 'neutral', superseded: 'neutral' };
 function row(c, best) {
   const net = netOf(c), live = c.status === 'received' || c.status === 'accepted';
   const expired = c.valid_until && c.valid_until < today() && c.status === 'received';
@@ -71,8 +73,8 @@ function row(c, best) {
   const move = `<details class="cost-move"><summary class="btn btn-sm btn-ghost">${tr('Move')}</summary><form class="task-form" data-cost-move novalidate>${linker({ id: `cm-${c.id}`, label: tr('To project'), kinds: ['project'], name: 'project', exclude: [c.project_id] })}<button class="btn btn-sm" type="submit">${tr('Move here')}</button></form></details>`;
   return `<li data-cost="${esc(c.id)}" data-supplier="${esc(c.supplier)}" data-company="${esc(c.company_id || '')}" data-category="${esc(c.category)}"${c.status === 'rejected' || c.status === 'superseded' ? ' class="is-out"' : ''}>
       <div><strong>${c.company_id ? `<a href="#/company/${esc(c.company_id)}">${esc(c.supplier)}</a>` : esc(c.supplier)}</strong>${c.reference ? ` · ${esc(c.reference)}` : ''}${c.variant ? ` · ${esc(c.variant)}` : ''}
-        <span class="tag${c.status === 'accepted' ? ' tag-accent' : ''}">${esc(tr(STATUS[c.status] || c.status))}</span>
-        ${best?.id === c.id ? `<span class="tag tag-accent">${tr('Lowest')}</span>` : ''}
+        <span class="tag tone-${expired ? 'warn' : COST_TONE[c.status] || 'neutral'}">${esc(tr(STATUS[c.status] || c.status))}</span>
+        ${best?.id === c.id ? `<span class="tag tone-ok">↓ ${tr('Lowest')}</span>` : ''}
         ${vs != null ? `<span class="note">+${esc(money(vs, 'GBP'))} (+${esc(String(Math.round((vs / best.net) * 1000) / 10))}%) ${esc(tr('vs lowest'))}</span>` : ''}
         <span class="note">${facts.filter(Boolean).join(' · ')}${c.pdf_name ? ` · ${c.pdf_path ? `<button type="button" class="q-link" data-cost-pdf="${esc(c.pdf_path)}">${esc(c.pdf_name)}</button>` : esc(c.pdf_name)}` : ''}</span>
         ${c.note ? `<span class="note">${esc(c.note)}</span>` : ''}

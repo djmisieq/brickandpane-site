@@ -173,7 +173,7 @@ export async function projectView(app, id, ctx) {
             <label class="consent"><input type="checkbox" id="ctl-visible" name="visible"> <span>${tr('Visible to client and notify them')}</span></label>
             <p class="hint" data-stage-preview>${tr('Only the team sees this change.')}</p>
             <p class="hint" data-stage-tasks></p>
-            <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
+            <button class="btn btn-sm btn-ghost" type="submit">${tr('Update stage')}</button>
           </form>
 
           ${fold('waiting', `${tr('Waiting on')}${wait.waiting_on ? ` <span class="tag tag-wait">${esc(tr(WAITING[wait.waiting_on]))}</span>` : ''}`, `<form class="fold-body" data-waiting novalidate>

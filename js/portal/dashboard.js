@@ -10,7 +10,8 @@ let period = 90;
 const DAY = 86400000;
 const num = (v) => (v == null ? '—' : String(v));
 
-const tile = (label, value, sub = '', warn = false) => `<div class="dash-tile${warn ? ' is-warn' : ''}"><span class="stat-dt">${esc(tr(label))}</span><span class="dash-v">${value}</span>${sub ? `<span class="note">${sub}</span>` : ''}</div>`;
+// Colour audit 26.11.2026: a tile is coloured only when it says something (true = late, a string = that tone).
+const tile = (label, value, sub = '', tone = false) => `<div class="dash-tile${tone ? ` tone-${tone === true ? 'danger' : tone}` : ''}"><span class="stat-dt">${esc(tr(label))}</span><span class="dash-v">${value}</span>${sub ? `<span class="note">${sub}</span>` : ''}</div>`;
 const bars = (rows, max) => `<ul class="dash-bars">${rows.map(([label, n, text]) => `<li><span class="dash-bl">${esc(label)}</span><span class="dash-bar"><span style="width:${max ? Math.max(2, Math.round((n / max) * 100)) : 0}%"></span></span><span class="dash-bn">${esc(text ?? String(n))}</span></li>`).join('')}</ul>`;
 
 export async function dashboardView(app, nav) {
@@ -30,13 +31,13 @@ export async function dashboardView(app, nav) {
   app.innerHTML = `<div class="container-wide section-tight" id="dashboard">
     ${head}
     <div class="dash-tiles">
-      ${tile('New enquiries', num(d.enquiries), d.unanswered ? esc(tr('{n} without a reply now', { n: d.unanswered })) : esc(tr('all answered')), d.unanswered > 0)}
-      ${tile('First reply, median', d.reply_hours_median == null ? '—' : esc(tr('{n} h', { n: d.reply_hours_median })), d.replied_known ? esc(tr('from {n} enquiries', { n: d.replied_known })) : esc(tr('measured from 25.11.2026')), Number(d.reply_hours_median) > 24)}
+      ${tile('New enquiries', num(d.enquiries), d.unanswered ? esc(tr('{n} without a reply now', { n: d.unanswered })) : esc(tr('all answered')), d.unanswered > 0 && 'warn')}
+      ${tile('First reply, median', d.reply_hours_median == null ? '—' : esc(tr('{n} h', { n: d.reply_hours_median })), d.replied_known ? esc(tr('from {n} enquiries', { n: d.replied_known })) : esc(tr('measured from 25.11.2026')), Number(d.reply_hours_median) > 24 && 'warn')}
       ${tile('To the quote, median', d.quote_days_median == null ? '—' : esc(tr('{n} d', { n: d.quote_days_median })))}
-      ${tile('Quotes in play', num((d.in_play || []).length), esc(fmtMoney(d.in_play_value)))}
-      ${tile('Won', num(d.won), esc(fmtMoney(d.won_value)))}
-      ${tile('Margin', mPct == null ? '—' : `${esc(String(mPct))}%`, m.projects ? esc(tr('{n} projects with costs', { n: m.projects })) : esc(tr('no accepted costs yet')), mPct != null && mPct < 20)}
-      ${tile('Paid in', esc(fmtMoney(d.paid)))}
+      ${tile('Quotes in play', num((d.in_play || []).length), esc(fmtMoney(d.in_play_value)), (d.in_play || []).length > 0 && 'info')}
+      ${tile('Won', num(d.won), esc(fmtMoney(d.won_value)), d.won > 0 && 'ok')}
+      ${tile('Margin', mPct == null ? '—' : `${esc(String(mPct))}%`, m.projects ? esc(tr('{n} projects with costs', { n: m.projects })) : esc(tr('no accepted costs yet')), mPct != null && (mPct < 0 ? 'danger' : mPct < 20 ? 'warn' : 'ok'))}
+      ${tile('Paid in', esc(fmtMoney(d.paid)), '', Number(d.paid) > 0 && 'ok')}
       ${tile('Due in 30 days', esc(fmtMoney(d.due_30)))}
       ${tile('Overdue', esc(fmtMoney(d.overdue)), '', Number(d.overdue) > 0)}
     </div>
@@ -46,9 +47,9 @@ export async function dashboardView(app, nav) {
       <section class="ctl"><h2 class="panel-h">${tr('Where new projects came from')}</h2>${src.length ? bars(src, Math.max(...src.map((x) => x[1]))) : `<p class="hint">${tr('No new projects in this period.')}</p>`}
         <p class="note">${tr('Set the source on each project, in Commercial.')}</p></section>
       <section class="ctl"><h2 class="panel-h">${tr('Quotes in play')}</h2>${(d.in_play || []).length ? `<ul class="today-list">${d.in_play.map((x) => `<li><a class="today-row${age(x.sent_at) >= 14 ? ' is-late' : ''}" href="#/quotes/${esc(x.id)}"><span class="today-t">${esc(x.reference)}</span><span class="today-s">${esc(fmtMoney(x.net))}</span><span class="today-age">${esc(tr('{n} d', { n: age(x.sent_at) }))}</span></a></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote waiting for an answer.')}</p>`}</section>
-      <section class="ctl"><h2 class="panel-h">${tr('Margin below 20%')}</h2>${(m.low || []).length ? `<ul class="today-list">${m.low.map((x) => `<li><a class="today-row is-late" href="#/p/${esc(x.id)}"><span class="today-t">${esc(x.ref)} · ${esc(x.name)}</span><span class="today-age">${esc(String(x.pct))}%</span></a></li>`).join('')}</ul>` : `<p class="hint">${tr('No project below 20%.')}</p>`}</section>
-      <section class="ctl"><h2 class="panel-h">${tr('Paid in by month')}</h2>${months.length ? bars(months, Math.max(...months.map((x) => x[1]))) : `<p class="hint">${tr('No payments recorded in the last six months.')}</p>`}</section>
-      <section class="ctl"><h2 class="panel-h">${tr('Lost, and why')}</h2>${(d.lost_reasons || []).length ? bars(d.lost_reasons.map((x) => [x.reason, x.n]), Math.max(...d.lost_reasons.map((x) => x.n))) : `<p class="hint">${tr('Nothing lost in this period.')}</p>`}</section>
+      <section class="ctl"><h2 class="panel-h">${tr('Margin below 20%')}</h2>${(m.low || []).length ? `<ul class="today-list">${m.low.map((x) => `<li><a class="today-row ${x.pct < 0 ? 'is-late' : 'is-warn'}" href="#/p/${esc(x.id)}"><span class="today-t">${esc(x.ref)} · ${esc(x.name)}</span><span class="today-age">${esc(String(x.pct))}%</span></a></li>`).join('')}</ul>` : `<p class="hint">${tr('No project below 20%.')}</p>`}</section>
+      <section class="ctl bars-ok"><h2 class="panel-h">${tr('Paid in by month')}</h2>${months.length ? bars(months, Math.max(...months.map((x) => x[1]))) : `<p class="hint">${tr('No payments recorded in the last six months.')}</p>`}</section>
+      <section class="ctl bars-neutral"><h2 class="panel-h">${tr('Lost, and why')}</h2>${(d.lost_reasons || []).length ? bars(d.lost_reasons.map((x) => [x.reason, x.n]), Math.max(...d.lost_reasons.map((x) => x.n))) : `<p class="hint">${tr('Nothing lost in this period.')}</p>`}</section>
       <section class="ctl"><h2 class="panel-h">${tr('Who carries what')}</h2><table class="dash-table"><thead><tr><th scope="col">${tr('Person')}</th><th scope="col">${tr('Open projects')}</th><th scope="col">${tr('Open tasks')}</th></tr></thead><tbody>${(d.workload || []).map((w) => `<tr><th scope="row">${esc(w.name || '—')}</th><td>${w.projects}</td><td>${w.tasks}</td></tr>`).join('')}</tbody></table></section>
     </div>
   </div>`;

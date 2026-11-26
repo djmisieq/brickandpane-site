@@ -142,7 +142,7 @@ export function overviewPanel(d, viewer = 'client', audience = 'trade', user = n
         ${payments.length ? `
           <h3 class="panel-h">${tr('Payments')}</h3>
           <table class="spec spec-compact"><thead><tr><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Amount')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Status')}</th></tr></thead><tbody>
-            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${tr(x.paid_at ? 'Mark unpaid' : 'Mark paid')}</button>` : ''}</td></tr>`).join('')}
+            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : x.due_date && x.due_date < new Date().toISOString().slice(0, 10) ? `<span class="badge tone-${viewer === 'staff' ? 'danger' : 'warn'}">${tr('Overdue')}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${tr(x.paid_at ? 'Mark unpaid' : 'Mark paid')}</button>` : ''}</td></tr>`).join('')}
           </tbody></table>
           <p class="note" style="margin-top:.6rem">${tr('Paid {paid} of {total}', { paid: fmtGBP(paid), total: fmtGBP(total) })}${audience === 'home' ? ` ${tr('(amounts include VAT)')}` : ''}.</p>` : ''}
       </div>
@@ -235,7 +235,7 @@ export function changesPanel(d, viewer, user) {
           ${c.impact ? `<span class="change-impact"><strong>${tr('Impact:')}</strong> ${esc(c.impact)}</span>` : ''}
           ${c.decided_at ? `<span class="doc-meta">${esc(tr(CHANGE_STATUS[c.status]))} ${tr('by')} ${esc(c.decider?.full_name || '')}, ${fmtDate(c.decided_at, true)}${c.comment ? `: “${esc(c.comment)}”` : ''}</span>` : ''}
         </div>
-        <div class="doc-side"><span class="badge ${c.status === 'approved' ? 'badge-ok' : c.status === 'proposed' ? 'badge-you' : 'badge-warn'}">${esc(tr(CHANGE_STATUS[c.status]))}</span></div>
+        <div class="doc-side"><span class="badge ${c.status === 'approved' ? 'badge-ok' : c.status === 'proposed' ? 'badge-you' : c.status === 'rejected' ? 'badge-warn' : 'tone-neutral'}">${esc(tr(CHANGE_STATUS[c.status]))}</span></div>
         ${canDecide(c) ? `
           <form class="approve-form" data-change="${esc(c.id)}">
             <label class="visually-hidden" for="cc-${esc(c.id)}">${tr('Comment')}</label>
