@@ -21,13 +21,20 @@ let channel = null;
 const subscribe = () => {
   if (channel) return;
   channel = sb.channel('portal');
-  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members'].forEach((table) =>
+  // The CRM tables too (migrations 0049/0050), so a second person sees links, tasks, bookings and notes change.
+  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members', 'tasks', 'project_companies', 'project_people', 'project_internal', 'supplier_quotes', 'project_bookings', 'contact_requests', 'mail_messages'].forEach((table) =>
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
   channel.subscribe();
 };
 sb.auth.onAuthStateChange(() => emit());
 
 const PROFILE = 'id, full_name, company, role, account_type';
+// The API returns at most 1000 rows per request (audit 26.11.2026: 1080 companies and 1147 people were cut off):
+// long lists are read in pages until a short page comes back.
+const every = async (make, size = 1000) => {
+  const out = [];
+  for (let from = 0; ; from += size) { const rows = ok(await make().range(from, from + size - 1)) || []; out.push(...rows); if (rows.length < size || from > 50000) return out; }
+};
 const PENDING_TYPE = 'bp-oauth-account-type';
 // Supabase sends people back (OAuth, magic link, email confirmation) with the session in the URL fragment, so the
 // address it returns to must not have one: admin.html#/enquiries + #access_token=… is never read and the sign-in is lost.
@@ -120,7 +127,8 @@ export const store = {
   },
   async saveQuote(q) {
     // project_id only when the quote names one: never clear a link made on the server (0038 backfill).
-    ok(await sb.from('quotes').upsert({ id: q.id, reference: q.reference, data: q, updated_at: new Date(q.updatedAt || Date.now()).toISOString(), ...(q.projectId ? { project_id: q.projectId } : {}) }));
+    // "No project" chosen in the builder (projectId '') unpins it (projects audit 26.11.2026: it could not be unpinned).
+    ok(await sb.from('quotes').upsert({ id: q.id, reference: q.reference, data: q, updated_at: new Date(q.updatedAt || Date.now()).toISOString(), ...(q.projectId ? { project_id: q.projectId } : q.projectId === '' ? { project_id: null } : {}) }));
   },
   async deleteQuote(id) { ok(await sb.from('quotes').delete().eq('id', id)); },
   async getQuoteSettings() { return ok(await sb.from('quote_settings').select('data').maybeSingle())?.data || {}; },
@@ -168,15 +176,15 @@ export const store = {
   async listCosts(pid) { return ok(await sb.from('supplier_quotes').select('*').eq('project_id', pid).order('created_at', { ascending: false })); },
   async projectMargin(pid) { return ok(await sb.rpc('project_margin', { pid })); },
   // Comparison fields since 0039: VAT inside the amount, discount, delivery on top, lead time, variant; "requested" = asked, no price.
-  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received', requested_on = null }) {
+  async addCost(pid, { supplier, reference = '', category, amount, quoted_on = null, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received', requested_on = null, company_id = null }) {
     const pdf = file ? await this.costPdf(pid, file) : { pdf_path: null, pdf_name: '' };
-    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency: 'GBP', fx_to_gbp: 1, status, quoted_on, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant, requested_on }));
+    ok(await sb.from('supplier_quotes').insert({ project_id: pid, supplier, reference, category, amount: Number(amount), currency: 'GBP', fx_to_gbp: 1, status, quoted_on, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant, requested_on, company_id }));
     emit();
   },
   // The price for a supplier we asked: the same row, now with its numbers.
-  async updateCost(id, pid, { supplier, reference = '', category, amount, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received' }) {
+  async updateCost(id, pid, { supplier, reference = '', category, amount, valid_until = null, note = '', file = null, vat_in_pct = 0, delivery_gbp = 0, discount_pct = 0, lead_days = null, variant = '', status = 'received', company_id = null }) {
     const pdf = file ? await this.costPdf(pid, file) : {};
-    ok(await sb.from('supplier_quotes').update({ supplier, reference, category, amount: Number(amount), status, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant }).eq('id', id));
+    ok(await sb.from('supplier_quotes').update({ supplier, reference, category, amount: Number(amount), status, valid_until, ...pdf, note, vat_in_pct, delivery_gbp, discount_pct, lead_days, variant, ...(company_id ? { company_id } : {}) }).eq('id', id));
     emit();
   },
   async costPdf(pid, file) {
@@ -207,8 +215,8 @@ export const store = {
   // The owner's dashboard: every figure from one function (migration 0043, staff only).
   async ownerDashboard(days = 90) { return ok(await sb.rpc('owner_dashboard', { days })); },
   // Companies and people (migration 0044, CRM audit phase 5; staff only).
-  async listCompanies() { return ok(await sb.from('companies').select('*').order('name').limit(2000)) || []; },
-  async listPeople() { return ok(await sb.from('people').select('*').order('full_name').limit(5000)) || []; },
+  async listCompanies() { return every(() => sb.from('companies').select('*').order('name').order('id')); },
+  async listPeople() { return every(() => sb.from('people').select('*').order('full_name').order('id')); },
   async getCompany(id) {
     const [c, people, links, quotes] = await Promise.all([
       sb.from('companies').select('*').eq('id', id).maybeSingle(), sb.from('people').select('*').eq('company_id', id).order('full_name'),
@@ -228,6 +236,46 @@ export const store = {
   async linkCompany(pid, companyId, role) { ok(await sb.from('project_companies').insert({ project_id: pid, company_id: companyId, role })); emit(); },
   async unlinkCompany(pid, companyId, role) { ok(await sb.from('project_companies').delete().eq('project_id', pid).eq('company_id', companyId).eq('role', role)); emit(); },
   async deleteTask(id) { ok(await sb.from('tasks').delete().eq('id', id)); emit(); },
+  // Projects audit 26.11.2026 (migrations 0049/0050): moving things between projects, people on a project, the log,
+  // an enquiry joining a project, merging duplicates, bookings and the stage playbook.
+  async updateTask(id, patch) { const allowed = {}; ['title', 'note', 'due_on', 'assignee_id', 'project_id', 'request_id'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; }); ok(await sb.from('tasks').update(allowed).eq('id', id)); emit(); },
+  async moveCost(id, pid) { ok(await sb.from('supplier_quotes').update({ project_id: pid }).eq('id', id)); emit(); },
+  async setCompanyRole(pid, companyId, from, to) { ok(await sb.from('project_companies').update({ role: to }).eq('project_id', pid).eq('company_id', companyId).eq('role', from)); emit(); },
+  async projectPeople(pid) { return (ok(await sb.from('project_people').select('role, is_main, person:people(*)').eq('project_id', pid)) || []).filter((x) => x.person); },
+  async linkPerson(pid, personId, role = 'contact', isMain = false) {
+    if (isMain) ok(await sb.from('project_people').update({ is_main: false }).eq('project_id', pid));
+    ok(await sb.from('project_people').insert({ project_id: pid, person_id: personId, role, is_main: isMain })); emit();
+  },
+  async updatePersonLink(pid, personId, { role, is_main }) {
+    if (is_main) ok(await sb.from('project_people').update({ is_main: false }).eq('project_id', pid).neq('person_id', personId));
+    const patch = {}; if (role) patch.role = role; if (is_main !== undefined) patch.is_main = !!is_main;
+    ok(await sb.from('project_people').update(patch).eq('project_id', pid).eq('person_id', personId)); emit();
+  },
+  async unlinkPerson(pid, personId) { ok(await sb.from('project_people').delete().eq('project_id', pid).eq('person_id', personId)); emit(); },
+  async personProjects(personId) { return (ok(await sb.from('project_people').select('role, is_main, project:projects(id, ref, name, stage)').eq('person_id', personId)) || []).filter((x) => x.project); },
+  async crmLog({ projectId = null, entity = null, entityId = null } = {}) {
+    let q = sb.from('crm_log').select(`*, actor:profiles(${PROFILE})`).order('created_at', { ascending: false }).limit(300);
+    if (projectId) q = q.eq('project_id', projectId); if (entity) q = q.eq('entity', entity); if (entityId) q = q.eq('entity_id', entityId);
+    return ok(await q) || [];
+  },
+  async attachEnquiry(rid, pid) { const r = ok(await sb.rpc('attach_enquiry', { r: rid, pid })); emit(); return r; },
+  async linkEnquiryContact(rid, companyId, personId) { ok(await sb.rpc('link_enquiry_contact', { r: rid, co: companyId, pe: personId })); emit(); },
+  async mergeCompanies(keep, drop) { ok(await sb.rpc('merge_companies', { keep, drop_id: drop })); emit(); },
+  async mergePeople(keep, drop) { ok(await sb.rpc('merge_people', { keep, drop_id: drop })); emit(); },
+  async listBookings({ from = null, to = null, projectId = null } = {}) {
+    let q = sb.from('project_bookings').select('*').order('starts_on');
+    if (projectId) q = q.eq('project_id', projectId); if (from) q = q.gte('ends_on', from); if (to) q = q.lte('starts_on', to);
+    return ok(await q) || [];
+  },
+  async saveBooking({ id = null, ...b }) {
+    const row = { kind: b.kind, starts_on: b.starts_on, ends_on: b.ends_on || b.starts_on, crew_company_id: b.crew_company_id || null, staff_id: b.staff_id || null, note: b.note || '' };
+    if (id) ok(await sb.from('project_bookings').update(row).eq('id', id)); else ok(await sb.from('project_bookings').insert({ ...row, project_id: b.project_id }));
+    emit();
+  },
+  async deleteBooking(id) { ok(await sb.from('project_bookings').delete().eq('id', id)); emit(); },
+  async listPlaybook() { return ok(await sb.from('stage_playbook').select('*').order('to_stage').order('sort')) || []; },
+  async savePlaybook({ id = null, ...b }) { if (id) ok(await sb.from('stage_playbook').update(b).eq('id', id)); else ok(await sb.from('stage_playbook').insert(b)); emit(); },
+  async deletePlaybook(id) { ok(await sb.from('stage_playbook').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
   async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },
   // A reply from the CRM (migration 0045): the mail-send function checks the person is staff and that they ticked it.
@@ -250,7 +298,7 @@ export const store = {
   async quotePdfUrl(path) { return ok(await sb.storage.from('quote-pdfs').createSignedUrl(path, 300))?.signedUrl; },
   // Staff inbox: requests from the public form, sent with or without an account (migration 0005, staff-only RLS).
   async listRequests() {
-    return ok(await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(200));
+    return every(() => sb.from('contact_requests').select('*').order('created_at', { ascending: false }).order('id'));
   },
   async updateRequest(id, { status, staff_note }) {
     ok(await sb.from('contact_requests').update({ status, staff_note }).eq('id', id));
@@ -353,20 +401,18 @@ export const store = {
     ok(await sb.from('payments').update({ paid_at: row.paid_at ? null : new Date().toISOString() }).eq('id', paymentId));
   },
 
+  // One transaction from the stage the row really has (set_stage, migration 0049): two people at once cannot
+  // write a wrong "from" stage into the history.
   async setStage(pid, to, { note = '', visible = true, next_step, due_at } = {}) {
-    const { data: { user } } = await sb.auth.getUser();
-    const p = ok(await sb.from('projects').select('stage').eq('id', pid).single());
-    ok(await sb.from('stage_events').insert({ project_id: pid, from_stage: p.stage, to_stage: to, note, visible_to_client: visible, actor_id: user.id }));
-    const patch = { due_at: due_at !== undefined ? due_at : null };
-    if (next_step !== undefined) patch.next_step = next_step;
-    ok(await sb.from('projects').update(patch).eq('id', pid));
+    ok(await sb.rpc('set_stage', { pid, to_stage: to, note, visible, next_step: next_step === undefined ? null : next_step, due_at: due_at !== undefined ? due_at : null }));
+    emit();
   },
 
   async updateProject(pid, patch) {
     const allowed = {}; ['assignee_id', 'next_step', 'due_at', 'delivery_at', 'install_at'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; });
-    ok(await sb.from('projects').update(allowed).eq('id', pid));
+    ok(await sb.from('projects').update(allowed).eq('id', pid)); emit();
   },
-  async updateInternal(pid, patch) { ok(await sb.from('project_internal').update({ ...patch, updated_at: new Date().toISOString() }).eq('project_id', pid)); },
+  async updateInternal(pid, patch) { ok(await sb.from('project_internal').update({ ...patch, updated_at: new Date().toISOString() }).eq('project_id', pid)); emit(); },
   async listStaff() { return ok(await sb.from('profiles').select(PROFILE).eq('role', 'staff')); },
 
   async notifications() {

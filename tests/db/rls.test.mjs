@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -728,7 +728,7 @@ test('tasks: staff plan and close them on a project or an enquiry; nobody else s
   assert.equal((await db.query('select count(*)::int n from public.tasks where done_at is null')).rows[0].n, 1);
   await fails(`insert into public.tasks (title) values ('   ')`);
   await fails(`insert into public.tasks (title, kind) values ('x', 'party')`);
-  await fails(`update public.tasks set project_id = null where id = $1`, [t.id]); // where a task hangs is set once
+  await fails(`update public.tasks set created_by = null where id = $1`, [t.id]); // the author stays (0049: a task may move)
   for (const who of [A, C, O]) {
     await as(who);
     assert.equal((await db.query('select * from public.tasks')).rows.length, 0);
@@ -762,7 +762,7 @@ test('owner dashboard: enquiries, quotes, wins, reply time, money and workload i
   assert.equal(d.quoted, 1);
   assert.deepEqual(d.enquiries_by_source, [{ source: 'referral', n: 1 }]);
   assert.equal(Number(d.paid), 6000); assert.equal(Number(d.overdue), 14000);
-  assert.equal(d.workload.find((w) => w.id === S).tasks, 1);
+  assert.equal(d.workload.find((w) => w.id === S).tasks, 4); // one by hand, three from the stage playbook (0050)
   for (const who of [A, C, O]) { await as(who); await fails('select public.owner_dashboard(90)'); }
   await db.exec('reset role'); await db.exec('set role anon');
   await fails('select public.owner_dashboard(90)');
@@ -830,4 +830,132 @@ test('cold list: removed after 12 months without contact, except do-not-contact 
   const left = (await db.query('select id from public.companies')).rows.map((x) => x.id);
   for (const id of [dnc, recent, onProject, fresh]) assert.ok(left.includes(id));
   assert.ok(!left.includes(old));
+});
+
+// 0049 (projects audit 26.11.2026): links can be changed, and every change is logged; an enquiry joins a project;
+// duplicates merge; the stage changes in one step; nobody but staff can do any of it.
+test('project links: move, log, attach an enquiry, merge duplicates, set the stage; staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  const Q = (await db.query(`insert into public.projects (name, owner_id) values ('Mews', $1) returning id`, [A])).rows[0].id;
+  await db.exec('reset role');
+  const R = (await db.query(`insert into public.contact_requests (name, email, consent_at, message, openings) values ('Anna', 'new.person@x.com', now(), 'Second site', '[{"ref":"","system":"windows","width_mm":1200,"height_mm":1400,"qty":2}]') returning id`)).rows[0].id;
+  const R2 = (await db.query(`insert into public.contact_requests (name, email, consent_at) values ('New', 'new@x.com', now()) returning id`)).rows[0].id;
+  await as(S);
+  // A supplier quote moves to another project; the move is logged on both projects, with who did it.
+  const sq = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Okna', 100) returning id`, [P])).rows[0].id;
+  await db.query('update public.supplier_quotes set project_id = $1 where id = $2', [Q, sq]);
+  const tk = (await db.query(`insert into public.tasks (title, request_id) values ('Reply', $1) returning id`, [R])).rows[0].id;
+  const log = (await db.query(`select project_id, field, actor_id from public.crm_log where entity = 'supplier_quote'`)).rows;
+  assert.equal(log.length, 2); assert.ok(log.every((l) => l.actor_id === S));
+  // People on a project, the assignee change and waiting-on are logged too.
+  const co = (await db.query(`insert into public.companies (name, kind) values ('JSA', 'architect') returning id`)).rows[0].id;
+  const co2 = (await db.query(`insert into public.companies (name, kind, source, phone) values ('J.S.A.', 'architect', 'cold', '0207') returning id`)).rows[0].id;
+  const pe = (await db.query(`insert into public.people (company_id, full_name, email) values ($1, 'Jane', 'jane@jsa.x') returning id`, [co2])).rows[0].id;
+  const pe2 = (await db.query(`insert into public.people (full_name, email, phone) values ('Jane S', 'jane@jsa.x', '07') returning id`)).rows[0].id;
+  await db.query(`insert into public.project_people (project_id, person_id, role, is_main) values ($1, $2, 'decision', true)`, [P, pe]);
+  await db.query(`insert into public.project_companies (project_id, company_id, role) values ($1, $2, 'architect')`, [P, co2]);
+  await fails(`insert into public.project_people (project_id, person_id, role) values ($1, $2, 'boss')`, [Q, pe]);
+  await db.query('update public.projects set assignee_id = $1 where id = $2', [S, P]);
+  await db.query(`update public.project_internal set waiting_on = 'supplier', waiting_note = 'Okna drawings', chase_on = current_date where project_id = $1`, [P]);
+  const fields = (await db.query('select entity, field from public.crm_log where project_id = $1 order by id', [P])).rows.map((r) => `${r.entity}.${r.field}`);
+  for (const f of ['supplier_quote.project_id', 'person.added', 'company.added', 'project.assignee_id', 'project.waiting_on']) assert.ok(fields.includes(f), f);
+  // The enquiry joins the existing project: no new project, its openings and task come along, the writer is invited.
+  const before = (await db.query('select count(*)::int n from public.projects')).rows[0].n;
+  await db.query('select public.attach_enquiry($1, $2)', [R, P]);
+  assert.equal((await db.query('select count(*)::int n from public.projects')).rows[0].n, before);
+  assert.equal((await db.query('select project_id from public.tasks where id = $1', [tk])).rows[0].project_id, P);
+  assert.equal((await db.query('select count(*)::int n from public.openings where project_id = $1', [P])).rows[0].n, 1);
+  assert.equal((await db.query('select status from public.contact_requests where id = $1', [R])).rows[0].status, 'converted');
+  assert.equal((await db.query('select count(*)::int n from public.messages where project_id = $1 and internal', [P])).rows[0].n, 1);
+  assert.equal((await db.query(`select count(*)::int n from public.project_invites where project_id = $1 and email = 'new.person@x.com'`, [P])).rows[0].n, 1);
+  await fails('select public.attach_enquiry($1, $2)', [R, Q]); // once only
+  await db.query('select public.link_enquiry_contact($1, $2, $3)', [R2, co2, pe]);
+  // Merging: links and people move, nothing is lost, the merge is logged.
+  await db.query('select public.merge_companies($1, $2)', [co, co2]);
+  assert.equal((await db.query('select company_id from public.people where id = $1', [pe])).rows[0].company_id, co);
+  assert.equal((await db.query('select company_id from public.contact_requests where id = $1', [R2])).rows[0].company_id, co);
+  assert.equal((await db.query('select count(*)::int n from public.project_companies where company_id = $1', [co])).rows[0].n, 1);
+  assert.equal((await db.query('select phone from public.companies where id = $1', [co])).rows[0].phone, '0207');
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where field = 'merged'`)).rows[0].n, 1);
+  await db.query('select public.merge_people($1, $2)', [pe, pe2]);
+  assert.equal((await db.query('select phone from public.people where id = $1', [pe])).rows[0].phone, '07');
+  assert.equal((await db.query('select count(*)::int n from public.people')).rows[0].n, 1);
+  await fails('select public.merge_people($1, $1)', [pe]);
+  // The stage: one call, from the stage the row has.
+  await db.query(`select public.set_stage($1, 'in_review', 'Looking', false, 'We are reviewing', now() + interval '2 days')`, [P]);
+  const ev = (await db.query(`select from_stage, visible_to_client from public.stage_events where project_id = $1 and to_stage = 'in_review'`, [P])).rows[0];
+  assert.equal(ev.from_stage, 'submitted'); assert.equal(ev.visible_to_client, false);
+  const pr = (await db.query('select stage, next_step from public.projects where id = $1', [P])).rows[0];
+  assert.equal(pr.stage, 'in_review'); assert.equal(pr.next_step, 'We are reviewing');
+  // Nobody else sees or does any of it.
+  for (const who of [A, C, O]) {
+    await as(who);
+    for (const t of ['crm_log', 'project_people']) assert.equal((await db.query(`select * from public.${t}`)).rows.length, 0);
+    await fails('select public.attach_enquiry($1, $2)', [R2, P]);
+    await fails('select public.merge_companies($1, $2)', [co, co]);
+    await fails(`select public.set_stage($1, 'accepted')`, [P]);
+    await fails('select public.link_enquiry_contact($1, null, null)', [R2]);
+  }
+  await db.exec('reset role'); await db.exec('set role anon');
+  await fails('select * from public.crm_log');
+  // The cold-list deletion spares a person who is on a project.
+  await db.exec('reset role');
+  const cold = (await db.query(`insert into public.companies (name, source, created_at) values ('Cold Ltd', 'cold', now() - interval '13 months') returning id`)).rows[0].id;
+  const cp = (await db.query(`insert into public.people (company_id, full_name) values ($1, 'On site') returning id`, [cold])).rows[0].id;
+  await db.query('insert into public.project_people (project_id, person_id) values ($1, $2)', [Q, cp]);
+  assert.deepEqual((await db.query('select public.purge_cold_prospects() r')).rows[0].r, { people: 0, companies: 0 });
+});
+
+// 0050 (projects audit 26.11.2026, teamwork): a stage starts its tasks once; the team hears about what is theirs;
+// bookings for the calendar; none of it reaches a client.
+test('team work: the stage playbook, team notifications, mentions and bookings; staff only', async () => {
+  const { db, as, fails } = await setup();
+  const K = '66666666-6666-6666-6666-666666666666'; // a second staff member
+  await db.query(`insert into auth.users values ($1, 'kate@bp.com', '{"full_name":"Kate Nowak"}')`, [K]);
+  await db.query(`update public.profiles set role = 'staff' where id = $1`, [K]);
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Hartley', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  assert.ok((await db.query('select count(*)::int n from public.stage_playbook')).rows[0].n >= 10);
+  // Handing the project to Kate tells Kate (not the person who did it, and never the client).
+  await db.query('update public.projects set assignee_id = $1 where id = $2', [K, P]);
+  const kateNotes = async (type) => { await db.exec('reset role'); const n = (await db.query(`select count(*)::int n from public.notifications where user_id = $1 and type = $2`, [K, type])).rows[0].n; await as(S); return n; }; // notifications are read by their owner only
+  assert.equal(await kateNotes('assigned'), 1);
+  // Accepted: the playbook's tasks land on Kate, dated on working days, once only even if the stage comes back.
+  await db.query(`select public.set_stage($1, 'accepted', '', false, null, null)`, [P]);
+  const tasks = (await db.query(`select title, assignee_id, due_on, extract(isodow from due_on)::int dow from public.tasks where project_id = $1`, [P])).rows;
+  assert.equal(tasks.length, 2);
+  assert.ok(tasks.every((t) => t.assignee_id === K && t.dow < 6));
+  assert.equal(await kateNotes('task'), 2);
+  await db.query(`select public.set_stage($1, 'in_review', '', false, null, null)`, [P]);
+  await db.query(`select public.set_stage($1, 'accepted', '', false, null, null)`, [P]);
+  assert.equal((await db.query(`select count(*)::int n from public.tasks where project_id = $1 and template_id is not null and title like 'Book the survey%'`, [P])).rows[0].n, 1);
+  // A switched-off playbook entry starts nothing; a task given to oneself notifies nobody.
+  await db.query(`update public.stage_playbook set active = false where to_stage = 'survey'`);
+  await db.query(`select public.set_stage($1, 'survey', '', false, null, null)`, [P]);
+  assert.equal((await db.query(`select count(*)::int n from public.tasks t join public.stage_playbook b on b.id = t.template_id where b.to_stage = 'survey'`)).rows[0].n, 0);
+  await db.query(`insert into public.tasks (title, assignee_id, project_id) values ('Mine', $1, $2)`, [S, P]);
+  assert.equal((await db.query(`select count(*)::int n from public.notifications where type = 'task'`)).rows[0].n, 0); // S reads only their own
+  // @Kate in an internal note reaches Kate; in a message to the client it does not.
+  await db.query(`insert into public.messages (project_id, author_id, body, internal) values ($1, $2, 'Can you call them, @kate?', true)`, [P, S]);
+  await db.query(`insert into public.messages (project_id, author_id, body, internal) values ($1, $2, 'Hello, @Kate here', false)`, [P, S]);
+  await db.query(`insert into public.messages (project_id, author_id, body, internal) values ($1, $2, 'email@katering.com', true)`, [P, S]);
+  assert.equal(await kateNotes('mention'), 1);
+  // Bookings: dated, with a crew; the end is never before the start; logged on the project.
+  const crew = (await db.query(`insert into public.companies (name, kind) values ('Fit Crew', 'contractor') returning id`)).rows[0].id;
+  await db.query(`insert into public.project_bookings (project_id, kind, starts_on, ends_on, crew_company_id) values ($1, 'install', current_date + 7, current_date + 8, $2)`, [P, crew]);
+  await fails(`insert into public.project_bookings (project_id, starts_on, ends_on) values ($1, current_date, current_date - 1)`, [P]);
+  await fails(`insert into public.project_bookings (project_id, kind, starts_on, ends_on) values ($1, 'party', current_date, current_date)`, [P]);
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where entity = 'booking' and field = 'added'`)).rows[0].n, 1);
+  // Nobody else sees the playbook, the bookings or the team's notifications.
+  for (const who of [A, C, O]) {
+    await as(who);
+    for (const t of ['stage_playbook', 'project_bookings']) assert.equal((await db.query(`select * from public.${t}`)).rows.length, 0);
+    await fails(`insert into public.project_bookings (project_id, starts_on, ends_on) values ($1, current_date, current_date)`, [P]);
+    assert.equal((await db.query(`select * from public.notifications where type in ('assigned', 'task', 'mention')`)).rows.length, 0);
+  }
+  await db.exec('reset role');
+  assert.equal((await db.query(`select public.add_workdays('2026-11-27'::date, 1) d`)).rows[0].d.toISOString().slice(0, 10), '2026-11-30'); // Friday + 1 = Monday
 });

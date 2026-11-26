@@ -37,7 +37,7 @@ export async function renderAppBar(el, user, area) {
             <div class="notif-panel" id="notif-panel" hidden>
               <div class="notif-head"><strong>${tr('Notifications')}</strong>${unread ? `<button type="button" class="linkish" data-read-all>${tr('Mark all read')}</button>` : ''}</div>
               <ul class="notif-list">${notes.length ? notes.map((n) => `
-                <li class="${n.read_at ? '' : 'is-unread'}"><a href="${area === 'admin' ? 'admin.html' : 'portal.html'}#/p/${esc(n.project_id)}" data-note="${esc(n.id)}">
+                <li class="${n.read_at ? '' : 'is-unread'}"><a href="${area === 'admin' ? 'admin.html' : 'portal.html'}#/${n.project_id ? `p/${esc(n.project_id)}` : area === 'admin' ? 'my' : ''}" data-note="${esc(n.id)}">
                   <span class="notif-title">${esc(n.title)}</span>${n.body ? `<span class="notif-body">${esc(n.body)}</span>` : ''}<span class="notif-time">${ago(n.created_at)}</span></a></li>`).join('') : `<li class="notif-empty">${tr('Nothing yet.')}</li>`}
               </ul>
             </div>

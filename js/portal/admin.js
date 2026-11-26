@@ -2,20 +2,20 @@
 import { store } from './store.js';
 import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
-import { route, renderAppBar, pipeline, nowCard, tabs, overviewPanel, documentsPanel, changesPanel, messagesPanel, timelinePanel, bindDetail, counts } from './ui.js';
-import { quotesView, projectQuotes, newQuoteFor, sentQuotes, findQuotes } from './quotes.js';
-import { loadCosts, costsPanel, bindCosts } from './costs.js';
-import { loadMail, mailPanel, bindMail, mailView } from './mail.js';
+import { route, renderAppBar } from './ui.js';
+import { quotesView, sentQuotes, findQuotes } from './quotes.js';
+import { mailView } from './mail.js';
 import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
 import { dashboardView, SOURCES } from './dashboard.js';
 import { replyBox, bindEnquiryReply } from './enquiry-reply.js';
-import { companiesView, companyView, loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, KINDS as CO_KINDS } from './companies.js';
+import { linker, bindLinkers, picked, linkerBusy } from './linker.js';
+import { projectView, WAITING } from './project.js';
+import { myWorkView, calendarView, playbookView } from './work.js';
+import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
 const app = $('#app');
 const bar = $('#appbar');
 let user = null;
-let activeTab = 'messages';
-let lastId = null;
 // Search text per view: a search typed on the board must not silently filter the enquiries (audit 24.11.2026).
 const queries = { board: '', enquiries: '' };
 let reqFilter = 'open';
@@ -25,8 +25,6 @@ const REQ_STATUS = { new: 'New', replied: 'Replied', converted: 'Now a project',
 const REQ_ROLES = { architect: 'Architect / designer', developer: 'Developer / contractor', homeowner: 'Homeowner', other: 'Other' };
 const REQ_TOPICS = { quote: 'A quotation', review: 'A drawing / schedule review', budget: 'A quotation for a scheme', 'spec-pack': 'Technical files (old form)', samples: 'Samples', cpd: 'Training session (old form)', pqq: 'The pre-qualification pack', founding: 'A project for a case study', question: 'Just a question' };
 const REQ_MATERIALS = { alu: 'Aluminium', timber: 'Timber', pvc: 'PVC', alutimber: 'Timber-aluminium', unsure: 'Not sure' };
-// Linked projects take their stage from HubSpot (migration 0019); staff open the deal there.
-const HUBSPOT_DEAL = 'https://app-eu1.hubspot.com/contacts/149668825/record/0-3/';
 // What happened to the client on conversion (convert_enquiry, migration 0024).
 const CONVERTED = {
   linked: () => 'Project created. The client’s account owns it.',
@@ -37,14 +35,6 @@ const CONVERTED = {
 // show the waiting client instead of that staff profile (leads bot test, 01.11.2026).
 const clientOf = (p) => (p.owner && p.owner.role !== 'staff' ? p.owner : null);
 const clientName = (p) => { const c = clientOf(p); return c ? c.company || c.full_name || '' : ''; };
-const headClient = (p, invites = []) => {
-  const c = clientOf(p);
-  if (c) return `${esc(c.full_name || '')}${c.company ? `, ${esc(c.company)}` : ''}${c.account_type ? ` · ${esc(tr(ACCOUNT_TYPES[c.account_type] || ''))}` : ''}`;
-  const inv = invites.find((i) => i.make_owner) || invites[0];
-  if (!inv) return esc(tr('No client yet'));
-  // A converted enquiry reserves the project for the client's email; it is an invitation only once emailed.
-  return esc(tr(inv.make_owner && !inv.emailed_at ? 'Awaiting client sign-up: {email}' : 'Client invited: {email}', { email: inv.email }));
-};
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 let enqFocused = null; // the enquiry a #/enquiries/<id> link already opened and scrolled to
 const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
@@ -57,7 +47,7 @@ async function render(fromStore = false) {
   if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + (/^#\/[\w/-]*$/.test(location.hash) ? location.hash : ''))}`; return; }
   if (user.role !== 'staff') { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr('This area is for Brick & Pane staff.'))} <a href="portal.html">${tr('Go to your projects')}</a>.</p></div>`; await renderAppBar(bar, user, 'portal'); return; }
   // A live update redraws the page: fields the user has changed keep their values (lists too), others refill empty ones.
-  const keep = {}, dirty = new Set(); if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); });
+  const keep = {}, dirty = new Set(), ticks = {}; if (fromStore) $$('textarea[id], input[id], select[id]', app).forEach((el) => { if (el.type !== 'file' && el.type !== 'checkbox' && el.value) keep[el.id] = el.value; if (el.dataset.dirty) dirty.add(el.id); if (el.type === 'checkbox' && el.dataset.dirty) ticks[el.id] = el.checked; });
   const focused = document.activeElement?.id;
   // The app bar is drawn again on every update: what someone is typing in its search must survive that.
   const gq = $('#crm-gq', bar), typed = gq ? { v: gq.value, focus: document.activeElement === gq, at: gq.selectionStart } : null;
@@ -65,8 +55,10 @@ async function render(fromStore = false) {
   const r = route();
   // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
   if (fromStore && r.name === 'quotes') return;
+  // Someone is picking in a search box: the redraw waits until they have picked (it would close the list).
+  if (fromStore && linkerBusy()) { clearTimeout(render.wait); render.wait = setTimeout(() => render(true), 1500); return; }
   try {
-    if (r.name === 'p' && r.id) await detail(r.id);
+    if (r.name === 'p' && r.id) await projectView(app, r.id, { user, listRequests, REQ_TOPICS, bindReqFiles });
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
     else if (r.name === 'enquiries') await enquiries();
     else if (r.name === 'companies') await companiesView(app, viewSwitch('companies', await listRequests()));
@@ -74,19 +66,32 @@ async function render(fromStore = false) {
     else if (r.name === 'owner') await dashboardView(app, viewSwitch('owner', await listRequests()));
     else if (r.name === 'search') await searchView(decodeURIComponent(r.id || ''));
     else if (r.name === 'today') await today();
+    else if (r.name === 'my') await myWorkView(app, viewSwitch('my', await listRequests()), user);
+    else if (r.name === 'calendar') await calendarView(app, viewSwitch('calendar', await listRequests()), user);
+    else if (r.name === 'playbook') await playbookView(app, viewSwitch('', await listRequests()));
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else if (r.name === 'board' || r.name === 'list') await board(r.name === 'list');
     else await today(); // the start screen (owner, 25.11.2026)
   } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
   Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && (dirty.has(id) || (!el.value && el.tagName !== 'SELECT'))) { el.value = v; if (dirty.has(id)) el.dataset.dirty = '1'; } });
+  // A box someone ticked (e.g. tell the client) stays ticked through a live redraw.
+  Object.entries(ticks).forEach(([id, on]) => { const el = document.getElementById(id); if (el && el.checked !== on) { el.checked = on; el.dataset.dirty = '1'; el.dispatchEvent(new Event('change', { bubbles: true })); } });
   if (focused) document.getElementById(focused)?.focus();
 }
 
+let boardMine = false, listSort = { by: 'updated', dir: 1 };
 async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
-  const [all, requests] = await Promise.all([store.listProjects(), listRequests()]);
+  const [all, requests, openT] = await Promise.all([store.listProjects(), listRequests(), loadTasks({ open: true })]);
   const q = queries.board.toLowerCase();
-  const projects = q ? all.filter((p) => [p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company].join(' ').toLowerCase().includes(q)) : all;
+  // Projects audit 26.11.2026: mine or everyone's, and the list sorts by any column.
+  const projects = (q ? all.filter((p) => [p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company, p.assignee?.full_name].join(' ').toLowerCase().includes(q)) : all)
+    .filter((p) => !boardMine || p.assignee_id === user.id);
+  const tasksOf = (pid) => (openT || []).filter((t) => t.project_id === pid);
+  const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const SORT = { ref: (p) => p.ref, name: (p) => p.name.toLowerCase(), client: (p) => clientName(p).toLowerCase(), stage: (p) => ALL_STAGES.findIndex((s) => s.id === p.stage), am: (p) => p.assignee?.full_name || '~', due: (p) => p.due_at || '9999', value: (p) => -(Number(p.internal?.value_gbp) || 0), waiting: (p) => p.internal?.waiting_on || '~', updated: (p) => `${9e15 - new Date(p.updated_at).getTime()}` };
+  const sorted = [...projects].sort((a, b) => { const f = SORT[listSort.by] || SORT.updated, x = f(a), y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * listSort.dir; });
+  const th = (k, label) => `<th scope="col" aria-sort="${listSort.by === k ? (listSort.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${tr(label)}${listSort.by === k ? (listSort.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`;
   const open = all.filter((p) => !['completed', 'closed'].includes(p.stage));
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
   const sum = (arr, w = false) => arr.reduce((t, p) => t + (Number(p.internal?.value_gbp) || 0) * (w ? (p.internal?.probability ?? 0) / 100 : 1), 0);
@@ -95,7 +100,8 @@ async function board(asList) {
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
       <span class="kcard-client">${esc(clientName(p))}${clientOf(p)?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
-      <span class="kcard-foot"><span>${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
+      ${p.internal?.waiting_on || tasksOf(p.id).length ? `<span class="kcard-tags">${p.internal?.waiting_on ? `<span class="tag tag-wait">${esc(tr('waiting on {who}', { who: tr(WAITING[p.internal.waiting_on]) }))}</span>` : ''}${tasksOf(p.id).length ? `<span class="tag${tasksOf(p.id).some(taskLate) ? ' tag-late' : ''}">${esc(tr('{n} tasks', { n: tasksOf(p.id).length }))}</span>` : ''}</span>` : ''}
+      <span class="kcard-foot"><span>${p.assignee ? `<span class="avatar" title="${esc(p.assignee.full_name)}">${esc(initials(p.assignee.full_name))}</span> ` : ''}${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
     </a>`;
   app.innerHTML = `
     <div class="container-wide section-tight">
@@ -111,18 +117,22 @@ async function board(asList) {
       </div>
       <div class="board-tools">
         ${viewSwitch(asList ? 'list' : 'board', requests)}
+        <div class="seg" role="group" aria-label="${tr('Show as')}"><a href="#/board" class="${asList ? '' : 'is-on'}" data-as="board">${tr('Board')}</a><a href="#/list" class="${asList ? 'is-on' : ''}" data-as="list">${tr('List')}</a></div>
+        <div class="seg" role="group" aria-label="${tr('Projects of')}"><button type="button" class="${boardMine ? 'is-on' : ''}" aria-pressed="${boardMine}" data-board-mine="1">${tr('Mine')}</button><button type="button" class="${boardMine ? '' : 'is-on'}" aria-pressed="${!boardMine}" data-board-mine="">${tr('Everyone')}</button></div>
         <label class="visually-hidden" for="crm-q">${tr('Search projects')}</label>
         <input id="crm-q" type="search" placeholder="${tr('Search ref, name, client, location')}" value="${esc(queries.board)}">
       </div>
       ${asList ? `
-        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr><th scope="col">${tr('Ref')}</th><th scope="col">${tr('Project')}</th><th scope="col">${tr('Client')}</th><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Account manager')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Value')}</th><th scope="col">${tr('Updated')}</th></tr></thead><tbody>
-          ${projects.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(clientName(p))}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
+        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead><tbody>
+          ${sorted.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(clientName(p))}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.internal?.waiting_on ? esc(tr(WAITING[p.internal.waiting_on])) : '—'}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
           return `<section class="col ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h">${esc(tr(s.staffLabel || s.label))} <span>${items.length}</span></h2>${items.map(card).join('')}</section>`;
         }).join('')}</div>`}
     </div>`;
+  $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
+  $$('[data-sort]', app).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.sort; listSort = { by: k, dir: listSort.by === k ? -listSort.dir : 1 }; board(true); }));
   const qi = $('#crm-q', app);
   qi.addEventListener('input', () => { queries.board = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
 }
@@ -150,7 +160,9 @@ async function today() {
   const last = new Map();
   (mail || []).forEach((m) => (m.projects || []).forEach((pid) => { if (!last.has(pid)) last.set(pid, m); }));
   const answer = mine.filter((p) => last.get(p.id)?.direction === 'in').map((p) => ({ p, m: last.get(p.id) })).sort(oldest((x) => x.m.sent_at));
-  const waiting = mine.filter((p) => stage(p.stage).court === 'you' && daysSince(p.stage_changed_at) >= WAIT_DAYS).sort(oldest((p) => p.stage_changed_at));
+  const waiting = mine.filter((p) => stage(p.stage).court === 'you' && !p.internal?.waiting_on && daysSince(p.stage_changed_at) >= WAIT_DAYS).sort(oldest((p) => p.stage_changed_at));
+  // "Waiting on" with a chase date (migration 0049): today's and the missed ones.
+  const chaseToday = mine.filter((p) => p.internal?.waiting_on && p.internal.chase_on && p.internal.chase_on <= new Date().toISOString().slice(0, 10)).sort(oldest((p) => p.internal.chase_on));
   // Sent quotes: chase after 3 days without an answer, and before they lapse (validity in the next 5 days).
   const chase = sent.filter((x) => daysSince(x.sentAt) >= 3 || (x.validUntil && new Date(`${x.validUntil}T23:59:59`) - Date.now() < 5 * DAY)).sort(oldest((x) => x.sentAt));
   const loose = (mail || []).filter((m) => m.direction === 'in' && !m.dismissed && !(m.projects || []).length).length;
@@ -168,6 +180,7 @@ async function today() {
       return row({ href: `#/quotes/${esc(x.id)}`, title: esc(`${x.reference}${x.customer ? ` · ${x.customer}` : ''}`), sub: `${esc(x.project)}${lapse != null && lapse <= 5 ? ` · <strong>${esc(lapse < 0 ? tr('expired') : tr('valid {n} more days', { n: lapse }))}</strong>` : ''}`, age: days(x.sentAt), late: daysSince(x.sentAt) >= 7 || (lapse != null && lapse <= 5) });
     }, 'No quote waiting for an answer.'],
     ['soon', 'Due in the next 3 days', soon, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Due {date}', { date: fmtDay(p.due_at) })) }), 'Nothing due in the next 3 days.'],
+    ['chase', 'Chase today (waiting on someone)', chaseToday, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${esc(tr('Waiting on {who}', { who: tr(WAITING[p.internal.waiting_on]) }))}${p.internal.waiting_note ? `: ${esc(p.internal.waiting_note)}` : ''}`, age: esc(fmtDay(p.internal.chase_on)), late: p.internal.chase_on < new Date().toISOString().slice(0, 10) }), 'Nobody to chase today.'],
     ['waiting', `Waiting on the client for ${WAIT_DAYS}+ days: chase`, waiting, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: stageBadge(p.stage, 'staff'), age: days(p.stage_changed_at) }), 'No client has kept us waiting that long.'],
   ];
   app.innerHTML = `
@@ -198,7 +211,8 @@ async function today() {
 function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('board', '#/board', tr('Board'))}${link('list', '#/list', tr('List'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('quotes', '#/quotes', tr('Quotes'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
+  // Projects audit 26.11.2026: My work and the Calendar join; Board and List are one "Projects" place (its own switch).
+  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('my', '#/my', tr('My work'))}${link(on === 'list' ? 'list' : 'board', on === 'list' ? '#/list' : '#/board', tr('Projects'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('calendar', '#/calendar', tr('Calendar'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('quotes', '#/quotes', tr('Quotes'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
@@ -229,8 +243,29 @@ function bindSearch(typed) {
 
 async function enquiries() {
   document.title = `${tr('Enquiries')} | CRM`;
+  const [projectsAll, peopleAll, companiesAll] = await Promise.all([store.listProjects().catch(() => []), store.listPeople ? store.listPeople().catch(() => []) : [], store.listCompanies ? store.listCompanies().catch(() => []) : []]);
   const [all, tasks, staff] = await Promise.all([listRequests(), loadTasks({}), store.listStaff().catch(() => [])]);
   const tasksOf = (rid) => (tasks || []).filter((t) => t.request_id === rid);
+  // Projects audit 26.11.2026: a known client's next enquiry joins their project instead of making a duplicate.
+  const dom = (e) => { const d = String(e || '').toLowerCase().split('@')[1] || ''; return /^(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|aol|btinternet|sky|wp|onet|o2|interia)\./.test(d) ? '' : d; };
+  const pOf = (id) => projectsAll.find((p) => p.id === id);
+  const likely = (r) => {
+    const ids = new Set(all.filter((x) => x.id !== r.id && x.project_id && (x.email.toLowerCase() === r.email.toLowerCase() || (dom(r.email) && dom(x.email) === dom(r.email)))).map((x) => x.project_id));
+    const name = (r.company || '').trim().toLowerCase();
+    if (name.length >= 3) projectsAll.filter((p) => [p.owner?.company, p.name].some((v) => String(v || '').toLowerCase().includes(name))).forEach((p) => ids.add(p.id));
+    return [...ids].map(pOf).filter((p) => p && !['completed', 'closed'].includes(p.stage)).slice(0, 4);
+  };
+  const attachBox = (r) => { const sug = likely(r); return `<form class="ctl enq-attach" data-req-attach novalidate><h3 class="panel-h">${tr('Or add it to an existing project')}</h3>
+    ${sug.length ? `<p class="enq-sug"><span class="note">${tr('Same client or company:')}</span> ${sug.map((p) => `<button type="button" class="btn btn-sm btn-ghost" data-req-attach-to="${esc(p.id)}">${esc(p.ref)} · ${esc(p.name)}</button>`).join(' ')}</p>` : ''}
+    ${linker({ id: `ra-${r.id}`, label: tr('Project'), kinds: ['project'], name: 'project', placeholder: tr('Type a reference, a name or a site…') })}
+    <button class="btn btn-sm btn-ghost" type="submit">${tr('Add to this project')}</button>
+    <span class="hint">${tr('Its openings, tasks and message join the project; the writer is invited to it. No new project is made.')}</span></form>`; };
+  const contactBox = (r) => {
+    const pe = r.person_id && peopleAll.find((p) => p.id === r.person_id), co = r.company_id && companiesAll.find((c) => c.id === r.company_id);
+    if (pe || co) return `<p class="enq-contact note">${tr('Contact:')} ${pe ? `<strong>${esc(pe.full_name)}</strong>` : ''}${co ? ` · <a href="#/company/${esc(co.id)}">${esc(co.name)}</a>` : ''}</p>`;
+    const known = peopleAll.find((p) => p.email && p.email.toLowerCase() === r.email.toLowerCase());
+    return `<p class="enq-contact"><button type="button" class="btn btn-sm btn-ghost" data-req-contact>${tr(known ? 'Link to {name} in Companies' : 'Save as a contact in Companies', { name: known?.full_name || '' })}</button></p>`;
+  };
   const focus = route().id || null; // #/enquiries/<id>: that enquiry is always listed and opened
   const q = queries.enquiries.toLowerCase();
   const shown = all
@@ -269,6 +304,8 @@ async function enquiries() {
         <p class="enq-convert">${r.project_id
           ? `<a class="btn btn-sm btn-ghost" href="#/p/${esc(r.project_id)}">${tr('Open the project')}</a>`
           : `<button type="button" class="btn btn-sm" data-req-convert>${tr('Turn into a project')}</button> <label class="enq-invite"><input type="checkbox" data-req-invite checked> ${tr('Email the client an invitation to the portal')}</label> <span class="note">${tr('Copies the details and openings into a portal project. Without an account on this email, the client becomes its owner when they sign up with it.')}</span>`}</p>
+        ${r.project_id ? '' : attachBox(r)}
+        ${contactBox(r)}
         ${r.files?.length || r.files_link ? `<p class="enq-files">${(r.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${r.files_link ? ` <a href="${esc(r.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
         ${replyBox(r)}
         <form class="ctl" data-req-form>
@@ -313,6 +350,30 @@ async function enquiries() {
     e.preventDefault();
     try { await store.updateRequest(f.closest('[data-req]').dataset.req, { status: f.status.value, staff_note: f.staff_note.value.trim() }); toast(tr('Saved.')); await enquiries(); } catch (err) { toast(tr(err.message)); }
   }));
+  bindLinkers(app);
+  const attach = async (box, pid) => {
+    try { await store.attachEnquiry(box.dataset.req, pid); toast(tr('Added to the project.')); location.hash = `#/p/${pid}`; } catch (err) { toast(tr(err.message)); }
+  };
+  $$('[data-req-attach]', app).forEach((f) => f.addEventListener('submit', (e) => {
+    e.preventDefault(); const to = picked(f, 'project');
+    if (!to) { $('[data-linker-input]', f).focus(); toast(tr('Choose the project from the list.')); return; }
+    attach(f.closest('[data-req]'), to.id);
+  }));
+  $$('[data-req-attach-to]', app).forEach((b) => b.addEventListener('click', () => attach(b.closest('[data-req]'), b.dataset.reqAttachTo)));
+  // The person who wrote (and their company) become a contact, or the existing contact with that email is linked.
+  const KIND = { architect: 'architect', developer: 'developer', homeowner: 'homeowner' };
+  $$('[data-req-contact]', app).forEach((b) => b.addEventListener('click', async () => {
+    const r = all.find((x) => x.id === b.closest('[data-req]').dataset.req); if (!r) return; b.disabled = true;
+    try {
+      let pe = peopleAll.find((p) => p.email && p.email.toLowerCase() === r.email.toLowerCase());
+      let co = pe?.company_id ? companiesAll.find((c) => c.id === pe.company_id) : null;
+      if (!co && r.company?.trim()) co = companiesAll.find((c) => c.name.trim().toLowerCase() === r.company.trim().toLowerCase()) || await store.saveCompany({ name: r.company.trim(), kind: KIND[r.role] || 'other', source: 'website' });
+      if (!pe) pe = await store.savePerson({ full_name: r.name || r.email, email: r.email, phone: r.phone || '', company_id: co?.id || null });
+      else if (co && !pe.company_id) await store.savePerson({ id: pe.id, company_id: co.id });
+      await store.linkEnquiryContact(r.id, co?.id || null, pe.id);
+      toast(tr('Saved as a contact.'));
+    } catch (err) { b.disabled = false; toast(tr(err.message)); }
+  }));
   $$('[data-req-convert]', app).forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
     const box = b.closest('[data-req]');
@@ -325,187 +386,11 @@ async function enquiries() {
   bindReqFiles();
 }
 
-// Which side panels of the project card are open; a live redraw keeps them as the user left them.
-const openFolds = new Set();
-const keyNumbers = (p, d, { margin }) => {
-  const m = margin || {};
-  const sale = m.sale_gbp ?? d.internal?.value_gbp;
-  const inStage = Math.floor((Date.now() - new Date(p.stage_changed_at).getTime()) / 86400e3);
-  const due = isOverdue(p) ? `<strong class="kn-late">${esc(tr('Overdue {date}', { date: fmtDay(p.due_at) }))}</strong>` : p.due_at ? esc(fmtDay(p.due_at)) : '—';
-  const item = (label, value) => `<div><dt>${tr(label)}</dt><dd>${value}</dd></div>`;
-  return `<dl class="key-numbers">
-    ${item('Stage', `${stageBadge(p.stage, 'staff')} <span class="note">${esc(tr('{n} d', { n: inStage }))}</span>`)}
-    ${item('Due', due)}
-    ${item('Value', sale == null || sale === '' ? '—' : esc(fmtMoney(sale)))}
-    ${item('Margin', m.margin_gbp == null ? '—' : !Number(m.cost_gbp) ? `<span class="note">${tr('no costs entered')}</span>` : `${esc(fmtMoney(m.margin_gbp))}${m.margin_pct == null ? '' : ` (${esc(String(m.margin_pct))}%)`}`)}
-    ${item('Account manager', esc(p.assignee?.full_name || tr('Unassigned')))}
-  </dl>`;
-};
-
+// Files sent with an enquiry: opened through a short-lived signed link.
 function bindReqFiles() {
   $$('[data-req-file]', app).forEach((b) => b.addEventListener('click', async () => {
     try { const url = await store.requestFileUrl(b.dataset.reqFile); if (url) open(url, '_blank', 'noopener'); else toast(tr('Files are not stored in demo mode.')); } catch (err) { toast(tr(err.message)); }
   }));
-}
-
-async function detail(id) {
-  if (id !== lastId) { activeTab = 'messages'; lastId = id; }
-  const [d, staff, costs, mail, pq, reqs, tasks, pco] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id }), loadProjectCompanies(id)]);
-  const openTasks = (tasks || []).filter((t) => !t.done_at), lateTasks = openTasks.filter(taskLate).length;
-  // The enquiry the project came from (audit, phase 1): what the client wrote and sent, on the card itself.
-  const src = (reqs || []).find((r) => r.project_id === id) || null;
-  const p = d.project;
-  document.title = `${p.ref} · ${p.name} | CRM`;
-  const nextIdx = STAGES.findIndex((s) => s.id === p.stage) + 1;
-  const suggested = STAGES[nextIdx]?.id || p.stage;
-  app.innerHTML = `
-    <div class="container section-tight">
-      <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/board">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
-      <div class="detail-head">
-        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location)} · ${headClient(p, d.invites)}</p></div>
-      </div>
-      ${keyNumbers(p, d, costs)}
-      <div class="crm-grid">
-        <div class="crm-main">
-          ${nowCard(p, 'staff')}
-          <section class="ctl pq" data-project-quotes>
-            <div class="pq-head"><h2 class="panel-h">${tr('Quotes')}</h2><button type="button" class="btn btn-sm" data-new-quote>+ ${tr('New quote')}</button></div>
-            ${pq.length ? `<ul class="pq-list">${pq.map((x) => `<li><a href="#/quotes/${esc(x.id)}">${esc(x.reference)}${x.revision && x.revision !== '00' ? ` rev ${esc(x.revision)}` : ''}</a> <span class="tag">${esc(x.statusName)}</span> <span class="pq-total">${esc(fmtMoney(x.total))}</span></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote yet. A new one takes the client, the site and the openings from this project.')}</p>`}
-          </section>
-          ${pipeline(p, d.events, 'staff')}
-          ${tabs(activeTab, counts(d, 'staff', user))}
-          <div class="tabpanel" role="tabpanel" id="panel-${activeTab}" aria-labelledby="tab-${activeTab}">
-            ${activeTab === 'documents' ? documentsPanel(d, 'staff', user) : activeTab === 'changes' ? changesPanel(d, 'staff', user) : activeTab === 'messages' ? messagesPanel(d, user) : activeTab === 'timeline' ? timelinePanel(d, 'staff') : overviewPanel(d, 'staff', 'staff', user)}
-          </div>
-          ${mailPanel(mail)}
-        </div>
-        <aside class="crm-side">
-          ${src ? `<details class="ctl fold" data-fold="enquiry" ${openFolds.has('enquiry') ? 'open' : ''}><summary class="panel-h">${tr('Source enquiry')}</summary><div class="fold-body enq-src">
-            <p class="note">${esc(fmtDate(src.created_at))} · ${esc(tr(REQ_TOPICS[src.topic] || src.topic || ''))}${src.ref ? ` · ${esc(src.ref)}` : ''}</p>
-            ${src.message ? `<p class="enq-msg">${esc(src.message)}</p>` : ''}
-            ${src.files?.length || src.files_link ? `<p class="enq-files">${(src.files || []).map((f) => `<button type="button" class="btn btn-sm btn-ghost" data-req-file="${esc(f)}">${esc(f.split('/').pop())}</button>`).join(' ')}${src.files_link ? ` <a href="${esc(src.files_link)}" target="_blank" rel="noopener noreferrer">${tr('Link to larger files')}</a>` : ''}</p>` : ''}
-            <a class="note" href="#/enquiries">${tr('All enquiries')}</a></div></details>` : ''}
-          <form class="ctl" data-stage novalidate>
-            <h2 class="panel-h">${tr('Move stage')}</h2>
-            <div class="field"><label for="ctl-stage">${tr('New stage')}</label><select id="ctl-stage" name="stage" required><option value="">${tr('Choose the new stage…')}</option>${ALL_STAGES.filter((s) => s.id !== p.stage).map((s) => `<option value="${s.id}">${esc(tr(s.staffLabel || s.label))}${s.id === suggested ? ` ${tr('(next)')}` : ''}</option>`).join('')}</select><span class="hint">${tr('Current:')} ${esc(tr(stage(p.stage).staffLabel || stage(p.stage).label))}</span></div>
-            <div class="field"><label for="ctl-note">${tr('Note to client')}</label><textarea id="ctl-note" name="note" rows="2" placeholder="${tr('e.g. Quotation Q1 is in Documents.')}"></textarea></div>
-            <div class="field"><label for="ctl-next">${tr('Next step (shown to client)')}</label><input id="ctl-next" name="next_step" value="${esc(p.next_step || '')}"></div>
-            <div class="field"><label for="ctl-due">${tr('Next update by')}</label><input id="ctl-due" name="due" type="date" value="${p.due_at ? esc(new Date(p.due_at).toISOString().slice(0, 10)) : ''}"><span class="hint">${tr('Kept as it is unless you change it; blank = no date.')}</span></div>
-            <label class="consent"><input type="checkbox" name="visible"> <span>${tr('Visible to client and notify them')}</span></label>
-            <p class="hint" data-stage-preview>${tr('Only the team sees this change.')}</p>
-            <button class="btn btn-sm" type="submit">${tr('Update stage')}</button>
-          </form>
-
-          <details class="ctl fold" data-fold="dates" ${openFolds.has('dates') ? 'open' : ''}><summary class="panel-h">${tr('Delivery & fitting')}</summary>
-          <form class="fold-body" data-dates>
-            <div class="field-row">
-              <div class="field"><label for="ctl-del">${tr('Delivery')}</label><input id="ctl-del" name="delivery" type="date" value="${p.delivery_at ? p.delivery_at.slice(0, 10) : ''}"></div>
-              <div class="field"><label for="ctl-ins">${tr('Fitting')}</label><input id="ctl-ins" name="install" type="date" value="${p.install_at ? p.install_at.slice(0, 10) : ''}"></div>
-            </div>
-            <button class="btn btn-sm btn-ghost" type="submit">${tr('Save & notify client')}</button>
-          </form></details>
-
-          <details class="ctl fold" data-fold="payment" ${openFolds.has('payment') ? 'open' : ''}><summary class="panel-h">${tr('Payment schedule')}</summary>
-          <form class="fold-body" data-payment>
-            <div class="field"><label for="pay-label">${tr('Stage')}</label><input id="pay-label" name="label" placeholder="${tr('e.g. Deposit')}" required></div>
-            <div class="field-row">
-              <div class="field"><label for="pay-amt">${tr('Amount (£)')}</label><input id="pay-amt" name="amount" type="number" min="0" step="1" required></div>
-              <div class="field"><label for="pay-due">${tr('Due')}</label><input id="pay-due" name="due" type="date"></div>
-            </div>
-            <button class="btn btn-sm btn-ghost" type="submit">${tr('Add payment')}</button>
-          </form></details>
-
-          <details class="ctl fold" data-fold="assign" ${openFolds.has('assign') ? 'open' : ''}><summary class="panel-h">${`${tr('Account manager')}: ${esc(p.assignee?.full_name || tr('Unassigned'))}`}</summary>
-          <form class="fold-body" data-assign>
-            <div class="field"><label for="ctl-owner" class="visually-hidden">${tr('Account manager')}</label><select id="ctl-owner" name="assignee_id"><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></div>
-            <button class="btn btn-sm btn-ghost" type="submit">${tr('Save owner')}</button>
-          </form></details>
-
-          <details class="ctl fold" data-fold="doc" ${openFolds.has('doc') ? 'open' : ''}><summary class="panel-h">${tr('Share a document')}</summary>
-          <form class="fold-body" data-doc>
-            <div class="field"><label for="ctl-file">${tr('File')}</label><input id="ctl-file" name="file" type="file" required></div>
-            <div class="field-row">
-              <div class="field"><label for="ctl-kind">${tr('Type')}</label><select id="ctl-kind" name="kind">${Object.entries(DOC_KINDS).filter(([k]) => k !== 'client_upload').map(([k, v]) => `<option value="${k}">${esc(tr(v))}</option>`).join('')}</select></div>
-              <div class="field"><label for="ctl-ver">${tr('Version')}</label><input id="ctl-ver" name="version" placeholder="Q1 / Rev A"></div>
-            </div>
-            <div class="field"><label for="ctl-title">${tr('Title')}</label><input id="ctl-title" name="title" placeholder="${tr('Defaults to file name')}"></div>
-            <div class="field"><label for="ctl-amt">${tr('Quotation amount (£, ex VAT)')}</label><input id="ctl-amt" name="amount" type="number" min="0" step="1" placeholder="${tr('For quotations')}"></div>
-            <label class="consent"><input type="checkbox" name="approval"> <span>${tr('Ask the client to approve')}</span></label>
-            <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client')}</span></label>
-            <button class="btn btn-sm" type="submit">${tr('Upload & notify')}</button>
-          </form></details>
-
-          <details class="ctl fold" data-fold="internal" ${openFolds.has('internal') ? 'open' : ''}><summary class="panel-h">${`${tr('Commercial')} <span class="tag">${tr('staff only')}</span>`}</summary>
-          <form class="fold-body" data-internal>
-            <div class="field-row">
-              <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
-              <div class="field"><label for="ctl-prob">${tr('Probability (%)')}</label><input id="ctl-prob" name="probability" type="number" min="0" max="100" step="5" value="${esc(d.internal?.probability ?? '')}"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label for="ctl-src">${tr('Source')}</label><select id="ctl-src" name="source"><option value="">${tr('Not set')}</option>${Object.entries(SOURCES).filter(([k]) => k !== 'unknown').map(([k, v]) => `<option value="${k}" ${d.internal?.source === k ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></div>
-              <div class="field"><label for="ctl-camp">${tr('Campaign or referrer')}</label><input id="ctl-camp" name="campaign" maxlength="120" value="${esc(d.internal?.campaign || '')}"></div>
-            </div>
-            ${p.stage === 'closed' ? `<div class="field"><label for="ctl-lost">${tr('Why it was lost')}</label><input id="ctl-lost" name="lost_reason" maxlength="500" value="${esc(d.internal?.lost_reason || '')}" placeholder="${esc(tr('e.g. price, lead time, went with the builder'))}"></div>` : ''}
-            <div class="field"><label for="ctl-notes">${tr('Notes')}</label><textarea id="ctl-notes" name="notes" rows="3">${esc(d.internal?.notes || '')}</textarea></div>
-            <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
-          </form></details>
-
-          <details class="ctl fold" data-fold="companies" ${openFolds.has('companies') ? 'open' : ''}><summary class="panel-h">${tr('Companies')} ${pco?.links?.length ? `<span class="tag">${pco.links.length}</span>` : ''}</summary><div class="fold-body">${projectCompaniesBox(pco)}</div></details>
-          <details class="ctl fold" data-fold="tasks" ${openFolds.has('tasks') || lateTasks ? 'open' : ''}><summary class="panel-h">${tr('Tasks')} ${openTasks.length ? `<span class="tag${lateTasks ? ' tag-late' : ''}">${openTasks.length}</span>` : ''}</summary><div class="fold-body">${tasksBox(tasks, staff, user, { projectId: id }, 'tk-p')}</div></details>
-          <details class="ctl fold" data-fold="costs" ${openFolds.has('costs') ? 'open' : ''}><summary class="panel-h">${tr('Costs & margin')} <span class="tag">${tr('staff only')}</span></summary>${costsPanel(costs)}</details>
-        </aside>
-      </div>
-    </div>`;
-
-  bindDetail(app, d, (t) => { activeTab = t; detail(id); });
-  bindCosts(app, id);
-  bindTasks(app, user);
-  bindProjectCompanies(app, id);
-  bindMail(app, id);
-  $('[data-new-quote]', app)?.addEventListener('click', async (e) => {
-    const b = e.currentTarget; if (b.disabled) return; b.disabled = true;
-    try { location.hash = `#/quotes/${await newQuoteFor(d)}`; } catch (err) { b.disabled = false; toast(tr(err.message)); }
-  });
-  $$('[data-fold]', app).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openFolds.add(el.dataset.fold); else openFolds.delete(el.dataset.fold); }));
-  bindReqFiles();
-  // Audit 25.11: the client is told only when someone ticks it, and sees in advance what they will get; the date
-  // stays as it is unless changed, and a stage on our side suggests two working days.
-  const sf = $('[data-stage]', app);
-  if (sf) {
-    const workdays = (n) => { const d = new Date(); while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) n--; } return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-    const preview = () => {
-      const s = sf.stage.value ? stage(sf.stage.value) : null, out = $('[data-stage-preview]', sf);
-      if (!out) return;
-      out.textContent = !sf.visible.checked ? tr('Only the team sees this change.')
-        : tr('The client sees “{stage}”{note} and gets an email.', { stage: s ? tr(s.homeLabel || s.label || s.id) : '…', note: sf.note.value.trim() ? tr(' with your note') : '' });
-    };
-    sf.stage.addEventListener('change', () => { const s = stage(sf.stage.value); if (s?.court === 'us' && !sf.due.value) sf.due.value = workdays(2); preview(); });
-    sf.visible.addEventListener('change', preview); sf.note.addEventListener('input', preview);
-  }
-  $('[data-stage]', app)?.addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.currentTarget;
-    if (!f.stage.value) { f.stage.focus(); toast(tr('Choose the new stage first.')); return; }
-    const due = f.due.value ? new Date(`${f.due.value}T17:00:00`).toISOString() : null;
-    try { await store.setStage(id, f.stage.value, { note: f.note.value.trim(), visible: f.visible.checked, next_step: f.next_step.value.trim(), due_at: due }); toast(tr(f.visible.checked ? 'Stage updated. Client notified.' : 'Stage updated (hidden from client).')); } catch (err) { toast(tr(err.message)); }
-  });
-  $('[data-assign]', app).addEventListener('submit', async (e) => { e.preventDefault(); try { await store.updateProject(id, { assignee_id: e.currentTarget.assignee_id.value || null }); toast(tr('Account manager saved.')); } catch (err) { toast(tr(err.message)); } });
-  $('[data-doc]', app).addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.currentTarget; const file = f.file.files[0]; if (!file) return;
-    try { await store.uploadFiles(id, [file], { kind: f.kind.value, version: f.version.value.trim(), title: f.title.value.trim(), amount: f.amount.value, approval: f.approval.checked, visible: f.visible.checked }); toast(tr(f.visible.checked ? 'Shared. Client notified.' : 'Uploaded (internal).')); } catch (err) { toast(tr(err.message)); }
-  });
-  $('[data-dates]', app).addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.currentTarget;
-    const iso = (v) => (v ? new Date(`${v}T09:00:00`).toISOString() : null);
-    try { await store.updateProject(id, { delivery_at: iso(f.delivery.value), install_at: iso(f.install.value) }); toast(tr('Dates saved. Client notified.')); } catch (err) { toast(tr(err.message)); }
-  });
-  $('[data-payment]', app).addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.currentTarget;
-    try { await store.addPayment(id, { label: f.label.value.trim(), amount: f.amount.value, due_date: f.due.value ? new Date(`${f.due.value}T09:00:00`).toISOString() : null }); f.reset(); toast(tr('Payment added.')); } catch (err) { toast(tr(err.message)); }
-  });
-  $('[data-internal]', app).addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.currentTarget;
-    try { await store.updateInternal(id, { value_gbp: f.value_gbp.value === '' ? null : +f.value_gbp.value, probability: f.probability.value === '' ? null : +f.probability.value, notes: f.notes.value, source: f.source.value || null, campaign: f.campaign.value.trim(), ...(f.lost_reason ? { lost_reason: f.lost_reason.value.trim() } : {}) }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
-  });
 }
 
 ['input', 'change'].forEach((type) => app.addEventListener(type, (ev) => { if (ev.target.matches?.('input, select, textarea')) ev.target.dataset.dirty = '1'; }));

@@ -8,6 +8,7 @@ import { store } from './store.js';
 import { esc, fmtMoney, fmtDate, $, $$, toast } from './core.js';
 import { tr, LANG } from './i18n.js';
 import { netOf } from './cost-net.js';
+import { linker, bindLinkers, picked } from './linker.js';
 
 // What the supplier gave: a discount, a lead time. The team's own entries, kept out of i18n.js (audit.spec keeps those
 // words off client-facing text; quotes.js does the same).
@@ -66,15 +67,17 @@ function row(c, best) {
   const acts = c.status === 'requested'
     ? `<button type="button" class="btn btn-sm" data-cost-price>${tr('Price received')}</button><button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('No reply')}</button>`
     : `${c.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="accepted">${tr('Accept')}</button>` : ''}${c.status !== 'rejected' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('Reject')}</button>` : ''}`;
-  return `<li data-cost="${esc(c.id)}" data-supplier="${esc(c.supplier)}" data-category="${esc(c.category)}"${c.status === 'rejected' || c.status === 'superseded' ? ' class="is-out"' : ''}>
-      <div><strong>${esc(c.supplier)}</strong>${c.reference ? ` · ${esc(c.reference)}` : ''}${c.variant ? ` · ${esc(c.variant)}` : ''}
+  // Projects audit 26.11.2026: a quote entered on the wrong project moves to the right one.
+  const move = `<details class="cost-move"><summary class="btn btn-sm btn-ghost">${tr('Move')}</summary><form class="task-form" data-cost-move novalidate>${linker({ id: `cm-${c.id}`, label: tr('To project'), kinds: ['project'], name: 'project', exclude: [c.project_id] })}<button class="btn btn-sm" type="submit">${tr('Move here')}</button></form></details>`;
+  return `<li data-cost="${esc(c.id)}" data-supplier="${esc(c.supplier)}" data-company="${esc(c.company_id || '')}" data-category="${esc(c.category)}"${c.status === 'rejected' || c.status === 'superseded' ? ' class="is-out"' : ''}>
+      <div><strong>${c.company_id ? `<a href="#/company/${esc(c.company_id)}">${esc(c.supplier)}</a>` : esc(c.supplier)}</strong>${c.reference ? ` · ${esc(c.reference)}` : ''}${c.variant ? ` · ${esc(c.variant)}` : ''}
         <span class="tag${c.status === 'accepted' ? ' tag-accent' : ''}">${esc(tr(STATUS[c.status] || c.status))}</span>
         ${best?.id === c.id ? `<span class="tag tag-accent">${tr('Lowest')}</span>` : ''}
         ${vs != null ? `<span class="note">+${esc(money(vs, 'GBP'))} (+${esc(String(Math.round((vs / best.net) * 1000) / 10))}%) ${esc(tr('vs lowest'))}</span>` : ''}
         <span class="note">${facts.filter(Boolean).join(' · ')}${c.pdf_name ? ` · ${c.pdf_path ? `<button type="button" class="q-link" data-cost-pdf="${esc(c.pdf_path)}">${esc(c.pdf_name)}</button>` : esc(c.pdf_name)}` : ''}</span>
         ${c.note ? `<span class="note">${esc(c.note)}</span>` : ''}
         ${c.hubspot_deal_id ? `<a class="note" href="${HUBSPOT_DEAL}${encodeURIComponent(c.hubspot_deal_id)}" target="_blank" rel="noopener">${tr('Purchase deal in HubSpot')}</a>` : c.hubspot_error ? `<span class="note q-warn">${tr('Not in HubSpot yet')}: ${esc(c.hubspot_error)}</span>` : ''}</div>
-      <div class="cost-acts">${acts}</div>
+      <div class="cost-acts">${acts}${move}</div>
     </li>`;
 }
 
@@ -104,7 +107,7 @@ export function costsPanel({ costs, margin }) {
       <h3 class="panel-h">${tr('Asked a supplier')}</h3>
       <p class="hint">${tr('Note who you asked, so the list shows who has not answered yet.')}</p>
       <div class="field-row">
-        <div class="field"><label for="cost-ask-sup">${tr('Supplier')}</label><input id="cost-ask-sup" name="supplier" maxlength="120" required></div>
+        ${linker({ id: 'cost-ask-sup', label: tr('Supplier'), kinds: ['company'], textName: 'supplier', name: 'company_id', free: true, create: 'company:supplier', placeholder: tr('Type the supplier…') })}
         <div class="field"><label for="cost-ask-cat">${tr('Category')}</label>${catSelect('cost-ask-cat')}</div>
       </div>
       <button class="btn btn-sm btn-ghost" type="submit">${tr('Add to the list')}</button>
@@ -112,7 +115,7 @@ export function costsPanel({ costs, margin }) {
     <form data-cost-add novalidate>
       <h3 class="panel-h">${tr('Add supplier quote')}</h3>
       <input type="hidden" name="from" value="">
-      <div class="field"><label for="cost-sup">${tr('Supplier')}</label><input id="cost-sup" name="supplier" maxlength="120" required></div>
+      ${linker({ id: 'cost-sup', label: tr('Supplier'), kinds: ['company'], textName: 'supplier', name: 'company_id', free: true, create: 'company:supplier', placeholder: tr('Type the supplier…'), hint: tr('Pick the supplier’s company so its quotes show on the company card; a new one is added as a supplier.') })}
       <div class="field-row">
         <div class="field"><label for="cost-ref">${tr('Their quote no.')}</label><input id="cost-ref" name="reference" maxlength="60"></div>
         <div class="field"><label for="cost-cat">${tr('Category')}</label>${catSelect('cost-cat')}</div>
@@ -143,6 +146,9 @@ const numOr = (v, d) => (v === '' || v == null ? d : Number(v));
 export function bindCosts(root, pid) {
   const box = $('[data-costs]', root); if (!box) return;
   const form = $('[data-cost-add]', box), ask = $('[data-cost-ask]', box);
+  bindLinkers(box);
+  // The supplier's company goes on the quote and, as a supplier, on the project (once).
+  const linkSupplier = async (co) => { if (co && store.linkCompany) await store.linkCompany(pid, co.id, 'supplier').catch(() => {}); };
   const fields = () => ({
     amount: numOr(form.amount.value, 0), vat_in_pct: numOr(form.vat_in_pct.value, 0), discount_pct: numOr(form.discount_pct.value, 0),
     delivery_gbp: numOr(form.delivery_gbp.value, 0), lead_days: numOr(form.lead_days.value, null),
@@ -157,7 +163,8 @@ export function bindCosts(root, pid) {
     e.preventDefault();
     const supplier = ask.supplier.value.trim();
     if (!supplier) { ask.supplier.focus(); toast(tr('Enter the supplier.')); return; }
-    try { await store.addCost(pid, { supplier, category: ask.category.value, amount: 0, status: 'requested', requested_on: today() }); ask.reset(); toast(tr('Added. It shows as waiting until the price comes in.')); }
+    const co = picked(ask, 'company_id');
+    try { await store.addCost(pid, { supplier, category: ask.category.value, amount: 0, status: 'requested', requested_on: today(), company_id: co?.id || null }); await linkSupplier(co); ask.reset(); toast(tr('Added. It shows as waiting until the price comes in.')); }
     catch (err) { toast(tr(err.message)); }
   });
   form?.addEventListener('submit', async (e) => {
@@ -170,10 +177,12 @@ export function bindCosts(root, pid) {
     if (f.lead_days != null && (f.lead_days < 0 || f.lead_days > 365 || !Number.isInteger(f.lead_days))) { form.lead_days.focus(); toast(t('The lead time is whole days, up to 365.', 'Czas realizacji to pełne dni, najwyżej 365.')); return; }
     const file = form.file.files[0] || null;
     if (file && file.type !== 'application/pdf') { toast(tr('The quote file must be a PDF.')); return; }
-    const data = { supplier, reference: form.reference.value.trim(), category: form.category.value, variant: form.variant.value.trim(), note: form.note.value.trim(), valid_until: form.valid_until.value || null, ...f, file };
+    const co = picked(form, 'company_id');
+    const data = { supplier, reference: form.reference.value.trim(), category: form.category.value, variant: form.variant.value.trim(), note: form.note.value.trim(), valid_until: form.valid_until.value || null, ...f, file, company_id: co?.id || null };
     try {
       if (form.from.value) await store.updateCost(form.from.value, pid, { ...data, status: 'received' });
       else await store.addCost(pid, data);
+      await linkSupplier(co);
       // Cleared, so the next supplier's quote never inherits this one's VAT, discount or delivery.
       form.reset(); form.from.value = ''; preview();
       toast(tr('Supplier quote added.'));
@@ -183,7 +192,13 @@ export function bindCosts(root, pid) {
   $$('[data-cost-price]', box).forEach((b) => b.addEventListener('click', () => {
     const li = b.closest('[data-cost]');
     form.from.value = li.dataset.cost; form.supplier.value = li.dataset.supplier; form.category.value = li.dataset.category;
+    const h = $('[data-linker-value]', form); if (h) h.value = li.dataset.company || '';
     form.scrollIntoView({ block: 'start', behavior: 'smooth' }); form.amount.focus({ preventScroll: true });
+  }));
+  $$('[data-cost-move]', box).forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const to = picked(f, 'project');
+    if (!to) { toast(tr('Choose the project from the list.')); return; }
+    try { await store.moveCost(f.closest('[data-cost]').dataset.cost, to.id); toast(tr('Moved to the other project.')); } catch (err) { toast(tr(err.message)); }
   }));
   $$('[data-cost-set]', box).forEach((b) => b.addEventListener('click', async () => {
     try { await store.setCostStatus(b.closest('[data-cost]').dataset.cost, b.dataset.costSet); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }

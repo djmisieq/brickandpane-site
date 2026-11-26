@@ -4,7 +4,7 @@
 import { stage, decisionRights, MEMBER_ROLES } from './core.js';
 import { netOf } from './cost-net.js';
 
-const KEY = 'bp-portal-demo-v4';
+const KEY = 'bp-portal-demo-v5'; // v5: a second staff member and the stage playbook (projects audit 26.11.2026)
 const SESSION = 'bp-portal-demo-session';
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
@@ -36,7 +36,8 @@ function seed() {
   const ravi = { id: 'u-ravi', email: 'ravi@example-homes.co.uk', full_name: 'Ravi Patel', company: 'Example Homes (demo)', phone: '', role: 'client', account_type: 'developer', notify_email: true, notify_digest: false };
   const sam = { id: 'u-sam', email: 'sam@example.com', full_name: 'Sam Taylor', company: '', phone: '', role: 'client', account_type: 'homeowner', notify_email: true, notify_digest: false };
   const tom = { id: 'u-tom', email: 'tom@brickandpane.co.uk', full_name: 'Tom Reid', company: 'Brick & Pane', phone: '', role: 'staff', notify_email: true, notify_digest: false };
-  const s = { users: [anna, ravi, sam, tom], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {}, changes: [], payments: [], invites: [], requests: [] };
+  const kate = { id: 'u-kate', email: 'kate@brickandpane.co.uk', full_name: 'Kate Nowak', company: 'Brick & Pane', phone: '', role: 'staff', notify_email: true, notify_digest: false };
+  const s = { users: [anna, ravi, sam, tom, kate], projects: [], members: [], openings: [], events: [], documents: [], approvals: [], messages: [], notifications: [], internal: {}, changes: [], payments: [], invites: [], requests: [] };
   s.requests.push({ id: uid(), ref: 'BP-261018-3F2A', created_at: daysAgo(0, 8), status: 'new', lang: 'en', role: 'homeowner', name: 'Jo Bennett', email: 'jo@example.com', phone: '', company: '', topic: 'quote', systems: ['sliding'], material: ['alu'], location: 'Walthamstow, E17', riba_stage: '', building: '', units: '', start: '3–6 months', opening_width_mm: null, opening_height_mm: null, openings: [{ ref: 'D01', system: 'sliding', material: 'alu', width_mm: 3600, height_mm: 2200, qty: 1, note: '3 panels' }, { ref: 'W01', system: 'windows', material: '', width_mm: 1200, height_mm: 1400, qty: 2, note: 'Side return' }], message: 'Kitchen extension, would like a 3-panel slider to the garden.', files: [], files_link: null, consent_at: daysAgo(0, 8), project_id: null, staff_note: '' });
 
   const mk = (p, owner, history, extra = {}) => {
@@ -117,6 +118,16 @@ function seed() {
 }
 
 // ---------- trigger mirrors ----------
+// crm_log (migration 0049): who changed which link or key fact.
+const log = (s, project_id, entity, entity_id, field, old_val, new_val) => { s.crmLog ||= []; s.crmLog.push({ id: s.crmLog.length + 1, project_id, entity, entity_id, field, old_val: old_val == null ? null : String(old_val), new_val: new_val == null ? null : String(new_val), actor_id: sessionId(), created_at: now() }); };
+const note = (s, user_id, project_id, type, title, body = '') => s.notifications.push({ id: uid(), user_id, project_id, type, title, body, created_at: now(), read_at: null });
+// The stage playbook (migration 0050), the same starting list.
+const PLAYBOOK = [['in_review', 'Check the drawings and the openings; list the questions for the client', 'task', 1], ['quote_issued', 'Follow up the quotation', 'call', 5], ['accepted', 'Book the survey with the client', 'call', 1], ['accepted', 'Send the deposit invoice', 'task', 1], ['survey', 'Enter the measured sizes and photos', 'task', 1], ['drawings', 'Send the shop drawings for approval', 'task', 2], ['production', 'Place the order with the supplier', 'task', 1], ['production', 'Enter the supplier’s confirmation and production date', 'task', 3], ['delivery', 'Confirm transport, access and unloading', 'call', 1], ['delivery', 'Book the fitting crew', 'task', 1], ['installation', 'Handover: openings checked, photos taken', 'visit', 0], ['handover', 'Send the O&M manual, warranty and final invoice', 'task', 2], ['completed', 'Aftercare call', 'call', 30]];
+const playbook = (s) => { if (!s.playbook) s.playbook = PLAYBOOK.map(([to_stage, title, kind, offset_days], i) => ({ id: `pb-${i + 1}`, to_stage, title, kind, offset_days, sort: i, active: true })); return s.playbook; };
+const addWorkdays = (n) => { const d = new Date(); let left = Math.max(n, 0); while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) left--; } while (!(d.getDay() % 6)) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const taskFor = (s, t) => { // on_task_assigned: a task given to someone else tells them
+  if (t.assignee_id && t.assignee_id !== sessionId() && !t.done_at) { const p = s.projects.find((x) => x.id === t.project_id); note(s, t.assignee_id, t.project_id, 'task', `Task for you: ${t.title}`, p ? `${p.ref} · ${p.name}` : ''); }
+};
 const notifyMembers = (s, pid, type, title, body) => s.members.filter((m) => m.project_id === pid)
   .forEach((m) => s.notifications.push({ id: uid(), user_id: m.user_id, project_id: pid, type, title, body, created_at: now(), read_at: null }));
 const notifyStaff = (s, pid, type, title, body) => {
@@ -255,6 +266,7 @@ export const store = {
     const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id);
     if (c) { Object.assign(c, fields, { amount: +fields.amount }, file ? { pdf_name: file.name } : {}); save(s); }
   },
+  async moveCost(id, pid) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c && c.project_id !== pid) { log(s, pid, 'supplier_quote', id, 'project_id', c.project_id, pid); log(s, c.project_id, 'supplier_quote', id, 'project_id', c.project_id, pid); c.project_id = pid; save(s); } },
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },
   async deleteCost(id) { const s = load(); needStaff(s); s.costs = (s.costs || []).filter((x) => x.id !== id); save(s); },
   async costPdfUrl() { return null; },
@@ -264,10 +276,19 @@ export const store = {
     return (s.tasks || []).filter((t) => (!projectId || t.project_id === projectId) && (!requestId || t.request_id === requestId) && (!open || !t.done_at))
       .sort((a, b) => (!!a.done_at - !!b.done_at) || String(a.due_on || '9999').localeCompare(String(b.due_on || '9999')) || b.created_at.localeCompare(a.created_at));
   },
-  async addTask({ title, kind = 'task', note = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
+  async addTask({ title, kind = 'task', note: text = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
     const s = load(); needStaff(s); s.tasks ||= []; const me = needStaff(s).id;
-    s.tasks.push({ id: uid(), title, kind, note, due_on, assignee_id, project_id, request_id, done_at: done ? now() : null, done_by: done ? me : null, created_by: me, created_at: now(), updated_at: now() });
+    const t = { id: uid(), title, kind, note: text, due_on, assignee_id, project_id, request_id, done_at: done ? now() : null, done_by: done ? me : null, created_by: me, created_at: now(), updated_at: now() };
+    s.tasks.push(t); taskFor(s, t);
     save(s);
+  },
+  async updateTask(id, patch) {
+    const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (!t) return;
+    const before = { ...t };
+    ['title', 'note', 'due_on', 'assignee_id', 'project_id', 'request_id'].forEach((k) => { if (k in patch) t[k] = patch[k]; });
+    if (t.project_id !== before.project_id) { log(s, t.project_id, 'task', id, 'project_id', before.project_id, t.project_id); if (before.project_id && t.project_id) log(s, before.project_id, 'task', id, 'project_id', before.project_id, t.project_id); }
+    if (t.assignee_id !== before.assignee_id) { log(s, t.project_id, 'task', id, 'assignee_id', before.assignee_id, t.assignee_id); taskFor(s, t); }
+    t.updated_at = now(); save(s);
   },
   async setTaskDone(id, done) { const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (t) { t.done_at = done ? now() : null; t.done_by = done ? (needStaff(s).id) : null; save(s); } },
   // The owner's dashboard in demo mode: the same figures as owner_dashboard (migration 0043), from this browser's data.
@@ -330,9 +351,91 @@ export const store = {
   async linkCompany(pid, companyId, role) {
     const s = load(); needStaff(s); s.projectCompanies ||= [];
     if (s.projectCompanies.some((l) => l.project_id === pid && l.company_id === companyId && l.role === role)) throw new Error('This company is already on the project in that role.');
-    s.projectCompanies.push({ project_id: pid, company_id: companyId, role, created_at: now() }); save(s);
+    s.projectCompanies.push({ project_id: pid, company_id: companyId, role, created_at: now() }); log(s, pid, 'company', companyId, 'added', null, role); save(s);
   },
-  async unlinkCompany(pid, companyId, role) { const s = load(); needStaff(s); s.projectCompanies = (s.projectCompanies || []).filter((l) => !(l.project_id === pid && l.company_id === companyId && l.role === role)); save(s); },
+  async unlinkCompany(pid, companyId, role) { const s = load(); needStaff(s); s.projectCompanies = (s.projectCompanies || []).filter((l) => !(l.project_id === pid && l.company_id === companyId && l.role === role)); log(s, pid, 'company', companyId, 'removed', role, null); save(s); },
+  async setCompanyRole(pid, companyId, from, to) {
+    const s = load(); needStaff(s); const l = (s.projectCompanies || []).find((x) => x.project_id === pid && x.company_id === companyId && x.role === from); if (!l || from === to) return;
+    if (s.projectCompanies.some((x) => x.project_id === pid && x.company_id === companyId && x.role === to)) throw new Error('This company is already on the project in that role.');
+    l.role = to; log(s, pid, 'company', companyId, 'role', from, to); save(s);
+  },
+  // People on a project (migration 0049): one of them the main contact.
+  async projectPeople(pid) { const s = load(); needStaff(s); return (s.projectPeople || []).filter((l) => l.project_id === pid).map((l) => ({ role: l.role, is_main: l.is_main, person: (s.people || []).find((p) => p.id === l.person_id) })).filter((x) => x.person); },
+  async linkPerson(pid, personId, role = 'contact', isMain = false) {
+    const s = load(); needStaff(s); s.projectPeople ||= [];
+    if (s.projectPeople.some((l) => l.project_id === pid && l.person_id === personId)) throw new Error('This person is already on the project.');
+    if (isMain) s.projectPeople.forEach((l) => { if (l.project_id === pid) l.is_main = false; });
+    s.projectPeople.push({ project_id: pid, person_id: personId, role, is_main: !!isMain, created_at: now() }); log(s, pid, 'person', personId, 'added', null, role); save(s);
+  },
+  async updatePersonLink(pid, personId, { role, is_main }) {
+    const s = load(); needStaff(s); const l = (s.projectPeople || []).find((x) => x.project_id === pid && x.person_id === personId); if (!l) return;
+    if (is_main) s.projectPeople.forEach((x) => { if (x.project_id === pid) x.is_main = false; });
+    if (role && role !== l.role) { log(s, pid, 'person', personId, 'role', l.role, role); l.role = role; }
+    if (is_main !== undefined) l.is_main = !!is_main; save(s);
+  },
+  async unlinkPerson(pid, personId) { const s = load(); needStaff(s); const l = (s.projectPeople || []).find((x) => x.project_id === pid && x.person_id === personId); s.projectPeople = (s.projectPeople || []).filter((x) => x !== l); if (l) log(s, pid, 'person', personId, 'removed', l.role, null); save(s); },
+  async personProjects(personId) { const s = load(); needStaff(s); return (s.projectPeople || []).filter((l) => l.person_id === personId).map((l) => ({ role: l.role, is_main: l.is_main, project: s.projects.find((p) => p.id === l.project_id) })).filter((x) => x.project); },
+  async crmLog({ projectId = null, entity = null, entityId = null } = {}) {
+    const s = load(); needStaff(s);
+    return (s.crmLog || []).filter((l) => (!projectId || l.project_id === projectId) && (!entity || l.entity === entity) && (!entityId || l.entity_id === entityId))
+      .map((l) => ({ ...l, actor: s.users.find((u) => u.id === l.actor_id) })).sort((a, b) => b.id - a.id).slice(0, 300);
+  },
+  // attach_enquiry (migration 0049): the enquiry joins an existing project; no new project.
+  async attachEnquiry(rid, pid) {
+    const s = load(); const u = needStaff(s); const r = (s.requests || []).find((x) => x.id === rid);
+    if (!r) throw new Error('Enquiry not found.'); if (r.project_id) throw new Error('This enquiry is already on a project.');
+    const p = s.projects.find((x) => x.id === pid); if (!p) throw new Error('Project not found.');
+    const n = s.openings.filter((o) => o.project_id === pid).length;
+    (r.openings || []).forEach((o, i) => s.openings.push({ id: uid(), project_id: pid, ref: o.ref || `E${String(n + i + 1).padStart(2, '0')}`, system: o.system || 'windows', material: ['alu', 'timber', 'pvc', 'alutimber'].includes(o.material) ? o.material : '', width_mm: o.width_mm ?? null, height_mm: o.height_mm ?? null, config: o.config || '', glazing: o.glazing || '', qty: o.qty || 1, notes: o.note || '' }));
+    (s.tasks || []).forEach((t) => { if (t.request_id === rid) { t.project_id = pid; t.request_id = null; } });
+    if (r.message || r.staff_note) s.messages.push({ id: uid(), project_id: pid, author_id: u.id, body: `Enquiry ${r.ref || ''} added to this project.${r.message ? `\n\n${r.message}` : ''}${r.staff_note ? `\n\nNote: ${r.staff_note}` : ''}`, internal: true, created_at: now() });
+    const email = r.email.toLowerCase();
+    const isStaff = s.users.some((x) => x.email.toLowerCase() === email && x.role === 'staff');
+    const member = s.members.some((m) => m.project_id === pid && s.users.find((x) => x.id === m.user_id)?.email.toLowerCase() === email);
+    if (!isStaff && !member && !s.invites.some((i) => i.project_id === pid && i.email === email)) s.invites.push({ id: uid(), project_id: pid, email, role: 'client', invited_by: u.id, created_at: now() });
+    log(s, pid, 'enquiry', rid, 'project_id', null, pid);
+    Object.assign(r, { status: 'converted', project_id: pid }); save(s); return pid;
+  },
+  async linkEnquiryContact(rid, companyId, personId) { const s = load(); needStaff(s); const r = (s.requests || []).find((x) => x.id === rid); if (!r) throw new Error('Enquiry not found.'); Object.assign(r, { company_id: companyId, person_id: personId }); save(s); },
+  async mergeCompanies(keep, drop) {
+    const s = load(); needStaff(s); if (keep === drop) throw new Error('Choose two different companies.');
+    const k = (s.companies || []).find((c) => c.id === keep), d = (s.companies || []).find((c) => c.id === drop); if (!k || !d) throw new Error('Company not found.');
+    (s.people || []).forEach((p) => { if (p.company_id === drop) p.company_id = keep; });
+    (s.costs || []).forEach((c) => { if (c.company_id === drop) c.company_id = keep; });
+    (s.requests || []).forEach((r) => { if (r.company_id === drop) r.company_id = keep; });
+    s.projectCompanies = (s.projectCompanies || []).map((l) => (l.company_id === drop ? { ...l, company_id: keep } : l)).filter((l, i, a) => a.findIndex((x) => x.project_id === l.project_id && x.company_id === l.company_id && x.role === l.role) === i);
+    ['website', 'email', 'phone', 'address'].forEach((f) => { if (!k[f]) k[f] = d[f] || ''; });
+    if (d.notes && d.notes !== k.notes) k.notes = [k.notes, d.notes].filter(Boolean).join('\n');
+    k.do_not_contact = !!(k.do_not_contact || d.do_not_contact); if (k.source === 'cold' && d.source && d.source !== 'cold') k.source = d.source;
+    s.companies = s.companies.filter((c) => c.id !== drop); log(s, null, 'company', keep, 'merged', d.name, k.name); save(s);
+  },
+  async mergePeople(keep, drop) {
+    const s = load(); needStaff(s); if (keep === drop) throw new Error('Choose two different people.');
+    const k = (s.people || []).find((p) => p.id === keep), d = (s.people || []).find((p) => p.id === drop); if (!k || !d) throw new Error('Person not found.');
+    s.projectPeople = (s.projectPeople || []).map((l) => (l.person_id === drop ? { ...l, person_id: keep } : l)).filter((l, i, a) => a.findIndex((x) => x.project_id === l.project_id && x.person_id === l.person_id) === i);
+    (s.requests || []).forEach((r) => { if (r.person_id === drop) r.person_id = keep; });
+    ['job_title', 'email', 'phone'].forEach((f) => { if (!k[f]) k[f] = d[f] || ''; }); if (!k.company_id) k.company_id = d.company_id || null;
+    k.do_not_contact = !!(k.do_not_contact || d.do_not_contact);
+    s.people = s.people.filter((p) => p.id !== drop); log(s, null, 'person', keep, 'merged', d.full_name, k.full_name); save(s);
+  },
+  // Bookings (migration 0050): surveys, deliveries, fitting and service visits for the calendar.
+  async listBookings({ from = null, to = null, projectId = null } = {}) {
+    const s = load(); needStaff(s);
+    return (s.bookings || []).filter((b) => (!projectId || b.project_id === projectId) && (!from || b.ends_on >= from) && (!to || b.starts_on <= to)).sort((a, b) => a.starts_on.localeCompare(b.starts_on));
+  },
+  async saveBooking({ id = null, ...b }) {
+    const s = load(); needStaff(s); s.bookings ||= [];
+    const row = { kind: b.kind || 'install', starts_on: b.starts_on, ends_on: b.ends_on || b.starts_on, crew_company_id: b.crew_company_id || null, staff_id: b.staff_id || null, note: b.note || '' };
+    if (!row.starts_on || row.ends_on < row.starts_on) throw new Error('The end date cannot be before the start.');
+    const old = id && s.bookings.find((x) => x.id === id);
+    if (old) { Object.assign(old, row, { updated_at: now() }); log(s, old.project_id, 'booking', id, 'starts_on', null, row.starts_on); }
+    else { const nb = { id: uid(), project_id: b.project_id, ...row, created_by: sessionId(), created_at: now() }; s.bookings.push(nb); log(s, b.project_id, 'booking', nb.id, 'added', null, `${row.kind} · ${row.starts_on}`); }
+    save(s);
+  },
+  async deleteBooking(id) { const s = load(); needStaff(s); const b = (s.bookings || []).find((x) => x.id === id); s.bookings = (s.bookings || []).filter((x) => x.id !== id); if (b) log(s, b.project_id, 'booking', id, 'removed', `${b.kind} · ${b.starts_on}`, null); save(s); },
+  async listPlaybook() { const s = load(); needStaff(s); return [...playbook(s)]; }, // read only: saving here would redraw the page
+  async savePlaybook({ id = null, ...b }) { const s = load(); needStaff(s); const list = playbook(s); const row = id && list.find((x) => x.id === id); if (row) Object.assign(row, b); else list.push({ id: uid(), kind: 'task', offset_days: 1, sort: list.length, active: true, ...b }); save(s); },
+  async deletePlaybook(id) { const s = load(); needStaff(s); s.playbook = playbook(s).filter((x) => x.id !== id); save(s); },
   async deleteTask(id) { const s = load(); needStaff(s); s.tasks = (s.tasks || []).filter((x) => x.id !== id); save(s); },
   // Mail in demo mode: a few made-up mails, matched to projects the way mail_list does it (migration 0035).
   async listMail({ pid = null, unassigned = false } = {}) {
@@ -358,7 +461,7 @@ export const store = {
     save(s); return { result: 'sent' };
   },
   async mailAccounts() { return [{ address: 'contact@brickandpane.co.uk', mode: 'all', last_run_at: now(), last_error: null }, { address: 'kate@brickandpane.co.uk', mode: 'known', last_run_at: now(), last_error: null }]; },
-  async assignMail(id, project_id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.project_id = project_id; save(s); } },
+  async assignMail(id, project_id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { if (m.project_id !== project_id) { log(s, project_id, 'mail', id, 'project_id', m.project_id, project_id); if (m.project_id) log(s, m.project_id, 'mail', id, 'project_id', m.project_id, project_id); } m.project_id = project_id; save(s); } },
   async dismissMail(id) { const s = load(); needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.dismissed = true; save(s); } },
   async listMailContacts() { const s = load(); needStaff(s); demoMail(s); return [...s.mailContacts]; },
   async addMailContact(c) { const s = load(); needStaff(s); demoMail(s); if (s.mailContacts.some((x) => x.match === c.match)) throw new Error('That contact is already there.'); s.mailContacts.push({ id: uid(), ...c, created_at: now() }); save(s); },
@@ -505,6 +608,9 @@ export const store = {
     s.messages.push({ id: uid(), project_id: pid, author_id: u.id, body, internal: isInternal, created_at: now() });
     const p = s.projects.find((x) => x.id === pid); p.updated_at = now();
     if (!isInternal) (u.role === 'staff' ? notifyMembers : notifyStaff)(s, pid, 'message', `${u.role === 'staff' ? 'New message' : 'Client message'}: ${p.name}`, body.slice(0, 200));
+    // on_internal_mention (0050): "@Kate" in an internal note reaches Kate.
+    if (isInternal) s.users.filter((x) => x.role === 'staff' && x.id !== u.id && x.full_name && new RegExp(`(^|[^\\w])@${x.full_name.split(' ')[0].replace(/[^\w]/g, '')}(\\W|$)`, 'i').test(body))
+      .forEach((x) => note(s, x.id, pid, 'mention', `You were mentioned: ${p.ref} · ${p.name}`, body.slice(0, 200)));
     save(s);
   },
 
@@ -537,26 +643,40 @@ export const store = {
     save(s);
   },
 
-  async setStage(pid, to, { note = '', visible = true, next_step, due_at } = {}) {
+  async setStage(pid, to, { note: text = '', visible = true, next_step, due_at } = {}) {
     const s = load(); const u = needStaff(s);
     const p = s.projects.find((x) => x.id === pid);
     const t = now();
-    s.events.push({ id: uid(), project_id: pid, from_stage: p.stage, to_stage: to, note, visible_to_client: visible, actor_id: u.id, created_at: t });
+    s.events.push({ id: uid(), project_id: pid, from_stage: p.stage, to_stage: to, note: text, visible_to_client: visible, actor_id: u.id, created_at: t });
+    // on_stage_playbook (0050): the stage's tasks, once per project, for the account manager.
+    s.tasks ||= []; const who = p.assignee_id || u.id;
+    playbook(s).filter((b) => b.active && b.to_stage === to && !s.tasks.some((x) => x.project_id === pid && x.template_id === b.id)).forEach((b) => {
+      const tk = { id: uid(), title: b.title, kind: b.kind, note: '', due_on: addWorkdays(b.offset_days), assignee_id: who, project_id: pid, request_id: null, template_id: b.id, done_at: null, done_by: null, created_by: u.id, created_at: t, updated_at: t };
+      s.tasks.push(tk); taskFor(s, tk);
+    });
+    if (due_at !== undefined && (due_at || null) !== (p.due_at || null)) log(s, pid, 'project', pid, 'due_at', p.due_at, due_at);
     Object.assign(p, { stage: to, stage_changed_at: t, updated_at: t });
     if (next_step !== undefined) p.next_step = next_step;
     p.due_at = due_at !== undefined ? due_at : null;
-    if (visible) notifyMembers(s, pid, 'stage', `${p.name}: ${stage(to).label}`, note);
+    if (visible) notifyMembers(s, pid, 'stage', `${p.name}: ${stage(to).label}`, text);
     save(s);
   },
 
   async updateProject(pid, patch) {
     const s = load(); needStaff(s);
     const p = s.projects.find((x) => x.id === pid);
+    ['assignee_id', 'due_at', 'delivery_at', 'install_at'].forEach((k) => { if (k in patch && (patch[k] || null) !== (p[k] || null)) log(s, pid, 'project', pid, k, p[k], patch[k]); });
+    // on_assignee_change (0050): the new account manager hears that the project is theirs.
+    if ('assignee_id' in patch && patch.assignee_id && patch.assignee_id !== p.assignee_id && patch.assignee_id !== sessionId()) note(s, patch.assignee_id, pid, 'assigned', `You now look after: ${p.name}`, p.ref);
     ['assignee_id', 'next_step', 'due_at', 'delivery_at', 'install_at'].forEach((k) => { if (k in patch) p[k] = patch[k]; });
     if ('delivery_at' in patch || 'install_at' in patch) notifyMembers(s, pid, 'dates', `${p.name}: dates updated`, [p.delivery_at && `Delivery ${new Date(p.delivery_at).toDateString()}`, p.install_at && `Fitting ${new Date(p.install_at).toDateString()}`].filter(Boolean).join(' · '));
     p.updated_at = now(); save(s);
   },
-  async updateInternal(pid, patch) { const s = load(); needStaff(s); Object.assign(s.internal[pid], patch); save(s); },
+  async updateInternal(pid, patch) {
+    const s = load(); needStaff(s); const i = s.internal[pid] ||= {};
+    ['waiting_on', 'value_gbp', 'probability'].forEach((k) => { if (k in patch && (patch[k] ?? null) !== (i[k] ?? null)) log(s, pid, 'project', pid, k, i[k], patch[k]); });
+    Object.assign(i, patch); save(s);
+  },
   async listStaff() { return load().users.filter((u) => u.role === 'staff'); },
 
   async notifications() { const s = load(); const u = me(s); return u ? s.notifications.filter((n) => n.user_id === u.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 50) : []; },
