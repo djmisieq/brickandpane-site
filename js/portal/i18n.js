@@ -534,7 +534,7 @@ const PL = {
   "Supplier quote added.": "Dodano ofertę dostawcy.",
   "Type to search…": "Zacznij pisać, żeby wyszukać…",
   "Create “{name}”": "Utwórz „{name}”",
-  "Add as a new company": "Dodaj jako nową firmę w CRM",
+  "Add it to Companies": "Dodaj do Firm",
   "Add as a new person": "Dodaj jako nową osobę",
   "Change raised": "Zgłoszona zmiana",
   "Change {status}": "Zmiana: {status}",

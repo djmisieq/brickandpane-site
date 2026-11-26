@@ -78,7 +78,7 @@ export function bindLinkers(root) {
       const found = await search(kinds, text, exclude);
       if (n !== seq) return; // a newer keystroke won
       items = [...found]; const [ckind] = creating();
-      if (ckind && text.length >= 2 && !found.some((x) => fold(x.label) === fold(text))) items.push({ kind: ckind, create: true, label: text, sub: esc(tr(ckind === 'person' ? 'Add as a new person' : 'Add as a new company')) });
+      if (ckind && text.length >= 2 && !found.some((x) => fold(x.label) === fold(text))) items.push({ kind: ckind, create: true, label: text, sub: esc(tr(ckind === 'person' ? 'Add as a new person' : 'Add it to Companies')) });
       list.innerHTML = items.length ? items.map((x, i) => `<li role="option" id="${esc(input.id)}-o${i}" aria-selected="false" data-i="${i}" class="linker-opt${x.create ? ' is-create' : ''}"><span class="linker-t">${x.create ? `+ ${esc(tr('Create “{name}”', { name: x.label }))}` : esc(x.label)}</span><span class="linker-s">${x.sub || ''}</span></li>`).join('')
         : `<li class="linker-empty">${esc(tr(text ? 'Nothing found.' : 'Type to search…'))}</li>`;
       // A free-text box (a supplier's name) picks nothing until asked, so Enter still sends its form.
