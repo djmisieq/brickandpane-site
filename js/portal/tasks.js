@@ -21,7 +21,7 @@ export function item(t, staff, opts = {}) {
   const who = staff.find((s) => s.id === t.assignee_id)?.full_name;
   const staffOpts = staff.map((s) => `<option value="${esc(s.id)}" ${s.id === t.assignee_id ? 'selected' : ''}>${esc(s.full_name || s.email)}</option>`).join('');
   const when = t.done_at ? tr('done {date}', { date: fmtDay(t.done_at) }) : t.due_on ? (taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Due {date}', { date: fmtDay(t.due_on) })) : '';
-  return `<li class="task${t.done_at ? ' is-done' : ''}${taskLate(t) ? ' is-late' : ''}" data-task="${esc(t.id)}">
+  return `<li class="task${t.done_at ? ' is-done' : ''}${taskLate(t) ? ' is-late' : !t.done_at && t.due_on === isoDay(0) ? ' is-today' : ''}" data-task="${esc(t.id)}">
     <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done'))}"><span><strong>${esc(t.title)}</strong>
       <span class="note">${esc(tr(KINDS[t.kind] || 'Task'))}${when ? ` · ${esc(when)}` : ''}${who ? ` · ${esc(who)}` : ''}</span>
       ${opts.project ? `<a class="note task-proj" href="${esc(opts.href)}">${esc(opts.project)}</a>` : ''}

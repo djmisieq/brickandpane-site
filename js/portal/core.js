@@ -22,6 +22,16 @@ export const SIDE_STAGES = [
 ];
 export const ALL_STAGES = [...STAGES, ...SIDE_STAGES];
 export const PHASES = ['Quotation', 'Design', 'Delivery'];
+// Colour of a stage (colour audit 26.11.2026): one hue per phase, so the board reads as a funnel
+// without fourteen colours. css/style.css .st-quote/.st-design/.st-delivery/.st-done/.st-side.
+export const stageTone = (id) => {
+  const s = ALL_STAGES.find((x) => x.id === id);
+  if (!s) return 'side';
+  if (s.id === 'completed') return 'done';
+  return s.phase ? { Quotation: 'quote', Design: 'design', Delivery: 'delivery' }[s.phase] : 'side';
+};
+// A team member's avatar colour, fixed per person (a hash of the id into eight muted hues).
+export const avatarTone = (id = '') => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 8; };
 export const stage = (id) => ALL_STAGES.find((s) => s.id === id) || ALL_STAGES[0];
 export const audienceOf = (user) => (user?.role === 'staff' ? 'staff' : user?.account_type === 'homeowner' ? 'home' : 'trade');
 export const stageLabel = (id, audience = 'trade') => { const s = stage(id); return tr(audience === 'home' && s.homeLabel ? s.homeLabel : audience === 'staff' && s.staffLabel ? s.staffLabel : s.label); };
@@ -101,7 +111,7 @@ export const toast = (msg) => {
 };
 export const stageBadge = (id, audience = 'trade') => {
   const s = stage(id);
-  return `<span class="badge badge-${s.court}">${esc(stageLabel(id, audience))}</span>`;
+  return `<span class="badge badge-${s.court} st-${stageTone(s.id)}">${esc(stageLabel(id, audience))}</span>`;
 };
 export const tracker = (id) => {
   const i = stageIndex(id);
@@ -118,7 +128,7 @@ export const courtLabel = (id, viewer = 'client') => {
 export const progressBar = (id) => {
   const i = stageIndex(id);
   const pct = i < 0 ? 0 : Math.round(((i + 1) / STAGES.length) * 100);
-  return `<div class="progress" role="img" aria-label="${tr('Stage {i} of {n}', { i: i + 1, n: STAGES.length })}"><span style="width:${pct}%"></span></div>`;
+  return `<div class="progress" role="img" aria-label="${tr('Stage {i} of {n}', { i: i + 1, n: STAGES.length })}"><span class="st-${stageTone(id)}" style="width:${pct}%"></span></div>`;
 };
 
 // ---------- project team & decision rights ----------

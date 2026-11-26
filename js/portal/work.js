@@ -129,6 +129,7 @@ export async function calendarView(app, nav, user) {
       <label class="visually-hidden" for="cal-kind">${tr('What')}</label><select id="cal-kind" data-cal-kind><option value="">${tr('Everything')}</option>${Object.entries(BOOKING_KINDS).map(([k, v]) => `<option value="${k}" ${k === calKind ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select>
       <button type="button" class="btn btn-sm btn-ghost" data-cal-ics ${shown.length ? '' : 'disabled'}>${tr('Download .ics')}</button>
     </div>
+    <ul class="cal-legend" aria-label="${tr('Colours')}">${Object.entries(BOOKING_KINDS).map(([k, v]) => `<li class="cal-${k}">${esc(tr(v))}</li>`).join('')}<li class="is-clash">${tr('clash')}</li></ul>
     <div class="cal cal-${mode}">
       ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-h" aria-hidden="true">${tr(d)}</div>`).join('')}
       ${cells.map((d) => { const on = all.filter((b) => b.starts_on <= d && b.ends_on >= d); return `<div class="cal-d${d === t0 ? ' is-today' : ''}${mode === 'month' && d.slice(0, 7) !== month ? ' is-out' : ''}${new Date(`${d}T12:00:00`).getDay() % 6 ? '' : ' is-weekend'}" data-day="${d}">

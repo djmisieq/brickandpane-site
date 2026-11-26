@@ -34,3 +34,46 @@ test('pages stay light and load nothing from other domains', async ({ page }, in
     page.removeAllListeners('request'); page.removeAllListeners('response');
   }
 });
+
+// Colour audit 26.11.2026: the CRM and the client portal had no contrast check. Every main view, in demo mode.
+test('CRM and portal: text contrast holds on every main view', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'runs once');
+  test.setTimeout(120000);
+  const bad = [];
+  const check = async (where) => {
+    await page.waitForTimeout(300);
+    const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+    violations.forEach((v) => v.nodes.slice(0, 5).forEach((n) => bad.push(`${where}: ${n.target.join(' ')} ${n.any[0]?.message || ''}`)));
+  };
+  await page.goto('/admin.html#/today');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.today').waitFor();
+  await check('today');
+  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook']) {
+    await page.goto(`/admin.html${hash}`);
+    await check(hash);
+  }
+  await page.goto('/admin.html#/board');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('.project-head').waitFor();
+  await check('project card');
+  expect(bad).toEqual([]);
+});
+
+test('client portal: text contrast holds on the dashboard and a project', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'runs once');
+  await page.goto('/portal.html');
+  await page.locator('[data-demo-login="client"]').click();
+  await page.locator('.pcard').first().waitFor();
+  const bad = [];
+  const check = async (where) => {
+    await page.waitForTimeout(300);
+    const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+    violations.forEach((v) => v.nodes.slice(0, 5).forEach((n) => bad.push(`${where}: ${n.target.join(' ')} ${n.any[0]?.message || ''}`)));
+  };
+  await check('portal');
+  await page.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('.now-card').waitFor();
+  await check('project');
+  expect(bad).toEqual([]);
+});

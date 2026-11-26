@@ -1,6 +1,9 @@
 // Internal CRM for Brick & Pane staff: pipeline board, list, enquiries from the public form, project control panel.
 import { store } from './store.js';
-import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, courtLabel, isOverdue, $, $$, toast } from './core.js';
+import { STAGES, SIDE_STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, stageTone, avatarTone, courtLabel, isOverdue, $, $$, toast } from './core.js';
+// Colour audit 26.11.2026: what each Today counter signals when it is not zero, and each enquiry status.
+const TODAY_TONE = { fresh: 'info', tasks: 'warn', overdue: 'danger', answer: 'info', quotes: 'warn', soon: 'neutral', chase: 'warn', waiting: 'warn' };
+const REQ_TONE = { new: 'info', replied: 'ok', converted: 'ok', closed: 'neutral', spam: 'neutral' };
 import { tr } from './i18n.js';
 import { route, renderAppBar } from './ui.js';
 import { quotesView, sentQuotes, findQuotes } from './quotes.js';
@@ -101,14 +104,14 @@ async function board(asList) {
       <span class="kcard-name">${esc(p.name)}</span>
       <span class="kcard-client">${esc(clientName(p))}${clientOf(p)?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
       ${p.internal?.waiting_on || tasksOf(p.id).length ? `<span class="kcard-tags">${p.internal?.waiting_on ? `<span class="tag tag-wait">${esc(tr('waiting on {who}', { who: tr(WAITING[p.internal.waiting_on]) }))}</span>` : ''}${tasksOf(p.id).length ? `<span class="tag${tasksOf(p.id).some(taskLate) ? ' tag-late' : ''}">${esc(tr('{n} tasks', { n: tasksOf(p.id).length }))}</span>` : ''}</span>` : ''}
-      <span class="kcard-foot"><span>${p.assignee ? `<span class="avatar" title="${esc(p.assignee.full_name)}">${esc(initials(p.assignee.full_name))}</span> ` : ''}${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
+      <span class="kcard-foot"><span>${p.assignee ? `<span class="avatar av-${avatarTone(p.assignee.id || p.assignee.full_name)}" title="${esc(p.assignee.full_name)}">${esc(initials(p.assignee.full_name))}</span> ` : ''}${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
     </a>`;
   app.innerHTML = `
     <div class="container-wide section-tight">
       <div class="dash-head">
         <div><h1 class="app-h1">${tr('Pipeline')}</h1></div>
         <dl class="stats">
-          <div class="stat ${open.filter(isOverdue).length ? 'is-you' : ''}"><dt>${tr('Overdue (with us)')}</dt><dd>${open.filter(isOverdue).length}</dd></div>
+          <div class="stat ${open.filter(isOverdue).length ? 'tone-danger' : 'is-zero'}"><dt>${tr('Overdue (with us)')}</dt><dd>${open.filter(isOverdue).length}</dd></div>
           <div class="stat"><dt>${tr('With us')}</dt><dd>${open.filter((p) => stage(p.stage).court === 'us').length}</dd></div>
           <div class="stat"><dt>${tr('Waiting on client')}</dt><dd>${open.filter((p) => stage(p.stage).court === 'you').length}</dd></div>
           <div class="stat"><dt>${tr('Quotes in play')}</dt><dd>${fmtMoney(sum(quoting))}</dd></div>
@@ -128,7 +131,7 @@ async function board(asList) {
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
-          return `<section class="col ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h">${esc(tr(s.staffLabel || s.label))} <span>${items.length}</span></h2>${items.map(card).join('')}</section>`;
+          return `<section class="col st-${stageTone(s.id)} ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h"><span class="col-dot" aria-hidden="true"></span>${esc(tr(s.staffLabel || s.label))}${s.court === 'you' ? ` <span class="col-wait" title="${esc(tr('Waiting on client'))}">⏳</span>` : ''} <span class="col-n">${items.length}</span></h2>${items.map(card).join('')}</section>`;
         }).join('')}</div>`}
     </div>`;
   $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
@@ -187,7 +190,7 @@ async function today() {
     <div class="container-wide section-tight">
       <div class="dash-head">
         <div><span class="eyebrow">${esc(fmtDay(new Date().toISOString()))}</span><h1 class="app-h1">${tr('Today')}</h1></div>
-        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat${items.length && ['fresh', 'tasks', 'overdue', 'answer'].includes(id) ? ' is-you' : ''}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
+        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat ${items.length ? `tone-${TODAY_TONE[id] || 'neutral'}` : 'is-zero'}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
       </div>
       <div class="board-tools">
         ${viewSwitch('today', requests)}
@@ -212,7 +215,7 @@ function viewSwitch(on, requests) {
   const fresh = requests.filter((r) => r.status === 'new').length;
   const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
   // Projects audit 26.11.2026: My work and the Calendar join; Board and List are one "Projects" place (its own switch).
-  return `<div class="seg" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('my', '#/my', tr('My work'))}${link(on === 'list' ? 'list' : 'board', on === 'list' ? '#/list' : '#/board', tr('Projects'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('calendar', '#/calendar', tr('Calendar'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('quotes', '#/quotes', tr('Quotes'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
+  return `<div class="seg seg-nav" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('my', '#/my', tr('My work'))}${link(on === 'list' ? 'list' : 'board', on === 'list' ? '#/list' : '#/board', tr('Projects'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('calendar', '#/calendar', tr('Calendar'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('quotes', '#/quotes', tr('Quotes'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.
@@ -279,7 +282,7 @@ async function enquiries() {
         <span class="enq-ref">${esc(r.ref)}</span>
         <span class="enq-name">${esc(r.name)}${r.company ? `, ${esc(r.company)}` : ''}</span>
         <span class="enq-meta">${esc(tr(REQ_ROLES[r.role] || r.role || ''))}${r.topic ? ` · ${esc(tr(REQ_TOPICS[r.topic] || r.topic))}` : ''}</span>
-        <span class="enq-foot"><span class="badge">${esc(tr(REQ_STATUS[r.status] || r.status))}</span> <span>${ago(r.created_at)}</span></span>
+        <span class="enq-foot"><span class="badge tone-${REQ_TONE[r.status] || 'neutral'}">${esc(tr(REQ_STATUS[r.status] || r.status))}</span> <span>${ago(r.created_at)}</span></span>
       </summary>
       <div class="enq-body">
         <table class="spec spec-compact"><tbody>
@@ -324,7 +327,7 @@ async function enquiries() {
       <div class="dash-head">
         <div><h1 class="app-h1">${tr('Enquiries')}</h1></div>
         <dl class="stats">
-          <div class="stat ${all.some((r) => r.status === 'new') ? 'is-you' : ''}"><dt>${tr('New')}</dt><dd>${all.filter((r) => r.status === 'new').length}</dd></div>
+          <div class="stat ${all.some((r) => r.status === 'new') ? 'tone-info' : 'is-zero'}"><dt>${tr('New')}</dt><dd>${all.filter((r) => r.status === 'new').length}</dd></div>
           <div class="stat"><dt>${tr('Replied')}</dt><dd>${all.filter((r) => r.status === 'replied').length}</dd></div>
         </dl>
       </div>

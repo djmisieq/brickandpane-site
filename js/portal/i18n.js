@@ -639,6 +639,7 @@ const PL = {
   "Calendar": "Kalendarz",
   "client date": "termin klienta",
   "clash": "kolizja",
+  "Colours": "Kolory",
   "Week of {date}": "Tydzień od {date}",
   "{n} clashes": "kolizje: {n}",
   "Move": "Przenieś",
