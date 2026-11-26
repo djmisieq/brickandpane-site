@@ -1198,8 +1198,12 @@ test('moving: a supplier quote, a task and an email go to the right project, and
   // An email on the wrong project.
   await page.locator('[data-tab="mail"]').click();
   const mail = page.locator('[data-mail-panel] details.mail:not(.is-out)', { hasText: 'threshold detail' }).first();
-  await mail.locator(':scope > summary').click();
-  await mail.locator('.mail-move > summary').click();
+  // A live redraw from the move above can close the mail just opened: open it again until the move form shows.
+  await expect(async () => {
+    if (!(await mail.evaluate((d) => d.open))) await mail.locator(':scope > summary').click();
+    await mail.locator('.mail-move > summary').click({ timeout: 2000 });
+    await expect(mail.locator('.mail-move [data-linker-input]')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15000 });
   await pick(page, await mail.locator('.mail-move [data-linker-input]').getAttribute('id'), 'Mews', 'Mews house');
   await mail.locator('.mail-move button[type="submit"]').click();
   await expect(page.locator('.toast').last()).toContainText('Moved to the other project.');
