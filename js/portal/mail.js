@@ -6,6 +6,7 @@
 import { store } from './store.js';
 import { esc, fmtDate, ago, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
+import { linker, bindLinkers, picked } from './linker.js';
 
 const KINDS = { client: 'Client', supplier: 'Supplier', other: 'Other' };
 const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -25,8 +26,7 @@ function item(m, { projects = null } = {}) {
     ? `<button type="button" class="q-link" data-mail-file="${esc(a.path)}">${esc(a.name)}</button> <span class="note">${esc(size(a.size))}</span>`
     : `<span class="note">${esc(a.name)} (${tr('in Zimbra only')})</span>`).join(' · ');
   const assign = projects ? `<form class="mail-assign" data-mail-assign>
-      <label class="visually-hidden" for="ma-${esc(m.id)}">${tr('Project')}</label>
-      <select id="ma-${esc(m.id)}" name="project"><option value="">${tr('Choose a project…')}</option>${projects.map((p) => `<option value="${esc(p.id)}" ${(m.projects || []).includes(p.id) ? 'selected' : ''}>${esc(p.ref)} · ${esc(p.name)}</option>`).join('')}</select>
+      ${linker({ id: `ma-${m.id}`, label: tr('Project'), kinds: ['project'], name: 'project', placeholder: tr('Type a reference, a name or a site…') })}
       <button class="btn btn-sm btn-ghost" type="submit">${tr('File on project')}</button>
       ${m.direction === 'in' ? `<button class="btn btn-sm btn-ghost" type="button" data-mail-known="${esc(m.from_addr)}">${tr('Add sender as contact')}</button>` : ''}
       ${!m.dismissed ? `<button class="btn btn-sm btn-ghost" type="button" data-mail-dismiss>${tr('Not for the CRM')}</button>` : ''}
@@ -44,6 +44,9 @@ function item(m, { projects = null } = {}) {
       ${files ? `<p class="mail-files">${files}</p>` : ''}
       ${projects ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-mail-reply>${tr('Reply')}</button>`}
       ${assign}
+      ${projects ? '' : `<details class="mail-move"><summary class="note">${tr('Not this project? Move it')}</summary><form class="mail-assign" data-mail-assign>
+        ${linker({ id: `mm-${m.id}`, label: tr('Move to project'), kinds: ['project'], name: 'project', placeholder: tr('Type a reference, a name or a site…') })}
+        <button class="btn btn-sm btn-ghost" type="submit">${tr('Move here')}</button></form></details>`}
     </div>
   </details>`;
 }
@@ -117,6 +120,13 @@ export function bindMail(root, pid = null) {
       redrawCompose(root, pid);
     }));
   }
+  // Filing an email on a project, or moving it from the wrong one (projects audit 26.11.2026).
+  bindLinkers(root);
+  $$('[data-mail-assign]', root).forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const to = picked(f, 'project');
+    if (!to) { $('[data-linker-input]', f)?.focus(); toast(tr('Choose a project first.')); return; }
+    try { await store.assignMail(f.closest('[data-mail]').dataset.mail, to.id); toast(tr(pid ? 'Moved to the other project.' : 'Filed on the project.')); } catch (err) { toast(tr(err.message)); }
+  }));
   const kw = $('[data-mail-keywords]', root);
   kw?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -182,11 +192,6 @@ export async function mailView(app, switcher) {
   const again = () => mailView(app, switcher);
   bindMail(app);
   $$('[data-mail-filter]', app).forEach((b) => b.addEventListener('click', () => { filter = b.dataset.mailFilter; again(); }));
-  $$('[data-mail-assign]', app).forEach((f) => f.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!f.project.value) { f.project.focus(); toast(tr('Choose a project first.')); return; }
-    try { await store.assignMail(f.closest('[data-mail]').dataset.mail, f.project.value); toast(tr('Filed on the project.')); await again(); } catch (err) { toast(tr(err.message)); }
-  }));
   $$('[data-mail-dismiss]', app).forEach((b) => b.addEventListener('click', async () => {
     try { await store.dismissMail(b.closest('[data-mail]').dataset.mail); toast(tr('Hidden from this list.')); await again(); } catch (err) { toast(tr(err.message)); }
   }));

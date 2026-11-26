@@ -4,6 +4,7 @@
 import { store } from './store.js';
 import { esc, fmtDay, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
+import { linker, bindLinkers, picked } from './linker.js';
 
 const KINDS = { task: 'Task', call: 'Call', email: 'Email', visit: 'Visit' };
 const DAY = 86400000;
@@ -15,14 +16,23 @@ export const taskDue = (t) => !t.done_at && t.due_on && t.due_on <= isoDay(0);
 
 export async function loadTasks(where) { return store.listTasks ? store.listTasks(where).catch(() => null) : null; }
 
-function item(t, staff) {
+// opts.project: the project's ref and name, shown when the list mixes projects (My work).
+export function item(t, staff, opts = {}) {
   const who = staff.find((s) => s.id === t.assignee_id)?.full_name;
+  const staffOpts = staff.map((s) => `<option value="${esc(s.id)}" ${s.id === t.assignee_id ? 'selected' : ''}>${esc(s.full_name || s.email)}</option>`).join('');
   const when = t.done_at ? tr('done {date}', { date: fmtDay(t.done_at) }) : t.due_on ? (taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Due {date}', { date: fmtDay(t.due_on) })) : '';
   return `<li class="task${t.done_at ? ' is-done' : ''}${taskLate(t) ? ' is-late' : ''}" data-task="${esc(t.id)}">
     <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done'))}"><span><strong>${esc(t.title)}</strong>
       <span class="note">${esc(tr(KINDS[t.kind] || 'Task'))}${when ? ` · ${esc(when)}` : ''}${who ? ` · ${esc(who)}` : ''}</span>
+      ${opts.project ? `<a class="note task-proj" href="${esc(opts.href)}">${esc(opts.project)}</a>` : ''}
       ${t.note ? `<span class="note task-note">${esc(t.note)}</span>` : ''}</span></label>
     <button type="button" class="q-icon" data-task-del aria-label="${esc(tr('Delete task'))}" title="${esc(tr('Delete task'))}">×</button>
+    ${t.done_at ? '' : `<details class="task-edit"><summary class="note">${tr('Change')}</summary><form class="task-form" data-task-edit novalidate>
+      <div class="field"><label for="te-t-${esc(t.id)}">${tr('Task')}</label><input id="te-t-${esc(t.id)}" name="title" maxlength="300" value="${esc(t.title)}"></div>
+      <div class="field-row"><div class="field"><label for="te-d-${esc(t.id)}">${tr('By')}</label><input id="te-d-${esc(t.id)}" name="due_on" type="date" value="${esc(t.due_on || '')}"></div>
+        <div class="field"><label for="te-w-${esc(t.id)}">${tr('Who')}</label><select id="te-w-${esc(t.id)}" name="assignee_id"><option value="">${tr('Nobody yet')}</option>${staffOpts}</select></div></div>
+      ${linker({ id: `te-p-${t.id}`, label: tr('Move to project'), kinds: ['project'], name: 'project', exclude: t.project_id ? [t.project_id] : [], placeholder: tr('Leave empty to keep it where it is') })}
+      <button class="btn btn-sm" type="submit">${tr('Save')}</button></form></details>`}
   </li>`;
 }
 
@@ -58,7 +68,19 @@ export function tasksBox(list, staff, user, where, uid = 'tk') {
   </div>`;
 }
 
+// The change form on a task: what, by when, who, and on which project (projects audit 26.11.2026).
+export function bindTaskEdits(root) {
+  bindLinkers(root);
+  $$('[data-task-edit]', root).forEach((f) => { if (f.dataset.bound) return; f.dataset.bound = '1'; f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const title = f.title.value.trim(); if (!title) { f.title.focus(); toast(tr('Write what needs doing.')); return; }
+    const to = picked(f, 'project'), patch = { title, due_on: f.due_on.value || null, assignee_id: f.assignee_id.value || null };
+    if (to) Object.assign(patch, { project_id: to.id, request_id: null });
+    try { await store.updateTask(f.closest('[data-task]').dataset.task, patch); toast(tr(to ? 'Task moved to the other project.' : 'Task saved.')); } catch (err) { toast(tr(err.message)); }
+  }); });
+}
+
 export function bindTasks(root, user) {
+  bindTaskEdits(root);
   $$('[data-tasks]', root).forEach((box) => {
     const where = { project_id: box.dataset.project || null, request_id: box.dataset.request || null };
     const add = $('[data-task-add]', box), log = $('[data-task-log]', box);

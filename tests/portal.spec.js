@@ -87,7 +87,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.seg a')).toHaveText([/Today/, /Board/, /List/, /Enquiries/, /Quotes/, /Email/, /Companies/, /Dashboard/]);
+  await expect(page.locator('.board-tools > .seg').first().locator('a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -394,7 +394,9 @@ test('companies: a practice with its people, linked to a project in a role, foun
   // On the project card, in a role.
   await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
-  await page.locator('[data-fold="companies"] > summary').click();
+  // Found by typing, not in a list of every company (projects audit 26.11.2026); the box is open on the card.
+  await page.locator('#pco-co').fill('jsa');
+  await page.locator('#pco-co-list [role="option"]', { hasText: 'JSA Architects' }).click();
   await page.locator('#pco-role').selectOption('architect');
   await page.locator('[data-pco-add] button[type="submit"]').click();
   await expect(page.locator('[data-pco-item]')).toContainText('JSA Architects');
@@ -427,9 +429,10 @@ test('mail: a reply is written on the project and goes only after the tick that 
   await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-tab="mail"]').click();
   const panel = page.locator('[data-mail-panel]');
   const first = panel.locator('details.mail:not(.is-out)', { hasText: 'threshold detail' }).first();
-  await first.locator('summary').click();
+  await first.locator(':scope > summary').click();
   await first.locator('[data-mail-reply]').click();
   const form = panel.locator('[data-mail-compose]');
   await expect(form.locator('#mc-subj')).toHaveValue('Re: Hartley Road: threshold detail');
@@ -711,7 +714,7 @@ test('costs: staff add a supplier quote in £, accept it and see the margin; the
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await expect(page.locator('.key-numbers')).toContainText('£23,900'); // value on top of the card, no scrolling
-  await page.locator('[data-fold="costs"] > summary').click();
+  await page.locator('[data-tab="money"]').click();
   const box = page.locator('[data-costs]');
   await expect(box).toContainText('Costs & margin');
   await expect(box).toContainText('£23,900'); // the Commercial value, until a quote goes out on a deal
@@ -744,7 +747,7 @@ test('costs: supplier quotes compare at one net figure; a supplier asked waits o
   await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
-  await page.locator('[data-fold="costs"] > summary').click();
+  await page.locator('[data-tab="money"]').click();
   const box = page.locator('[data-costs]');
   // Asked, no price yet.
   await box.locator('#cost-ask-sup').fill('Okna Nowak (demo)');
@@ -788,11 +791,12 @@ test('mail: the client’s email shows on the project, the rest waits in Email; 
   await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-tab="mail"]').click();
   const panel = page.locator('[data-mail-panel]');
   await expect(panel).toContainText('Hartley Road: threshold detail');
   await expect(panel).toContainText('Re: Hartley Road: threshold detail');
   await expect(panel).not.toContainText('Offer for frames');
-  await panel.locator('details.mail', { hasText: 'threshold detail' }).first().locator('summary').click();
+  await panel.locator('details.mail', { hasText: 'threshold detail' }).first().locator(':scope > summary').click();
   await expect(panel).toContainText('Could the threshold be flush');
   // A site name in the subject routes mail too (one client, several sites).
   await page.locator('#mk-word').fill('Avon Run');
@@ -850,6 +854,7 @@ test('a quote started on a project goes out without a HubSpot deal: PDF in Docum
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-tab="money"]').click();
   const box = page.locator('[data-project-quotes]');
   await expect(box).toContainText('No quote yet.');
   await box.locator('[data-new-quote]').click();
@@ -924,7 +929,7 @@ test('quote builder: our cost comes from a supplier quote on the project, the pr
   await page.goto('/admin.html#/board');
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
-  await page.locator('[data-fold="costs"] > summary').click();
+  await page.locator('[data-tab="money"]').click();
   const costs = page.locator('[data-costs]');
   await costs.locator('#cost-sup').fill('Frames Ltd (demo)');
   await costs.locator('#cost-amt').fill('12000');
@@ -956,6 +961,7 @@ test('quote builder: the PDF is made in the browser and sent, no print and uploa
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-tab="money"]').click();
   await page.locator('[data-new-quote]').click();
   await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
   await page.locator('[data-act="step"][data-v="client"]').click();
@@ -1086,6 +1092,7 @@ test('Today: a sent quote about to lapse is on the chase list', async ({ page })
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/board');
   await page.locator('.kcard', { hasText: 'Garden room, Dulwich' }).click();
+  await page.locator('[data-tab="money"]').click();
   await page.locator('[data-new-quote]').click();
   await expect(page).toHaveURL(/#\/quotes\/[\w-]+$/);
   await page.locator('[data-act="step"][data-v="client"]').click();
@@ -1102,4 +1109,258 @@ test('Today: a sent quote about to lapse is on the chase list', async ({ page })
   await expect(sec).toContainText(ref);
   await expect(sec).toContainText('valid 2 more days');
   await expect(sec.locator('.today-row').first()).toHaveClass(/is-late/);
+});
+
+// ---------- Projects audit 26.11.2026: linked, movable, and built for the team ----------
+const staffOn = async (page, hash = '#/board') => { await page.goto(`/admin.html${hash}`); await page.locator('[data-demo-login="staff"]').click(); };
+const pick = async (page, id, text, option) => { await page.locator(`#${id}`).fill(text); await page.locator(`#${id}-list [role="option"]`, { hasText: option || text }).first().click(); };
+const fold = async (page, key) => { const d = page.locator(`[data-fold="${key}"]`); if (!(await d.evaluate((e) => e.open))) await d.locator(':scope > summary').click(); };
+const asKate = async (context) => { const p = await context.newPage(); await p.goto('/login.html'); await p.evaluate(() => sessionStorage.setItem('bp-portal-demo-session', 'u-kate')); await p.goto('/admin.html#/my'); return p; };
+const card = async (page, name) => { await page.goto('/admin.html#/board'); await page.locator('.kcard', { hasText: name }).click(); await expect(page.locator('.project-head h1')).toContainText(name); };
+
+test('project card: the facts on top, the next stage one tap away, and one activity feed', async ({ page }) => {
+  await staffOn(page);
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await expect(page.locator('.key-numbers')).toContainText('Account manager');
+  await expect(page.locator('.key-numbers')).toContainText('Waiting on');
+  await expect(page.locator('[data-tab="activity"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-activity] .feed')).toContainText('Quotation Q1 is in Documents.');
+  // The next stage: one tap fills the form and names the tasks it starts.
+  await page.locator('[data-next-stage]').click();
+  await expect(page.locator('#ctl-stage')).toHaveValue('accepted');
+  await expect(page.locator('[data-stage-tasks]')).toContainText('Book the survey with the client');
+  await page.locator('[data-stage] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Stage updated');
+  await expect(page.locator('[data-fold="tasks"]')).toContainText('Book the survey with the client');
+  await expect(page.locator('[data-fold="tasks"]')).toContainText('Send the deposit invoice');
+  // Quick actions open the place where the thing is done.
+  await page.locator('[data-quick="booking"]').click();
+  await expect(page.locator('#bk-start')).toBeFocused();
+  await page.locator('[data-quick="note"]').click();
+  await expect(page.locator('#msg-body')).toBeFocused();
+  await expect(page.locator('.composer-mode input[value="internal"]')).toBeChecked();
+  // Filters: what the client sees, team only.
+  await page.locator('[data-tab="activity"]').click();
+  await page.locator('[data-feed="internal"]').click();
+  await expect(page.locator('[data-activity] .feed')).toContainText('Book the survey with the client');
+  await page.locator('[data-feed="client"]').click();
+  await expect(page.locator('[data-activity] .feed')).not.toContainText('Book the survey with the client');
+});
+
+test('people and companies: found by typing, created on the spot, re-roled, the main contact marked, all in the feed', async ({ page, context }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await pick(page, 'pco-co', 'Northside Fit (TEST)', 'Create');
+  await page.locator('#pco-role').selectOption('contractor');
+  await page.locator('[data-pco-add] button[type="submit"]').click();
+  await expect(page.locator('[data-pco-item]')).toContainText('Northside Fit (TEST)');
+  await page.locator('[data-pco-item] [data-pco-role]').selectOption('supplier');
+  await expect(page.locator('.toast').last()).toContainText('Role changed.');
+  await pick(page, 'pp-person', 'Pat Site (TEST)', 'Create');
+  await page.locator('#pp-role').selectOption('site');
+  await page.locator('[data-pp-add] button[type="submit"]').click();
+  await expect(page.locator('[data-pp-item]')).toContainText('main contact');
+  await expect(page.locator('[data-pp-item] [data-pp-role]')).toHaveValue('site');
+  await page.locator('[data-tab="activity"]').click();
+  await expect(page.locator('[data-activity]')).toContainText('Northside Fit (TEST) linked as Contractor');
+  await expect(page.locator('[data-activity]')).toContainText('role Contractor → Supplier');
+  await expect(page.locator('[data-activity]')).toContainText('Pat Site (TEST) linked as On site');
+  // The client sees none of it.
+  const client = await context.newPage();
+  await client.goto('/login.html'); await client.locator('[data-demo-login="client"]').click();
+  await client.goto('/portal.html'); await client.locator('.pcard', { hasText: 'Hartley Road' }).click();
+  await expect(client.locator('.now-card')).toBeVisible();
+  for (const t of ['Northside Fit', 'Pat Site']) await expect(client.locator('body')).not.toContainText(t);
+});
+
+test('moving: a supplier quote, a task and an email go to the right project, and both feeds say so', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="money"]').click();
+  await page.locator('#cost-sup').fill('Wrong Place Ltd (TEST)');
+  await page.locator('#cost-amt').fill('900');
+  await page.locator('[data-cost-add] button[type="submit"]').click();
+  const row = page.locator('[data-cost]', { hasText: 'Wrong Place Ltd (TEST)' });
+  await row.locator('.cost-move > summary').click();
+  await pick(page, await row.locator('[data-linker-input]').getAttribute('id'), 'Mews', 'Mews house');
+  await row.locator('[data-cost-move] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Moved to the other project.');
+  await expect(page.locator('[data-costs]')).not.toContainText('Wrong Place Ltd (TEST)');
+  // A task too.
+  await page.locator('[data-quick="task"]').click();
+  await page.locator('#tk-p-title').fill('Measure the side door (TEST)');
+  await page.locator('[data-task-add] button[type="submit"]').click();
+  const task = page.locator('[data-fold="tasks"] [data-task]', { hasText: 'Measure the side door (TEST)' });
+  await task.locator('.task-edit > summary').click();
+  await pick(page, await task.locator('[data-linker-input]').getAttribute('id'), 'Mews', 'Mews house');
+  await task.locator('[data-task-edit] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Task moved to the other project.');
+  // An email on the wrong project.
+  await page.locator('[data-tab="mail"]').click();
+  const mail = page.locator('[data-mail-panel] details.mail:not(.is-out)', { hasText: 'threshold detail' }).first();
+  await mail.locator(':scope > summary').click();
+  await mail.locator('.mail-move > summary').click();
+  await pick(page, await mail.locator('.mail-move [data-linker-input]').getAttribute('id'), 'Mews', 'Mews house');
+  await mail.locator('.mail-move button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Moved to the other project.');
+  await expect(page.locator('[data-mail-panel] details.mail:not(.is-out)', { hasText: 'threshold detail' })).toHaveCount(0);
+  // On the other project, all three arrived, and its feed says where from.
+  await card(page, 'Mews house');
+  await page.locator('[data-tab="activity"]').click();
+  await expect(page.locator('[data-activity]')).toContainText('A supplier quote moved here from another project');
+  await expect(page.locator('[data-activity]')).toContainText('A task moved here');
+  await expect(page.locator('[data-activity]')).toContainText('An email was filed on this project');
+  await expect(page.locator('[data-fold="tasks"]')).toContainText('Measure the side door (TEST)');
+});
+
+test('an enquiry from a known client joins their project instead of making a new one', async ({ page }) => {
+  await staffOn(page, '#/board');
+  await expect(page.locator('.kcard').first()).toBeVisible();
+  const before = await page.locator('.kcard').count();
+  await page.goto('/admin.html#/enquiries');
+  const enq = page.locator('details.enq', { hasText: 'Jo Bennett' });
+  await enq.locator('summary').click();
+  await pick(page, await enq.locator('[data-req-attach] [data-linker-input]').getAttribute('id'), 'Hartley', 'Hartley Road');
+  await enq.locator('[data-req-attach] button[type="submit"]').click();
+  await expect(page).toHaveURL(/#\/p\//);
+  await expect(page.locator('.project-head h1')).toContainText('Hartley Road');
+  await expect(page.locator('[data-activity]')).toContainText('An enquiry joined this project');
+  await expect(page.locator('[data-activity]')).toContainText('Kitchen extension, would like a 3-panel slider');
+  await page.locator('[data-tab="overview"]').click();
+  await expect(page.locator('#panel-overview')).toContainText('jo@example.com');
+  await page.goto('/admin.html#/board');
+  await expect(page.locator('.kcard')).toHaveCount(before);
+  // Saved as a contact from an enquiry: the person (and their email) lands in Companies.
+  await page.goto('/admin.html#/enquiries');
+  await page.locator('#rq-filter').selectOption('all');
+  const done = page.locator('details.enq', { hasText: 'Jo Bennett' });
+  await done.locator('summary').click();
+  await done.locator('[data-req-contact]').click();
+  await expect(page.locator('.toast').last()).toContainText('Saved as a contact.');
+  await expect(page.locator('details.enq', { hasText: 'Jo Bennett' }).locator('.enq-contact')).toContainText('Jo Bennett');
+});
+
+test('waiting on: who has the ball and when to chase, on the card, the board and Today', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await fold(page, 'waiting');
+  await page.locator('#w-on').selectOption('supplier');
+  await page.locator('#w-note').fill('Production date from the factory');
+  const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await page.locator('#w-chase').fill(today);
+  await page.locator('[data-waiting] button[type="submit"]').click();
+  await expect(page.locator('.key-numbers')).toContainText('the supplier');
+  await page.goto('/admin.html#/board');
+  await expect(page.locator('.kcard', { hasText: 'Hartley Road' })).toContainText('waiting on the supplier');
+  await page.goto('/admin.html#/today');
+  await expect(page.locator('#t-chase')).toContainText('Production date from the factory');
+  await page.goto('/admin.html#/list');
+  await expect(page.locator('.crm-table tbody tr').first()).toBeVisible();
+  await page.locator('[data-sort="waiting"]').click();
+  await expect(page.locator('.crm-table tbody tr').first()).toContainText('Hartley Road');
+});
+
+test('the team: a project handed to a colleague tells them; My work shows their tasks; hand over for a holiday', async ({ page, context }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('#head-owner').selectOption({ label: 'Kate Nowak' });
+  await expect(page.locator('.toast').last()).toContainText('Account manager saved.');
+  await page.locator('[data-next-stage]').click();
+  await page.locator('[data-stage] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Stage updated');
+  await expect(page.locator('[data-fold="tasks"] [data-task]', { hasText: 'Book the survey' })).toContainText('Kate Nowak');
+  // My work for Kate (the owner opens anyone's) lists the playbook tasks; then all of it goes back to Tom.
+  await page.goto('/admin.html#/my');
+  await expect(page.locator('h1')).toHaveText('My work');
+  await page.locator('#mw-who').selectOption({ label: 'Kate Nowak' });
+  await expect(page.locator('h1')).toContainText('Kate Nowak');
+  await expect(page.locator('#my-work')).toContainText('Book the survey with the client');
+  await page.locator('#ho-to').selectOption({ label: 'Tom Reid' });
+  await page.locator('[data-handover] input[name="sure"]').check();
+  await page.locator('[data-handover] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Handed over.');
+  await page.locator('#mw-who').selectOption({ index: 0 });
+  await expect(page.locator('#my-work')).toContainText('Book the survey with the client');
+  // Kate was told (her bell), and the client never was.
+  const kate = await asKate(context);
+  await expect(kate.locator('#mw-mentions')).toContainText('You now look after: Hartley Road rear extension');
+});
+
+test('@mention in an internal note reaches that colleague; the client never sees it', async ({ page, context }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="messages"]').click();
+  await page.fill('#msg-body', 'Can you call the architect, @Kate?');
+  await page.locator('[data-message] button[type="submit"]').click();
+  const kate = await asKate(context);
+  await expect(kate.locator('#mw-mentions')).toContainText('You were mentioned');
+});
+
+test('calendar: a booking with its crew shows in the week; the same crew twice on a day is a clash; an .ics comes out', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await fold(page, 'dates');
+  await page.locator('#bk-kind').selectOption('install');
+  await pick(page, 'bk-crew', 'Crew One (TEST)', 'Create');
+  await page.locator('[data-booking-add] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Added to the calendar.');
+  await expect(page.locator('[data-booking]')).toContainText('Crew One (TEST)');
+  const start = await page.locator('#bk-start').inputValue();
+  await card(page, 'Mews house');
+  await fold(page, 'dates');
+  await page.locator('#bk-start').fill(start); await page.locator('#bk-end').fill(start);
+  await pick(page, 'bk-crew', 'Crew One', 'Crew One (TEST)');
+  await page.locator('[data-booking-add] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Added to the calendar.');
+  await page.goto('/admin.html#/calendar');
+  await expect(page.locator('h1')).toHaveText('Calendar');
+  if (!(await page.locator(`.cal-d[data-day="${start}"]`).count())) await page.locator('[data-cal="1"]').click();
+  const day = page.locator(`.cal-d[data-day="${start}"]`);
+  await expect(day.locator('.cal-e')).toHaveCount(2);
+  await expect(day.locator('.cal-e.is-clash')).toHaveCount(2);
+  const dl = page.waitForEvent('download');
+  await page.locator('[data-cal-ics]').click();
+  expect((await dl).suggestedFilename()).toMatch(/\.ics$/);
+  await page.locator('[data-cal-mode="month"]').click();
+  await expect(page.locator('.cal-month')).toBeVisible();
+});
+
+test('duplicates: two records of one company are found and merged, people and links kept', async ({ page }) => {
+  await staffOn(page, '#/companies');
+  for (const name of ['Acme Glazing Ltd (TEST)', 'ACME glazing (TEST)']) {
+    await page.goto('/admin.html#/companies');
+    await page.locator('#co-name').fill(name);
+    await page.locator('[data-co-new] button[type="submit"]').click();
+    await expect(page.locator('h1')).toHaveText(name);
+    await page.locator('#co-pname').fill(`Person at ${name}`);
+    await page.locator('[data-person-add] button[type="submit"]').click();
+    await expect(page.locator('[data-person]')).toContainText(`Person at ${name}`);
+  }
+  await page.goto('/admin.html#/companies');
+  await page.locator('[data-dupes] > summary').click();
+  await expect(page.locator('[data-dupes]')).toContainText('Acme Glazing Ltd (TEST)');
+  await page.locator('[data-dupes] a', { hasText: 'Acme Glazing Ltd (TEST)' }).click();
+  await pick(page, 'co-merge', 'ACME glazing', 'ACME glazing (TEST)');
+  await page.locator('[data-co-merge] input[name="sure"]').check();
+  await page.locator('[data-co-merge] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('Merged.');
+  await expect(page.locator('[data-person]')).toHaveCount(2);
+  await page.goto('/admin.html#/companies');
+  await expect(page.locator('.co-table')).not.toContainText('ACME glazing (TEST)');
+});
+
+test('stage playbook: the team switches a task off and adds its own', async ({ page }) => {
+  await staffOn(page, '#/playbook');
+  await expect(page.locator('h1')).toHaveText('Stage playbook');
+  const row = page.locator('[data-pb]', { hasText: 'Send the deposit invoice' });
+  await row.locator('[data-pb-toggle]').click();
+  await expect(page.locator('[data-pb]', { hasText: 'Send the deposit invoice' }).locator('[data-pb-toggle]')).toHaveText('Switch on');
+  const form = page.locator('[data-pb-add][data-stage="accepted"]');
+  await form.locator('input[name="title"]').fill('Order the samples (TEST)');
+  await form.locator('button[type="submit"]').click();
+  await expect(page.locator('[data-pb]', { hasText: 'Order the samples (TEST)' })).toBeVisible();
+  await card(page, 'Hartley Road');
+  await page.locator('#ctl-stage').selectOption('accepted');
+  await expect(page.locator('[data-stage-tasks]')).toContainText('Order the samples (TEST)');
+  await expect(page.locator('[data-stage-tasks]')).not.toContainText('Send the deposit invoice');
 });

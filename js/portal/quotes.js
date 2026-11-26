@@ -334,7 +334,7 @@ const stageText = (s) => STAGE_LABEL[s] || s || '';
 // The builder's JSON names it (projectId) once a person chose it; quotes.project_id on the server also holds the
 // backfill from a shared HubSpot deal.
 let projectsList = [];
-const projectOf = (q) => q.projectId || metaOf(q).project_id || null;
+const projectOf = (q) => (q.projectId === '' ? null : q.projectId || metaOf(q).project_id || null); // '' = "No project" chosen: unpinned
 const projectRow = (q) => projectsList.find((p) => p.id === projectOf(q)) || null;
 const QUOTE_ISSUED = STAGES.findIndex((s) => s.id === 'quote_issued');
 // Enquiry wording to the builder's: what the client's openings were, as the first product lines.
