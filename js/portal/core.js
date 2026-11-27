@@ -103,11 +103,26 @@ export const estimatePanel = ({ width_mm: W, height_mm: H, config, glazing }) =>
 // ---------- tiny UI helpers ----------
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-export const toast = (msg) => {
+// UX audit 27.11.2026: tone 'error' stays until closed (role alert); undo adds "Undo" for a few seconds.
+export const toast = (msg, { tone = '', undo = null } = {}) => {
   let t = $('.toast');
-  if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.append(t); }
-  t.textContent = msg; t.classList.add('is-on');
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('is-on'), 3200);
+  if (!t) { t = document.createElement('div'); document.body.append(t); }
+  t.className = `toast${tone ? ` tone-${tone}` : ''}`;
+  t.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+  const text = document.createElement('span'); text.textContent = msg; t.replaceChildren(text);
+  const hide = () => t.classList.remove('is-on');
+  if (undo) { const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-btn'; b.textContent = tr('Undo'); b.addEventListener('click', () => { hide(); undo(); }); t.append(b); }
+  if (tone === 'error') { const x = document.createElement('button'); x.type = 'button'; x.className = 'toast-btn'; x.textContent = '×'; x.setAttribute('aria-label', tr('Close')); x.addEventListener('click', hide); t.append(x); }
+  requestAnimationFrame(() => t.classList.add('is-on'));
+  t.classList.add('is-on');
+  clearTimeout(t._h); if (tone !== 'error') t._h = setTimeout(hide, undo ? 6500 : 3200);
+};
+// Deleting with a way back (UX audit B7): the row disappears at once, the delete runs after the undo window.
+export const softDelete = (el, msg, run) => {
+  if (el) el.hidden = true;
+  let undone = false;
+  const timer = setTimeout(() => { if (!undone) Promise.resolve(run()).catch((err) => { if (el) el.hidden = false; toast(tr(err.message), { tone: 'error' }); }); }, 6000);
+  toast(msg, { undo: () => { undone = true; clearTimeout(timer); if (el) el.hidden = false; } });
 };
 export const stageBadge = (id, audience = 'trade') => {
   const s = stage(id);

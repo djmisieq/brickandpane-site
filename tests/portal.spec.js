@@ -1,6 +1,9 @@
 // Client portal + staff CRM in demo mode. Two tabs share data (localStorage) but not sessions.
 import { test, expect } from './fixtures.js';
 
+// The CRM menu is a side bar; on a phone the less used places sit behind "More" in the bottom bar.
+const crmNav = async (page, href) => { const a = page.locator(`.side-nav a[href="${href}"]`); if (!(await a.isVisible())) await page.locator('.side-nav [data-more]').click(); return a; };
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/login.html');
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
@@ -87,14 +90,14 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.board-tools > .seg').first().locator('a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/]);
+  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
 test('staff build a quote in five steps and get a printable estimate', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html');
-  await page.locator('.seg a[href="#/quotes"]').click();
+  await (await crmNav(page, '#/quotes')).click();
   await expect(page.locator('h1')).toHaveText('Quotes');
   await expect(page.locator('#app')).toContainText('Nothing yet.');
   await page.locator('[data-act="new"]').click();
@@ -241,8 +244,8 @@ test('a quote goes to its HubSpot deal: new, then a revision; a copy stays on th
 test('staff see website enquiries sent without an account and triage them', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html');
-  await expect(page.locator('.seg a[href="#/enquiries"] .seg-count')).toHaveText('1');
-  await page.locator('.seg a[href="#/enquiries"]').click();
+  await expect(page.locator('.side-nav a[href="#/enquiries"] .seg-count')).toHaveText('1');
+  await (await crmNav(page, '#/enquiries')).click();
   await expect(page.locator('h1')).toHaveText('Enquiries');
   const enq = page.locator('details.enq', { hasText: 'BP-261018-3F2A' });
   await enq.locator('summary').click();
@@ -338,8 +341,8 @@ test('CRM: opens on Today; the board is one click away and its breadcrumb leads 
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html');
   await expect(page.locator('h1')).toHaveText('Today');
-  await expect(page.locator('.seg a.is-on')).toHaveText('Today');
-  await page.locator('.seg a[href="#/board"]').click();
+  await expect(page.locator('.side-nav a.is-on')).toHaveText('Today');
+  await (await crmNav(page, '#/board')).click();
   await expect(page.locator('.board')).toBeVisible();
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('.breadcrumb a[href="#/board"]').click();

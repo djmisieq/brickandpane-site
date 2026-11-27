@@ -6,7 +6,7 @@
 //    crew or a person on the same day, and an .ics file to send to a crew.
 //  - Stage playbook: the tasks each stage starts, edited by the team.
 import { store } from './store.js';
-import { ALL_STAGES, STAGES, esc, fmtDay, stageBadge, stageLabel, $, $$, toast } from './core.js';
+import { ALL_STAGES, STAGES, esc, fmtDay, stageBadge, stageLabel, $, $$, toast, softDelete } from './core.js';
 import { tr } from './i18n.js';
 import { loadTasks, item as taskItem, bindTasks, taskLate } from './tasks.js';
 import { names } from './linker.js';
@@ -173,5 +173,5 @@ export async function playbookView(app, nav) {
     try { await store.savePlaybook({ to_stage: f.dataset.stage, title, kind: f.kind.value, offset_days: Math.max(0, Math.min(90, +f.offset_days.value || 0)), sort: list.filter((b) => b.to_stage === f.dataset.stage).length + 1 }); toast(tr('Added.')); playbookView(app, nav); } catch (err) { toast(tr(err.message)); }
   }));
   $$('[data-pb-toggle]', app).forEach((b) => b.addEventListener('click', async () => { const row = list.find((x) => x.id === b.closest('[data-pb]').dataset.pb); try { await store.savePlaybook({ id: row.id, active: !row.active }); playbookView(app, nav); } catch (err) { toast(tr(err.message)); } }));
-  $$('[data-pb-del]', app).forEach((b) => b.addEventListener('click', async () => { try { await store.deletePlaybook(b.closest('[data-pb]').dataset.pb); playbookView(app, nav); } catch (err) { toast(tr(err.message)); } }));
+  $$('[data-pb-del]', app).forEach((b) => b.addEventListener('click', async () => { const row = b.closest('[data-pb]'); softDelete(row, tr('Rule removed.'), () => store.deletePlaybook(row.dataset.pb)); }));
 }

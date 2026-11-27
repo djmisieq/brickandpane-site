@@ -4,7 +4,7 @@
 // messages, email, files, tasks, supplier quotes, bookings and every relink in time order. The side keeps the forms:
 // stage, waiting on, who is on the project, tasks, dates and bookings, commercial, sharing a file, payments.
 import { store } from './store.js';
-import { STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, isOverdue, $, $$, toast } from './core.js';
+import { STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, isOverdue, $, $$, toast, softDelete } from './core.js';
 import { tr, LANG } from './i18n.js';
 import { pipeline, nowCard, overviewPanel, documentsPanel, changesPanel, messagesPanel, bindDetail, counts } from './ui.js';
 import { projectQuotes, newQuoteFor } from './quotes.js';
@@ -14,6 +14,7 @@ import { loadTasks, tasksBox, bindTasks, taskLate } from './tasks.js';
 import { SOURCES } from './dashboard.js';
 import { loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, ROLES as CO_ROLES, PERSON_ROLES } from './companies.js';
 import { linker, bindLinkers, picked, names } from './linker.js';
+import { ICON } from './icons.js';
 
 // Team words kept out of i18n.js (audit.spec keeps them off client-facing text; costs.js does the same).
 export const t = (en, pl, vars) => (LANG === 'pl' ? pl : en).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? '');
@@ -23,6 +24,22 @@ const TABS = [['activity', 'Activity'], ['overview', 'Overview'], ['documents', 
 const DAY = 86400e3;
 const daysSince = (iso) => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / DAY)) : 0);
 const isoDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const isoDayOf = (iso) => isoDay(new Date(iso));
+// The number to call from the card: the project's main contact, else anyone on it with a phone, else the enquiry's.
+const phoneOf = (pco, src) => { const ppl = pco?.people || []; return (ppl.find((x) => x.is_main && x.person?.phone) || ppl.find((x) => x.person?.phone))?.person.phone || src?.phone || ''; };
+// Phone photos are 3–8 MB: a 2000 px JPEG is plenty for a site record and uploads quickly over 4G.
+const shrinkPhoto = (file) => new Promise((resolve) => {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { resolve(file); return; }
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    c.toBlob((b) => resolve(b ? new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file), 'image/jpeg', 0.85);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+  img.src = url;
+});
 const workdays = (n) => { const d = new Date(); while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) n--; } return isoDay(d); };
 
 let activeTab = 'activity', lastId = null, feedFilter = 'all';
@@ -113,7 +130,7 @@ function headFacts(p, d, margin, staff, wait) {
   const item = (label, value, cls = '') => `<div class="${cls}"><dt>${tr(label)}</dt><dd>${value}</dd></div>`;
   return `<dl class="key-numbers">
     ${item('Stage', `${stageBadge(p.stage, 'staff')} <span class="note">${esc(tr('{n} d', { n: inStage }))}</span>`)}
-    ${item('Due', due)}
+    ${item('Due', `<label class="visually-hidden" for="head-due">${tr('Due')}</label><input id="head-due" class="head-due${isOverdue(p) ? ' is-late' : ''}" type="date" data-head-due value="${p.due_at ? esc(isoDayOf(p.due_at)) : ''}">${isOverdue(p) ? ` <strong class="kn-late">${esc(tr('Overdue'))}</strong>` : ''}`)}
     ${item('Value', sale == null || sale === '' ? '—' : esc(fmtMoney(sale)))}
     ${item('Margin', m.margin_gbp == null ? '—' : !Number(m.cost_gbp) ? `<span class="note">${tr('no costs entered')}</span>` : `${esc(fmtMoney(m.margin_gbp))}${m.margin_pct == null ? '' : ` (${esc(String(m.margin_pct))}%)`}`)}
     ${item('Account manager', `<label class="visually-hidden" for="head-owner">${tr('Account manager')}</label><select id="head-owner" class="head-owner" data-head-assignee><option value="">${tr('Unassigned')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select>`)}
@@ -151,7 +168,8 @@ export async function projectView(app, id, ctx) {
     <div class="container-wide section-tight project-card">
       <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/board">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
       <div class="detail-head project-head">
-        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location || '')} · ${headClient(p, d.invites)}</p></div>
+        <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location || '')} · ${headClient(p, d.invites)}</p>
+          <p class="head-acts">${phoneOf(pco, src) ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(phoneOf(pco, src).replace(/[^\d+]/g, ''))}">${ICON.phone}${tr('Call now')}</a>` : ''}${p.location ? `<a class="btn btn-sm btn-ghost" href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(p.location)}" target="_blank" rel="noopener">${ICON.map}${tr('Directions')}</a>` : ''}<label class="btn btn-sm btn-ghost head-photo">${ICON.camera}${tr('Photo')}<input type="file" accept="image/*" capture="environment" multiple data-site-photo class="visually-hidden"></label></p></div>
         ${suggested ? `<button type="button" class="btn btn-sm" data-next-stage="${esc(suggested)}">${esc(tr('Next stage: {stage}', { stage: tr(stage(suggested).staffLabel || stage(suggested).label) }))} ▸</button>` : ''}
       </div>
       ${headFacts(p, d, costs.margin, staff, wait)}
@@ -235,8 +253,8 @@ export async function projectView(app, id, ctx) {
             <div class="field"><label for="ctl-title">${tr('Title')}</label><input id="ctl-title" name="title" placeholder="${tr('Defaults to file name')}"></div>
             <div class="field"><label for="ctl-amt">${tr('Quotation amount (£, ex VAT)')}</label><input id="ctl-amt" name="amount" type="number" min="0" step="1" placeholder="${tr('For quotations')}"></div>
             <label class="consent"><input type="checkbox" name="approval"> <span>${tr('Ask the client to approve')}</span></label>
-            <label class="consent"><input type="checkbox" name="visible" checked> <span>${tr('Visible to client')}</span></label>
-            <button class="btn btn-sm" type="submit">${tr('Upload & notify')}</button>
+            <label class="consent"><input type="checkbox" name="visible"> <span>${tr('Visible to client')}</span></label>
+            <button class="btn btn-sm" type="submit">${tr('Upload')}</button>
           </form>`)}
 
           ${fold('payment', tr('Payment schedule'), `<form class="fold-body" data-payment>
@@ -311,6 +329,21 @@ export async function projectView(app, id, ctx) {
     const btn = $('button[type="submit"]', f); if (btn.disabled) return; btn.disabled = true;
     try { await store.setStage(id, f.stage.value, { note: f.note.value.trim(), visible: f.visible.checked, next_step: f.next_step.value.trim(), due_at: due }); toast(tr(f.visible.checked ? 'Stage updated. Client notified.' : 'Stage updated (hidden from client).')); } catch (err) { btn.disabled = false; toast(tr(err.message)); }
   });
+  // UX audit 27.11.2026: the date of the next update is set on its own, without moving the stage.
+  $('[data-head-due]', app)?.addEventListener('change', async (e) => {
+    const v = e.target.value;
+    try { await store.updateProject(id, { due_at: v ? new Date(`${v}T17:00:00`).toISOString() : null }); toast(tr('Due date saved.')); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
+  // Site photos from the phone camera: smaller copies, for the team only (shown to the client later, by choice).
+  $('[data-site-photo]', app)?.addEventListener('change', async (e) => {
+    const files = [...e.target.files]; if (!files.length) return;
+    toast(tr('Uploading {n} photo(s)…', { n: files.length }));
+    try {
+      const small = await Promise.all(files.map(shrinkPhoto));
+      await store.uploadFiles(id, small, { kind: 'survey', title: `${tr('Site photo')} ${fmtDay(new Date().toISOString())}`, visible: false });
+      toast(tr('{n} photo(s) added for the team.', { n: files.length }), { tone: 'ok' });
+    } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
   $('[data-head-assignee]', app).addEventListener('change', async (e) => {
     try { await store.updateProject(id, { assignee_id: e.target.value || null }); toast(tr('Account manager saved.')); } catch (err) { toast(tr(err.message)); }
   });
@@ -344,7 +377,7 @@ export async function projectView(app, id, ctx) {
       toast(tr('Added to the calendar.'));
     } catch (err) { toast(tr(err.message)); }
   });
-  $$('[data-booking-del]', app).forEach((b) => b.addEventListener('click', async () => { try { await store.deleteBooking(b.closest('[data-booking]').dataset.booking); toast(tr('Booking removed.')); } catch (err) { toast(tr(err.message)); } }));
+  $$('[data-booking-del]', app).forEach((b) => b.addEventListener('click', async () => { const row = b.closest('[data-booking]'); softDelete(row, tr('Booking removed.'), () => store.deleteBooking(row.dataset.booking)); }));
   $('[data-payment]', app).addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget;
     try { await store.addPayment(id, { label: f.label.value.trim(), amount: f.amount.value, due_date: f.due.value ? new Date(`${f.due.value}T09:00:00`).toISOString() : null }); f.reset(); toast(tr('Payment added.')); } catch (err) { toast(tr(err.message)); }

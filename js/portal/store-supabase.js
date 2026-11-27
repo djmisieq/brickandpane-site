@@ -26,7 +26,15 @@ const subscribe = () => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
   channel.subscribe();
 };
-sb.auth.onAuthStateChange(() => emit());
+// UX audit 27.11.2026: the signed-in user comes from the local session (no request per redraw); the first read of
+// a page load still asks the server once, so a revoked session is noticed. Data access is checked by RLS either way.
+let checked = false, meCache = null;
+const authUser = async () => {
+  if (!checked) { checked = true; return sb.auth.getUser(); }
+  const { data: { session } } = await sb.auth.getSession();
+  return { data: { user: session?.user ?? null } };
+};
+sb.auth.onAuthStateChange(() => { meCache = null; emit(); });
 
 const PROFILE = 'id, full_name, company, role, account_type';
 // The API returns at most 1000 rows per request (audit 26.11.2026: 1080 companies and 1147 people were cut off):
@@ -71,9 +79,10 @@ export const store = {
   onChange(cb) { listeners.add(cb); subscribe(); return () => listeners.delete(cb); },
 
   async getUser() {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     if (!user) return null;
     restoreRoute();
+    if (meCache && meCache.id === user.id && Date.now() - meCache.at < 300e3) return { ...meCache.p };
     const p = ok(await sb.from('profiles').select('*').eq('id', user.id).single());
     // First sign-in through Google/Apple/Microsoft: apply the account type picked on the sign-up panel.
     let pending = null;
@@ -82,6 +91,7 @@ export const store = {
       ok(await sb.from('profiles').update({ account_type: pending }).eq('id', user.id));
       p.account_type = pending;
     }
+    meCache = { id: user.id, at: Date.now(), p: { ...p, email: user.email } };
     return { ...p, email: user.email };
   },
   // captchaToken: Turnstile token, required once captcha is switched on in Supabase (Auth → Attack Protection).
@@ -108,9 +118,9 @@ export const store = {
   async setPassword(password) { ok(await sb.auth.updateUser({ password })); },
 
   async updateProfile(patch) {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     const { full_name, company, phone, notify_email, notify_digest } = patch;
-    ok(await sb.from('profiles').update({ full_name, company, phone, notify_email, notify_digest }).eq('id', user.id));
+    ok(await sb.from('profiles').update({ full_name, company, phone, notify_email, notify_digest }).eq('id', user.id)); meCache = null;
   },
 
   // Quote requests sent through the public form with this account's confirmed email (migration 0007).
@@ -204,12 +214,12 @@ export const store = {
     return ok(await q) || [];
   },
   async addTask({ title, kind = 'task', note = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
-    const me = (await sb.auth.getUser()).data.user?.id ?? null;
+    const me = (await authUser()).data.user?.id ?? null;
     ok(await sb.from('tasks').insert({ title, kind, note, due_on, assignee_id, project_id, request_id, done_at: done ? new Date().toISOString() : null, done_by: done ? me : null }));
     emit();
   },
   async setTaskDone(id, done) {
-    const me = (await sb.auth.getUser()).data.user?.id ?? null;
+    const me = (await authUser()).data.user?.id ?? null;
     ok(await sb.from('tasks').update({ done_at: done ? new Date().toISOString() : null, done_by: done ? me : null }).eq('id', id)); emit();
   },
   // The owner's dashboard: every figure from one function (migration 0043, staff only).
@@ -359,7 +369,7 @@ export const store = {
   },
 
   async addMessage(pid, body, internal = false) {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     ok(await sb.from('messages').insert({ project_id: pid, author_id: user.id, body, internal }));
     emit(); // shows the message even when realtime is blocked
   },
@@ -383,7 +393,7 @@ export const store = {
   },
 
   async decide(docId, decision, comment = '', { onBehalf = false } = {}) {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     const d = ok(await sb.from('documents').select('project_id').eq('id', docId).single());
     const { error } = await sb.from('approvals').insert({ document_id: docId, project_id: d.project_id, decision, comment, on_behalf: onBehalf, actor_id: user.id });
     if (error) throw new Error(error.code === '42501' ? 'You can’t decide on this document. If it’s a quotation, your client needs to accept it, or confirm you have their authority.' : error.message);
@@ -391,7 +401,7 @@ export const store = {
 
   async inviteMember(pid, email, role) { return ok(await sb.rpc('invite_member', { p: pid, e: email.trim(), r: role })); },
   async raiseChange(pid, { title, description, impact = '' }) {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     ok(await sb.from('changes').insert({ project_id: pid, title, description, impact, raised_by: user.id }));
   },
   async decideChange(changeId, decision, comment = '') { ok(await sb.rpc('decide_change', { c: changeId, decision, note: comment })); },
@@ -416,12 +426,12 @@ export const store = {
   async listStaff() { return ok(await sb.from('profiles').select(PROFILE).eq('role', 'staff')); },
 
   async notifications() {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     if (!user) return [];
     return ok(await sb.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50));
   },
   async markRead(ids = 'all') {
-    const { data: { user } } = await sb.auth.getUser();
+    const { data: { user } } = await authUser();
     let q = sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null);
     if (ids !== 'all') q = q.in('id', ids);
     ok(await q);

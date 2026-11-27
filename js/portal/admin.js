@@ -12,7 +12,8 @@ import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
 import { dashboardView, SOURCES } from './dashboard.js';
 import { replyBox, bindEnquiryReply } from './enquiry-reply.js';
 import { linker, bindLinkers, picked, linkerBusy } from './linker.js';
-import { projectView, WAITING } from './project.js';
+import { projectView, WAITING, BOOKING_KINDS } from './project.js';
+import { ICON } from './icons.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
@@ -40,12 +41,19 @@ const clientOf = (p) => (p.owner && p.owner.role !== 'staff' ? p.owner : null);
 const clientName = (p) => { const c = clientOf(p); return c ? c.company || c.full_name || '' : ''; };
 const isOpenReq = (r) => r.status === 'new' || r.status === 'replied';
 let enqFocused = null; // the enquiry a #/enquiries/<id> link already opened and scrolled to
-const listRequests = () => (store.listRequests ? store.listRequests().catch(() => []) : []);
+// One read of the enquiries per redraw: the side menu, the view and its counters share it (UX audit 27.11.2026).
+let reqP = null;
+const listRequests = () => (reqP ||= store.listRequests ? store.listRequests().catch(() => []) : Promise.resolve([]));
 
 // CRM-only styles (css: body.crm): tool density, red reserved for what needs action.
 document.body.classList.add('crm');
 
 async function render(fromStore = false) {
+  reqP = null;
+  if (!fromStore) document.body.classList.add('is-loading');
+  try { await draw(fromStore); } finally { document.body.classList.remove('is-loading'); }
+}
+async function draw(fromStore) {
   user = await store.getUser();
   if (!user) { location.href = `login.html?next=${encodeURIComponent('admin.html' + (/^#\/[\w/-]*$/.test(location.hash) ? location.hash : ''))}`; return; }
   if (user.role !== 'staff') { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr('This area is for Brick & Pane staff.'))} <a href="portal.html">${tr('Go to your projects')}</a>.</p></div>`; await renderAppBar(bar, user, 'portal'); return; }
@@ -56,6 +64,7 @@ async function render(fromStore = false) {
   const gq = $('#crm-gq', bar), typed = gq ? { v: gq.value, focus: document.activeElement === gq, at: gq.selectionStart } : null;
   await renderAppBar(bar, user, 'admin'); bindSearch(fromStore ? typed : null);
   const r = route();
+  await sideNav(r);
   // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
   if (fromStore && r.name === 'quotes') return;
   // Someone is picking in a search box: the redraw waits until they have picked (it would close the list).
@@ -75,7 +84,7 @@ async function render(fromStore = false) {
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else if (r.name === 'board' || r.name === 'list') await board(r.name === 'list');
     else await today(); // the start screen (owner, 25.11.2026)
-  } catch (e) { app.innerHTML = `<div class="container section-tight"><p class="callout">${esc(tr(e.message))}</p></div>`; }
+  } catch (e) { app.innerHTML = `<div class="container-wide section-tight"><p class="callout tone-danger" role="alert">${esc(tr(e.message))} <button type="button" class="btn btn-sm btn-ghost" data-retry>${tr('Try again')}</button></p></div>`; $('[data-retry]', app)?.addEventListener('click', () => render()); }
   Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && (dirty.has(id) || (!el.value && el.tagName !== 'SELECT'))) { el.value = v; if (dirty.has(id)) el.dataset.dirty = '1'; } });
   // A box someone ticked (e.g. tell the client) stays ticked through a live redraw.
   Object.entries(ticks).forEach(([id, on]) => { const el = document.getElementById(id); if (el && el.checked !== on) { el.checked = on; el.dataset.dirty = '1'; el.dispatchEvent(new Event('change', { bubbles: true })); } });
@@ -149,7 +158,8 @@ let todayMine = false;
 
 async function today() {
   document.title = `${tr('Today')} | CRM`;
-  const [all, requests, mail, sent, openT] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : [], sentQuotes().catch(() => []), loadTasks({ open: true })]);
+  const iso = (d) => d.toISOString().slice(0, 10), now = new Date(), tomorrow = iso(new Date(Date.now() + DAY));
+  const [all, requests, mail, sent, openT, books] = await Promise.all([store.listProjects(), listRequests(), store.listMail ? store.listMail({}).catch(() => []) : [], sentQuotes().catch(() => []), loadTasks({ open: true }), store.listBookings ? store.listBookings({ from: iso(now), to: tomorrow }).catch(() => []) : []]);
   // Tasks due today or late (phase 3); "mine" = given to me, or made by me for nobody in particular.
   const dueT = (openT || []).filter(taskDue).filter((t) => !todayMine || t.assignee_id === user.id || (!t.assignee_id && t.created_by === user.id)).sort((a, b) => a.due_on.localeCompare(b.due_on));
   const pOf = (pid) => all.find((p) => p.id === pid);
@@ -186,12 +196,21 @@ async function today() {
     ['chase', 'Chase today (waiting on someone)', chaseToday, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${esc(tr('Waiting on {who}', { who: tr(WAITING[p.internal.waiting_on]) }))}${p.internal.waiting_note ? `: ${esc(p.internal.waiting_note)}` : ''}`, age: esc(fmtDay(p.internal.chase_on)), late: p.internal.chase_on < new Date().toISOString().slice(0, 10) }), 'Nobody to chase today.'],
     ['waiting', `Waiting on the client for ${WAIT_DAYS}+ days: chase`, waiting, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: stageBadge(p.stage, 'staff'), age: days(p.stage_changed_at) }), 'No client has kept us waiting that long.'],
   ];
+  // UX audit 27.11.2026: who is out on site today and tomorrow comes first; empty lists fold into one "all clear" line.
+  const fieldOf = (d) => (books || []).filter((b) => b.starts_on <= d && (b.ends_on || b.starts_on) >= d && (!todayMine || b.staff_id === user.id || pOf(b.project_id)?.assignee_id === user.id));
+  const fieldToday = fieldOf(iso(now)), fieldTomorrow = fieldOf(tomorrow);
+  const fieldCard = (b) => { const p = pOf(b.project_id); return `<li><a class="field-card cal-${esc(b.kind)}" href="#/p/${esc(b.project_id)}"><span class="field-k">${esc(tr(BOOKING_KINDS[b.kind] || b.kind))}</span><span class="field-p">${esc(p ? `${p.ref} · ${p.name}` : '')}</span>${p?.location ? `<span class="field-l">${esc(p.location)}</span>` : ''}</a></li>`; };
+  const filled = SECTIONS.filter(([, , items]) => items.length), clear = SECTIONS.filter(([, , items]) => !items.length);
   app.innerHTML = `
     <div class="container-wide section-tight">
       <div class="dash-head">
         <div><span class="eyebrow">${esc(fmtDay(new Date().toISOString()))}</span><h1 class="app-h1">${tr('Today')}</h1></div>
-        <div class="stats today-stats">${SECTIONS.map(([id, label, items]) => `<button type="button" class="stat ${items.length ? `tone-${TODAY_TONE[id] || 'neutral'}` : 'is-zero'}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
+        <div class="stats today-stats">${filled.map(([id, label, items]) => `<button type="button" class="stat tone-${TODAY_TONE[id] || 'neutral'}" data-jump="${id}"><span class="stat-dt">${tr(label)}</span><span class="stat-dd">${items.length}</span></button>`).join('')}</div>
       </div>
+      <section class="field-strip" aria-labelledby="th-field">
+        <h2 class="panel-h" id="th-field">${tr('Out on site today')} <span class="today-n">${fieldToday.length}</span></h2>
+        ${fieldToday.length ? `<ul class="field-list">${fieldToday.map(fieldCard).join('')}</ul>` : `<p class="note">${tr('Nobody out on site today.')}${fieldTomorrow.length ? ` <a href="#/calendar">${tr('Tomorrow: {n}', { n: fieldTomorrow.length })} →</a>` : ''}</p>`}
+      </section>
       <div class="board-tools">
         ${viewSwitch('today', requests)}
         <div class="seg" role="group" aria-label="${tr('Projects of')}">
@@ -199,23 +218,43 @@ async function today() {
           <button type="button" class="${todayMine ? '' : 'is-on'}" aria-pressed="${!todayMine}" data-mine="">${tr('Everyone')}</button>
         </div>
       </div>
-      <div class="today">${SECTIONS.map(([id, label, items, html, empty]) => `
+      <div class="today">${filled.map(([id, label, items, html]) => `
         <section class="today-sec" id="t-${id}" aria-labelledby="th-${id}">
           <h2 class="panel-h" id="th-${id}">${tr(label)} <span class="today-n">${items.length}</span></h2>
-          ${items.length ? `<ul class="today-list">${items.map(html).join('')}</ul>` : `<p class="note">${tr(empty)}</p>`}
+          <ul class="today-list">${items.map(html).join('')}</ul>
         </section>`).join('')}
-        ${loose ? `<p class="note"><a href="#/mail">${tr('{n} emails are not on any project yet', { n: loose })}</a></p>` : ''}
+        ${filled.length ? '' : `<p class="today-done">${tr('All done for now.')}</p>`}
+        ${clear.length ? `<p class="today-clear"><span class="today-ok" aria-hidden="true">✓</span> ${tr('Clear:')} ${clear.map(([, , , , empty]) => esc(tr(empty))).join(' ')}</p>` : ''}
+        ${loose ? `<p class="note"><a href="#/mail">${tr(loose === 1 ? '1 email is not on any project yet' : '{n} emails are not on any project yet', { n: loose })}</a></p>` : ''}
       </div>
     </div>`;
   $$('[data-jump]', app).forEach((b) => b.addEventListener('click', () => document.getElementById(`t-${b.dataset.jump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
   $$('[data-mine]', app).forEach((b) => b.addEventListener('click', () => { todayMine = !!b.dataset.mine; today(); }));
 }
 
-function viewSwitch(on, requests) {
-  const fresh = requests.filter((r) => r.status === 'new').length;
-  const link = (id, href, label) => `<a href="${href}" class="${on === id ? 'is-on' : ''}">${label}</a>`;
-  // Projects audit 26.11.2026: My work and the Calendar join; Board and List are one "Projects" place (its own switch).
-  return `<div class="seg seg-nav" role="group" aria-label="${tr('View')}">${link('today', '#/today', tr('Today'))}${link('my', '#/my', tr('My work'))}${link(on === 'list' ? 'list' : 'board', on === 'list' ? '#/list' : '#/board', tr('Projects'))}${link('enquiries', '#/enquiries', `${tr('Enquiries')}${fresh ? ` <span class="seg-count">${fresh}</span>` : ''}`)}${link('calendar', '#/calendar', tr('Calendar'))}${link('mail', '#/mail', tr('Email'))}${link('companies', '#/companies', tr('Companies'))}${link('quotes', '#/quotes', tr('Quotes'))}${link('owner', '#/owner', tr('Dashboard'))}</div>`;
+// UX audit 27.11.2026: the menu lives in one fixed side bar (a bottom bar on a phone), not inside each view, so it
+// never moves and stays on project, company and quote cards. Views still call viewSwitch(): it draws nothing now.
+const viewSwitch = () => '';
+const NAV = [
+  ['today', '#/today', 'Today', 1], ['my', '#/my', 'My work', 1], ['board', '#/board', 'Projects', 1], ['enquiries', '#/enquiries', 'Enquiries', 0],
+  ['calendar', '#/calendar', 'Calendar', 1], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0],
+];
+const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'my', '': 'today' };
+let side = null;
+async function sideNav(r) {
+  if (!side) {
+    side = document.createElement('nav'); side.className = 'side-nav'; side.id = 'side-nav'; side.setAttribute('aria-label', tr('CRM menu'));
+    document.querySelector('main').prepend(side);
+    side.addEventListener('click', (e) => { if (e.target.closest('[data-more]')) side.classList.toggle('is-more'); else if (e.target.closest('a')) side.classList.remove('is-more'); });
+  }
+  const on = NAV_OF[r.name] ?? r.name;
+  const fresh = (await listRequests()).filter((x) => x.status === 'new').length;
+  const lang = document.querySelector('.site-header .lang-switch')?.outerHTML || '';
+  const brand = document.querySelector('.site-header .brand-mark')?.outerHTML || '';
+  side.innerHTML = `<a class="side-brand" href="#/today">${brand}<span>${tr('Brick & Pane CRM')}</span></a>
+    <ul class="side-list">${NAV.map(([id, href, label, main]) => `<li class="${main ? 'is-main' : ''}"><a href="${on === 'board' && id === 'board' && r.name === 'list' ? '#/list' : href}" class="${on === id ? 'is-on' : ''}" ${on === id ? 'aria-current="page"' : ''}>${ICON[id] || ''}<span class="side-t">${tr(label)}</span>${id === 'enquiries' && fresh ? `<span class="seg-count">${fresh}</span>` : ''}</a></li>`).join('')}
+      <li class="side-more-li"><button type="button" class="side-more" data-more aria-controls="side-nav">${ICON.more}<span class="side-t">${tr('More')}</span>${fresh ? '<span class="side-dot" aria-hidden="true"></span>' : ''}</button></li></ul>
+    <div class="side-foot">${lang}</div>`;
 }
 
 // One search for the whole CRM in the app bar (audit, phase 1): projects, enquiries and quotes at once.

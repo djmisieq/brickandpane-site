@@ -162,7 +162,7 @@ export async function mailView(app, switcher) {
   app.innerHTML = `
     <div class="container section-tight">
       <div class="dash-head"><div><span class="eyebrow">${tr('Internal')}</span><h1 class="app-h1">${tr('Email')}</h1></div></div>
-      <p class="note mb-m">${tr('A copy of the Zimbra mailboxes, read only: nothing is deleted, moved or marked read there. Reply in Zimbra.')}</p>
+      <p class="note mb-m">${tr('A copy of the Zimbra mailboxes, read only: nothing is deleted, moved or marked read there. To reply from the CRM, put the email on its project and answer it there.')}</p>
       <div class="board-tools">
         ${switcher}
         <div class="seg" role="group" aria-label="${tr('Show')}">

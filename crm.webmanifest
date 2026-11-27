@@ -1,0 +1,17 @@
+{
+  "name": "Brick & Pane CRM",
+  "short_name": "B&P CRM",
+  "start_url": "admin.html#/today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
+  "icons": [
+    {
+      "src": "img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
