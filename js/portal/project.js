@@ -16,6 +16,7 @@ import { loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, ROLES 
 import { linker, bindLinkers, picked, names } from './linker.js';
 import { ICON } from './icons.js';
 import { bindMentions } from './crm-quick.js';
+import { projectFieldsBox, bindProjectFields } from './u3.js';
 
 // Team words kept out of i18n.js (audit.spec keeps them off client-facing text; costs.js does the same).
 export const t = (en, pl, vars) => (LANG === 'pl' ? pl : en).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? '');
@@ -160,8 +161,8 @@ const QUICK = [['note', '+ Note'], ['task', '+ Task'], ['call', '+ Log a call'],
 export async function projectView(app, id, ctx) {
   const { user, listRequests, REQ_TOPICS, bindReqFiles } = ctx;
   if (id !== lastId) { activeTab = 'activity'; lastId = id; feedFilter = 'all'; }
-  const [d, staff, costs, mail, pq, reqs, tasks, pco, log, bookings] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id }),
-    loadProjectCompanies(id), store.crmLog ? store.crmLog({ projectId: id }).catch(() => []) : [], store.listBookings ? store.listBookings({ projectId: id }).catch(() => []) : []]);
+  const [d, staff, costs, mail, pq, reqs, tasks, pco, log, bookings, ownFields] = await Promise.all([store.getProject(id), store.listStaff(), loadCosts(id), loadMail(id), projectQuotes(id).catch(() => []), listRequests(), loadTasks({ projectId: id }),
+    loadProjectCompanies(id), store.crmLog ? store.crmLog({ projectId: id }).catch(() => []) : [], store.listBookings ? store.listBookings({ projectId: id }).catch(() => []) : [], store.listFields ? store.listFields().catch(() => []) : []]);
   const nameOf = await names();
   const openTasks = (tasks || []).filter((t) => !t.done_at), lateTasks = openTasks.filter(taskLate).length;
   const src = (reqs || []).find((r) => r.project_id === id) || null;
@@ -248,6 +249,7 @@ export async function projectView(app, id, ctx) {
             </form>
             <a class="note" href="#/calendar">${tr('Open the calendar')}</a></div>`)}
 
+          ${ownFields.length ? fold('fields', `${tr('Our fields')} <span class="tag">${tr('staff only')}</span>`, `<div class="fold-body" data-own-fields>${projectFieldsBox(ownFields, wait.custom || {})}<p class="hint"><a href="#/automations">${tr('Change the fields')}</a></p></div>`) : ''}
           ${fold('internal', `${tr('Commercial')} <span class="tag">${tr('staff only')}</span>`, `<form class="fold-body" data-internal>
             <div class="field-row">
               <div class="field"><label for="ctl-val">${tr('Value (£)')}</label><input id="ctl-val" name="value_gbp" type="number" min="0" step="100" value="${esc(d.internal?.value_gbp ?? '')}"></div>
@@ -322,6 +324,7 @@ export async function projectView(app, id, ctx) {
   $$('[data-quick]', app).forEach((b) => b.addEventListener('click', () => QUICK_DO[b.dataset.quick]?.()));
   $('[data-next-add]', app)?.addEventListener('click', () => QUICK_DO.task?.());
   bindMentions($('#qn-body', app), staff); bindMentions($('#msg-body', app), staff);
+  bindProjectFields(app, id, wait.custom || {});
   $('[data-quick-note]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget, body = f.body.value.trim();
     if (!body) { f.body.focus(); return; }

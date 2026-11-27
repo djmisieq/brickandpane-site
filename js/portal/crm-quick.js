@@ -9,7 +9,7 @@ import { ICON } from './icons.js';
 const isoDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const dayOf = (iso) => (iso ? isoDay(new Date(iso)) : '');
 
-function dialog(cls, html) {
+export function dialog(cls, html) {
   const d = document.createElement('dialog');
   d.className = `qd ${cls}`;
   d.innerHTML = html;
@@ -20,8 +20,8 @@ function dialog(cls, html) {
   d.showModal();
   return d;
 }
-const head = (title) => `<div class="qd-head"><h2 class="qd-h">${title}</h2><button type="button" class="qd-x" data-close aria-label="${esc(tr('Close'))}">×</button></div>`;
-const bindClose = (d) => $$('[data-close]', d).forEach((b) => b.addEventListener('click', () => d.close()));
+export const head = (title) => `<div class="qd-head"><h2 class="qd-h">${title}</h2><button type="button" class="qd-x" data-close aria-label="${esc(tr('Close'))}">×</button></div>`;
+export const bindClose = (d) => $$('[data-close]', d).forEach((b) => b.addEventListener('click', () => d.close()));
 
 // ---------- moving a stage ----------
 // The same choices as the card's "Move stage" form: the client hears of it only when ticked, the date stays as it is.

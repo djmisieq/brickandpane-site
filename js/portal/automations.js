@@ -4,6 +4,7 @@
 import { store } from './store.js';
 import { esc, fmtDate, ago, $, $$, toast } from './core.js';
 import { tr } from './i18n.js';
+import { fieldsManager, bindFieldsManager } from './u3.js';
 
 // {n} is where the number of days goes; rules without it have no number.
 const RULES = {
@@ -37,7 +38,9 @@ export async function automationsView(app) {
       <p class="rule-s note">${count(r.id) ? esc(tr('{n} task(s) in the last 30 days', { n: count(r.id) })) : esc(tr('No tasks in the last 30 days'))}${last(r.id) ? ` · <span title="${esc(fmtDate(last(r.id).created_at, true))}">${esc(tr('last {when}', { when: ago(last(r.id).created_at) }))}</span>` : ''}</p>
     </li>`).join('')}</ul>`}
     <section class="ctl mt-l"><h2 class="panel-h">${tr('When a stage starts')}</h2><p class="note">${tr('The tasks each stage gives the account manager are set in the stage playbook.')} <a href="#/playbook">${tr('Open the stage playbook')}</a></p></section>
+    ${await fieldsManager()}
   </div>`;
+  bindFieldsManager(app, () => automationsView(app));
   $$('[data-rule-on]', app).forEach((c) => c.addEventListener('change', async () => {
     try { await store.saveRule(c.dataset.ruleOn, { active: c.checked }); c.closest('.rule').classList.toggle('is-off', !c.checked); toast(tr(c.checked ? 'Rule switched on.' : 'Rule switched off.'), { tone: 'ok' }); } catch (err) { c.checked = !c.checked; toast(tr(err.message), { tone: 'error' }); }
   }));

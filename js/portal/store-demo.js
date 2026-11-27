@@ -729,4 +729,15 @@ export const store = {
     save(s);
   },
   async fileUrl() { return null; }, // demo: files are not stored
+  // UX audit U3 (migration 0053): snoozed notifications, mail dealt with, the team's own project fields.
+  async snoozeNote(id, until) { const s = load(); const u = need(s); const n = s.notifications.find((x) => x.id === id && x.user_id === u.id); if (n) { n.snooze_until = until; save(s); } },
+  async markMailHandled(id, on = true) { const s = load(); const u = needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.handled_at = on ? now() : null; m.handled_by = on ? u.id : null; save(s); } },
+  async listFields() { const s = load(); needStaff(s); return [...(s.fields || [])].sort((a, b) => a.sort - b.sort); },
+  async saveField(f) {
+    const s = load(); needStaff(s); s.fields ||= [];
+    if (!/^[a-z][a-z0-9_]{1,39}$/.test(f.key || '')) throw new Error('A field needs a short name of letters.');
+    const row = { key: f.key, label: f.label, kind: f.kind || 'text', options: f.options || [], sort: f.sort || 0 };
+    const i = s.fields.findIndex((x) => x.key === f.key); if (i >= 0) s.fields[i] = row; else s.fields.push(row); save(s);
+  },
+  async deleteField(key) { const s = load(); needStaff(s); s.fields = (s.fields || []).filter((x) => x.key !== key); save(s); },
 };

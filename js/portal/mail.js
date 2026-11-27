@@ -34,7 +34,7 @@ function item(m, { projects = null } = {}) {
   return `<details class="mail${m.direction === 'out' ? ' is-out' : ''}" data-mail="${esc(m.id)}">
     <summary>
       <span class="mail-dir" aria-label="${tr(m.direction === 'out' ? 'Sent' : 'Received')}">${m.direction === 'out' ? '↗' : '↙'}</span>
-      <span class="mail-subj">${esc(m.subject || tr('(no subject)'))}</span>
+      <span class="mail-subj">${esc(m.subject || tr('(no subject)'))}${m.direction === 'in' ? (m.handled_at ? ` <span class="tag tone-ok">${tr('dealt with')}</span>` : '') : ''}</span>
       <span class="mail-who note">${esc(who(m))}</span>
       <span class="mail-when note" title="${esc(fmtDate(m.sent_at, true))}">${esc(ago(m.sent_at))}${(m.attachments || []).length ? ` · 📎 ${(m.attachments || []).length}` : ''}</span>
     </summary>
@@ -43,6 +43,7 @@ function item(m, { projects = null } = {}) {
       <div class="mail-text">${esc(m.body_text || '')}</div>
       ${files ? `<p class="mail-files">${files}</p>` : ''}
       ${projects ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-mail-reply>${tr('Reply')}</button>`}
+      ${m.direction === 'in' ? `<button type="button" class="btn btn-sm btn-ghost" data-mail-handled="${m.handled_at ? '' : '1'}">${m.handled_at ? tr('Mark as waiting for us') : tr('Mark as dealt with')}</button>` : ''}
       ${assign}
       ${projects ? '' : `<details class="mail-move"><summary class="note">${tr('Not this project? Move it')}</summary><form class="mail-assign" data-mail-assign>
         ${linker({ id: `mm-${m.id}`, label: tr('Move to project'), kinds: ['project'], name: 'project', placeholder: tr('Type a reference, a name or a site…') })}
@@ -107,6 +108,10 @@ function bindCompose(root, pid) {
 }
 
 export function bindMail(root, pid = null) {
+  // Dealt with (0053): CRM-side only, nothing changes in the mailbox; "Email came in, our move" stops showing it.
+  $$('[data-mail-handled]', root).forEach((b) => b.addEventListener('click', async () => {
+    try { await store.markMailHandled(b.closest('[data-mail]').dataset.mail, !!b.dataset.mailHandled); toast(tr(b.dataset.mailHandled ? 'Marked as dealt with.' : 'Back on the list for us.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  }));
   if (pid) {
     loadBoxes().then(() => { if (draft && draft.pid === pid && !draft.from) draft.from = boxes[0] || ''; redrawCompose(root, pid); });
     if (draft && draft.pid !== pid) draft = null;

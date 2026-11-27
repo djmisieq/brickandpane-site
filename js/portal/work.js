@@ -137,7 +137,7 @@ export async function calendarView(app, nav, user) {
       <div class="seg" role="group" aria-label="${tr('View')}"><button type="button" data-cal-mode="week" aria-pressed="${mode === 'week'}" class="${mode === 'week' ? 'is-on' : ''}">${tr('Week')}</button><button type="button" data-cal-mode="month" aria-pressed="${mode === 'month'}" class="${mode === 'month' ? 'is-on' : ''}">${tr('Month')}</button></div>
       <label class="visually-hidden" for="cal-who">${tr('Whose')}</label><select id="cal-who" data-cal-who><option value="">${tr('Everyone')}</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === calWho ? 'selected' : ''}>${esc(s.id === user.id ? tr('Me ({name})', { name: s.full_name }) : s.full_name)}</option>`).join('')}</select>
       <label class="visually-hidden" for="cal-kind">${tr('What')}</label><select id="cal-kind" data-cal-kind><option value="">${tr('Everything')}</option>${Object.entries(BOOKING_KINDS).map(([k, v]) => `<option value="${k}" ${k === calKind ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select>
-      <button type="button" class="btn btn-sm btn-ghost" data-cal-ics ${shown.length ? '' : 'disabled'}>${tr('Download .ics')}</button>
+      <a class="btn btn-sm btn-ghost" href="#/timeline">${tr('Timeline')}</a><button type="button" class="btn btn-sm btn-ghost" data-cal-ics ${shown.length ? '' : 'disabled'}>${tr('Download .ics')}</button>
     </div>
     <ul class="cal-legend" aria-label="${tr('Colours')}">${Object.entries(BOOKING_KINDS).map(([k, v]) => `<li class="cal-${k}">${esc(tr(v))}</li>`).join('')}<li class="is-clash">${tr('clash')}</li></ul>
     <div class="cal cal-${mode}">
