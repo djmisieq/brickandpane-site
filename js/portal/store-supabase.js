@@ -292,7 +292,19 @@ export const store = {
   async savePlaybook({ id = null, ...b }) { if (id) ok(await sb.from('stage_playbook').update(b).eq('id', id)); else ok(await sb.from('stage_playbook').insert(b)); emit(); },
   async deletePlaybook(id) { ok(await sb.from('stage_playbook').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).
-  async listMail({ pid = null, unassigned = false } = {}) { return ok(await sb.rpc('mail_list', { pid, unassigned, lim: 200 })) || []; },
+  // Mail marked as dealt with (0053) comes from the table itself, so mail_list keeps its shape.
+  async listMail({ pid = null, unassigned = false } = {}) {
+    const [rows, done] = await Promise.all([sb.rpc('mail_list', { pid, unassigned, lim: 200 }).then(ok), sb.from('mail_messages').select('id, handled_at').not('handled_at', 'is', null).limit(2000).then(({ data }) => data || [])]);
+    const at = new Map(done.map((m) => [m.id, m.handled_at]));
+    return (rows || []).map((m) => ({ ...m, handled_at: at.get(m.id) || null }));
+  },
+  async markMailHandled(id, on = true) { const { data: { user } } = await authUser(); ok(await sb.from('mail_messages').update({ handled_at: on ? new Date().toISOString() : null, handled_by: on ? user.id : null }).eq('id', id)); emit(); },
+  // Notifications put off until later (0053).
+  async snoozeNote(id, until) { ok(await sb.from('notifications').update({ snooze_until: until }).eq('id', id)); emit(); },
+  // The team's own project fields (0053).
+  async listFields() { const { data, error } = await sb.from('project_fields').select('*').order('sort').order('created_at'); if (error) return []; return data || []; },
+  async saveField(f) { ok(await sb.from('project_fields').upsert({ key: f.key, label: f.label, kind: f.kind || 'text', options: f.options || [], sort: f.sort || 0 })); emit(); },
+  async deleteField(key) { ok(await sb.from('project_fields').delete().eq('key', key)); emit(); },
   // A reply from the CRM (migration 0045): the mail-send function checks the person is staff and that they ticked it.
   async sendMail(payload) {
     const { data, error } = await sb.functions.invoke('mail-send', { body: payload });

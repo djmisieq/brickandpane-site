@@ -49,7 +49,33 @@ test('CRM and portal: text contrast holds on every main view', async ({ page }, 
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.today').waitFor();
   await check('today');
-  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook', '#/automations']) {
+  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook', '#/automations', '#/inbox', '#/timeline']) {
+    await page.goto(`/admin.html${hash}`);
+    await check(hash);
+  }
+  await page.goto('/admin.html#/board');
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('.project-head').waitFor();
+  await check('project card');
+  expect(bad).toEqual([]);
+});
+
+// UX audit U3: the same check in the CRM's dark mode.
+test('CRM in dark mode: text contrast holds on every main view', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'runs once');
+  test.setTimeout(120000);
+  await page.addInitScript(() => { try { localStorage.setItem('bp-crm-theme', 'dark'); } catch {} });
+  const bad = [];
+  const check = async (where) => {
+    await page.waitForTimeout(300);
+    const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+    violations.forEach((v) => v.nodes.slice(0, 5).forEach((n) => bad.push(`${where}: ${n.target.join(' ')} ${n.any[0]?.message || ''}`)));
+  };
+  await page.goto('/admin.html#/today');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.today').waitFor();
+  await check('today');
+  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook', '#/automations', '#/inbox', '#/timeline']) {
     await page.goto(`/admin.html${hash}`);
     await check(hash);
   }

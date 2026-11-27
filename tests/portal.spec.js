@@ -90,7 +90,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/, /Automations/]);
+  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Inbox/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/, /Automations/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -1119,7 +1119,8 @@ test('Today: a sent quote about to lapse is on the chase list', async ({ page })
 const staffOn = async (page, hash = '#/board') => { await page.goto(`/admin.html${hash}`); await page.locator('[data-demo-login="staff"]').click(); };
 const pick = async (page, id, text, option) => { await page.locator(`#${id}`).fill(text); await page.locator(`#${id}-list [role="option"]`, { hasText: option || text }).first().click(); };
 const fold = async (page, key) => { const d = page.locator(`[data-fold="${key}"]`); if (!(await d.evaluate((e) => e.open))) await d.locator(':scope > summary').click(); };
-const asKate = async (context) => { const p = await context.newPage(); await p.goto('/login.html'); await p.evaluate(() => sessionStorage.setItem('bp-portal-demo-session', 'u-kate')); await p.goto('/admin.html#/my'); return p; };
+// Kate's session is set before the page loads: going through login.html first raced its own redirect on slow CI.
+const asKate = async (context) => { const p = await context.newPage(); await p.addInitScript(() => sessionStorage.setItem('bp-portal-demo-session', 'u-kate')); await p.goto('/admin.html#/my'); return p; };
 const card = async (page, name) => { await page.goto('/admin.html#/board'); await page.locator('.kcard', { hasText: name }).click(); await expect(page.locator('.project-head h1')).toContainText(name); };
 
 test('project card: the facts on top, the next stage one tap away, and one activity feed', async ({ page }) => {
@@ -1469,4 +1470,43 @@ test('U2: typing @ in a team update lists the team and says who will be told', a
   await page.locator('#qn-body').press('Enter');
   await expect(page.locator('#qn-body')).toHaveValue(/@Tom $/);
   await expect(page.locator('.mention-who').first()).toContainText('Tom Reid');
+});
+
+// ---------- UX audit 27.11.2026, stage U3 ----------
+test('U3: the inbox puts a notification off until tomorrow and marks one done', async ({ page }) => {
+  await staffOn(page, '#/inbox');
+  await expect(page.locator('h1')).toHaveText('Inbox');
+  const first = page.locator('.inbox-i').first();
+  await expect(first).toContainText('New project: Garden room');
+  await first.locator('[data-inbox-later]').click();
+  await expect(page.locator('.toast')).toContainText('Back tomorrow');
+  await page.locator('[data-inbox-tab="later"]').click();
+  await expect(page.locator('.inbox-i')).toContainText(['New project: Garden room']);
+});
+
+test('U3: a project opens as a preview beside the board; the timeline and the workload show the bookings', async ({ page }) => {
+  await staffOn(page);
+  await page.locator('.kwrap', { hasText: 'Hartley Road' }).locator('[data-peek]').click();
+  await expect(page.locator('dialog.qd-peek')).toContainText('Hartley Road');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.board')).toBeVisible();
+  await page.goto('/admin.html#/timeline');
+  await expect(page.locator('.tl-row', { hasText: 'Kitchen extension doors' })).toContainText('Delivery');
+  await page.goto('/admin.html#/owner');
+  await expect(page.locator('.workload')).toContainText('Tom Reid');
+});
+
+test('U3: a field of our own is added once and filled in on a project card', async ({ page }) => {
+  await staffOn(page, '#/automations');
+  await page.locator('#pf-label').fill('RAL colour');
+  await page.locator('[data-field-add] button[type="submit"]').click();
+  await expect(page.locator('[data-field="ral_colour"]')).toBeVisible();
+  await card(page, 'Hartley Road');
+  await fold(page, 'fields');
+  await page.locator('#pfv-ral_colour').fill('7016');
+  await page.locator('#pfv-ral_colour').dispatchEvent('change');
+  await expect(page.locator('.toast')).toContainText('Saved.');
+  await page.reload();
+  await fold(page, 'fields');
+  await expect(page.locator('#pfv-ral_colour')).toHaveValue('7016');
 });

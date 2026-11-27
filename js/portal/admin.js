@@ -16,6 +16,7 @@ import { projectView, WAITING, BOOKING_KINDS } from './project.js';
 import { ICON } from './icons.js';
 import { stageDialog, newDialog, palette, bindKeys, rememberRecent } from './crm-quick.js';
 import { automationsView } from './automations.js';
+import { inboxView, peekProject, timelineView, watchOnline } from './u3.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
@@ -49,6 +50,8 @@ const listRequests = () => (reqP ||= store.listRequests ? store.listRequests().c
 
 // CRM-only styles (css: body.crm): tool density, red reserved for what needs action.
 document.body.classList.add('crm');
+const setTheme = (t) => { if (t === 'dark') document.documentElement.dataset.theme = 'dark'; else delete document.documentElement.dataset.theme; try { localStorage.setItem('bp-crm-theme', t); } catch { /* private mode */ } };
+try { if (localStorage.getItem('bp-crm-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch { /* private mode */ }
 
 async function render(fromStore = false) {
   reqP = null;
@@ -70,6 +73,9 @@ async function draw(fromStore) {
   $('.crm-gsearch', bar)?.insertAdjacentHTML('beforeend', `<button type="button" class="crm-k" data-palette title="${esc(tr('Find or go to'))}"><kbd>Ctrl K</kbd></button>`);
   $('[data-crm-new]', bar)?.addEventListener('click', () => newDialog(user));
   $('[data-palette]', bar)?.addEventListener('click', () => palette(user));
+  // Dark mode (UX audit U3): a choice for this browser, in the user menu.
+  $('.usermenu-panel', bar)?.insertAdjacentHTML('afterbegin', `<button type="button" class="linkish" data-theme-toggle>${tr(document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode')}</button>`);
+  $('[data-theme-toggle]', bar)?.addEventListener('click', () => { const dark = document.documentElement.dataset.theme !== 'dark'; setTheme(dark ? 'dark' : 'light'); render(true); });
   const r = route();
   if (!fromStore) rememberRecent(location.hash);
   await sideNav(r);
@@ -90,6 +96,8 @@ async function draw(fromStore) {
     else if (r.name === 'calendar') await calendarView(app, viewSwitch('calendar', await listRequests()), user);
     else if (r.name === 'playbook') await playbookView(app, viewSwitch('', await listRequests()));
     else if (r.name === 'automations') await automationsView(app);
+    else if (r.name === 'inbox') await inboxView(app);
+    else if (r.name === 'timeline') await timelineView(app);
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else if (r.name === 'board' || r.name === 'list') await board(r.name === 'list');
     else await today(); // the start screen (owner, 25.11.2026)
@@ -128,13 +136,14 @@ async function board(asList) {
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
   const sum = (arr, w = false) => arr.reduce((t, p) => t + (Number(p.internal?.value_gbp) || 0) * (w ? (p.internal?.probability ?? 0) / 100 : 1), 0);
   const card = (p) => `
+    <div class="kwrap"><button type="button" class="kpeek" data-peek="${esc(p.id)}" aria-label="${esc(tr('Preview {ref}', { ref: p.ref }))}" title="${esc(tr('Preview'))}">${ICON.eye}</button>
     <a class="kcard ${isOverdue(p) ? 'is-overdue' : ''}" href="#/p/${esc(p.id)}" draggable="true" data-pid="${esc(p.id)}">
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
       <span class="kcard-client">${esc(clientName(p))}${clientOf(p)?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
       ${p.internal?.waiting_on || tasksOf(p.id).length ? `<span class="kcard-tags">${p.internal?.waiting_on ? `<span class="tag tag-wait">${esc(tr('waiting on {who}', { who: tr(WAITING[p.internal.waiting_on]) }))}</span>` : ''}${tasksOf(p.id).length ? `<span class="tag${tasksOf(p.id).some(taskLate) ? ' tag-late' : ''}">${esc(tr('{n} tasks', { n: tasksOf(p.id).length }))}</span>` : ''}</span>` : ''}
       <span class="kcard-foot"><span>${p.assignee ? `<span class="avatar av-${avatarTone(p.assignee.id || p.assignee.full_name)}" title="${esc(p.assignee.full_name)}">${esc(initials(p.assignee.full_name))}</span> ` : ''}${p.internal?.value_gbp ? fmtMoney(p.internal.value_gbp) : '—'}</span><span>${isOverdue(p) ? tr('Overdue {date}', { date: fmtDay(p.due_at) }) : p.due_at && stage(p.stage).court === 'us' ? tr('Due {date}', { date: fmtDay(p.due_at) }) : courtLabel(p.stage, 'staff')}</span></span>
-    </a>`;
+    </a></div>`;
   app.innerHTML = `
     <div class="container-wide section-tight">
       <div class="dash-head">
@@ -158,7 +167,7 @@ async function board(asList) {
       </div>
       ${asList ? `
         <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead>${grouped.map(([gl, rows]) => `<tbody>${gl == null ? '' : `<tr class="grp-h"><th colspan="9" scope="rowgroup"><span>${esc(gl)}</span> <span class="grp-n">${rows.length}</span><span class="grp-sum">${fmtMoney(sum(rows))}</span></th></tr>`}
-          ${rows.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
+          ${rows.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a> <button type="button" class="kpeek kpeek-row" data-peek="${esc(p.id)}" aria-label="${esc(tr('Preview {ref}', { ref: p.ref }))}">${ICON.eye}</button></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
             <td><button type="button" class="cell-btn" data-cell-stage="${esc(p.id)}" aria-label="${esc(tr('Move {ref} to another stage', { ref: p.ref }))}">${stageBadge(p.stage, 'staff')}</button></td>
             <td><label class="visually-hidden" for="am-${esc(p.id)}">${tr('Account manager')}</label><select class="cell-in" id="am-${esc(p.id)}" data-cell-am="${esc(p.id)}"><option value="">—</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></td>
             <td>${p.internal?.waiting_on ? esc(tr(WAITING[p.internal.waiting_on])) : '—'}</td>
@@ -185,6 +194,7 @@ async function board(asList) {
   $$('[data-cell-stage]', app).forEach((b) => b.addEventListener('click', () => { const p = byId(b.dataset.cellStage); if (p) stageDialog(p); }));
   $$('[data-cell-am]', app).forEach((s) => s.addEventListener('change', async () => { try { await store.updateProject(s.dataset.cellAm, { assignee_id: s.value || null }); toast(tr('Account manager saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
   $$('[data-cell-due]', app).forEach((i) => i.addEventListener('change', async () => { try { await store.updateProject(i.dataset.cellDue, { due_at: i.value ? new Date(`${i.value}T17:00:00`).toISOString() : null }); toast(tr('Due date saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
+  $$('[data-peek]', app).forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); peekProject(b.dataset.peek); }));
   $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
   $('[data-list-group]', app)?.addEventListener('change', (e) => { const v = e.target.value; history.replaceState(null, '', `#/list${v === 'none' ? '' : `?group=${v}`}`); board(true); });
   // CSV of what the list shows now (search, mine and order kept); amounts in £ as plain numbers.
@@ -223,7 +233,7 @@ async function today() {
   // The newest email on each project (mail_list is newest first). If it came in, the next move is ours.
   const last = new Map();
   (mail || []).forEach((m) => (m.projects || []).forEach((pid) => { if (!last.has(pid)) last.set(pid, m); }));
-  const answer = mine.filter((p) => last.get(p.id)?.direction === 'in').map((p) => ({ p, m: last.get(p.id) })).sort(oldest((x) => x.m.sent_at));
+  const answer = mine.filter((p) => last.get(p.id)?.direction === 'in' && !last.get(p.id)?.handled_at).map((p) => ({ p, m: last.get(p.id) })).sort(oldest((x) => x.m.sent_at));
   const waiting = mine.filter((p) => stage(p.stage).court === 'you' && !p.internal?.waiting_on && daysSince(p.stage_changed_at) >= WAIT_DAYS).sort(oldest((p) => p.stage_changed_at));
   // "Waiting on" with a chase date (migration 0049): today's and the missed ones.
   const chaseToday = mine.filter((p) => p.internal?.waiting_on && p.internal.chase_on && p.internal.chase_on <= new Date().toISOString().slice(0, 10)).sort(oldest((p) => p.internal.chase_on));
@@ -287,10 +297,10 @@ async function today() {
 // never moves and stays on project, company and quote cards. Views still call viewSwitch(): it draws nothing now.
 const viewSwitch = () => '';
 const NAV = [
-  ['today', '#/today', 'Today', 1], ['my', '#/my', 'My work', 1], ['board', '#/board', 'Projects', 1], ['enquiries', '#/enquiries', 'Enquiries', 0],
+  ['today', '#/today', 'Today', 1], ['my', '#/my', 'My work', 1], ['inbox', '#/inbox', 'Inbox', 0], ['board', '#/board', 'Projects', 1], ['enquiries', '#/enquiries', 'Enquiries', 0],
   ['calendar', '#/calendar', 'Calendar', 1], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0], ['automations', '#/automations', 'Automations', 0],
 ];
-const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'automations', '': 'today' };
+const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'automations', timeline: 'calendar', '': 'today' };
 let side = null;
 async function sideNav(r) {
   if (!side) {
@@ -492,4 +502,5 @@ store.onChange(() => { clearTimeout(t); t = setTimeout(() => render(true), 120);
 addEventListener('hashchange', () => render());
 // Keyboard: Ctrl+K or / finds anything, N a new project, T a task, G then a letter goes to a place, ? lists them.
 bindKeys(() => user);
+watchOnline();
 render();

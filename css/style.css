@@ -1579,3 +1579,60 @@ body.crm.is-loading .appbar::after{content:"";position:absolute;left:0;bottom:-1
 .mention-who{margin:.2rem 0 0;color:var(--c-plum-fg)}
 .mention-who:empty{display:none}
 .cal-todo{margin-top:var(--s-l);max-width:900px}
+/* ===== CRM U3 (UX audit 27.11.2026): inbox, preview, workload, timeline, own fields, offline ===== */
+.inbox-list{list-style:none;margin:var(--s-s) 0 0;padding:0;display:grid;gap:4px;max-width:980px}
+.inbox-i{display:flex;gap:var(--s-s);align-items:center;justify-content:space-between;padding:.55rem .8rem;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--c-info-line)}
+.inbox-i.is-read{border-left-color:var(--line)}
+.inbox-main{display:grid;gap:2px;min-width:0;text-decoration:none;color:inherit;flex:1}
+.inbox-t{font-weight:600}.inbox-b{color:var(--ink-2);font-size:var(--step--1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inbox-time{font-size:var(--step--2);color:var(--ink-2)}
+.inbox-acts{display:flex;gap:var(--s-xs);flex:none}
+@media (max-width:600px){.inbox-i{flex-wrap:wrap}.inbox-acts{width:100%}}
+.kwrap{position:relative}
+.kpeek{position:absolute;top:4px;right:4px;z-index:1;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--ink-2);cursor:pointer;opacity:.55}
+.kwrap:hover .kpeek,.kpeek:focus-visible{opacity:1;background:var(--surface);border-color:var(--line)}
+.kpeek .ico{width:16px;height:16px}
+.kpeek-row{position:static;display:inline-flex;vertical-align:middle;opacity:.6}
+@media (max-width:1099px){.kpeek{width:44px;height:44px;opacity:.8}}
+.qd-peek{margin:0 0 0 auto;height:100vh;max-height:100vh;width:min(480px,100vw);border-radius:0;border-width:0 0 0 1px}
+.peek-facts{display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;margin:0}
+.peek-facts dt{font-size:var(--step--2);color:var(--ink-2)}.peek-facts dd{margin:0;font-weight:600}
+.peek-tasks{margin:0;padding-left:1.1rem;display:grid;gap:.25rem}
+.workload{margin-top:var(--s-m)}
+.wl-table th,.wl-table td{text-align:center}.wl-table th[scope=row]{text-align:left}
+.wl-c a{display:block;padding:.3rem;text-decoration:none;color:var(--ink);font-variant-numeric:tabular-nums}
+.wl-c.is-some{background:var(--c-ok-bg)}.wl-c.is-busy{background:var(--c-warn-bg)}.wl-c.is-full{background:var(--c-danger-bg);font-weight:600}
+.dash-tile.is-link{text-decoration:none;color:inherit}
+.dash-tile.is-link:hover{border-color:var(--ink)}
+.tl-scroll{overflow-x:auto;border:1px solid var(--line);background:var(--surface)}
+.tl{display:grid;min-width:900px}
+.tl-head,.tl-row{display:grid;grid-template-columns:220px repeat(var(--tl-days),minmax(10px,1fr));align-items:center;min-height:34px;border-bottom:1px solid var(--line);position:relative}
+.tl-head{font-size:var(--step--2);color:var(--ink-2);background:var(--surface-2)}
+.tl-w{border-left:1px solid var(--line);padding-left:4px;white-space:nowrap;overflow:hidden}
+.tl-name{grid-column:1;padding:0 .6rem;font-size:var(--step--1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);text-decoration:none}
+.tl-bar{grid-row:1;height:22px;margin:0 1px;padding:0 4px;font-size:var(--step--2);line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--k-bg,var(--c-neutral-bg));border-left:3px solid var(--k-line,var(--c-neutral-line));color:var(--ink);text-decoration:none}
+.tl-today{grid-row:1;width:2px;height:100%;background:var(--accent);justify-self:start}
+.pf-list{display:grid;gap:var(--s-xs);margin:0}.pf-list dd{margin:0}
+.field-add{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s-xs);align-items:end;margin-top:var(--s-s)}
+.offline-bar{position:sticky;top:0;z-index:60;background:var(--c-warn-bg);color:var(--c-warn-fg);border-bottom:1px solid var(--c-warn-line);padding:.4rem var(--margin);font-size:var(--step--1);text-align:center}
+.offline-bar[hidden]{display:none}
+/* Dark mode for the CRM (UX audit U3): switched in the user menu, kept in this browser. Same tokens, dark values;
+   colour families keep their meaning with light text on dark fills. Printed quotes stay light. */
+html[data-theme=dark]{color-scheme:dark}
+html[data-theme=dark] body.crm{--bg:#151514;--surface:#1f1e1c;--surface-2:#2a2926;--ink:#ece9e2;--ink-2:#c3beb5;--muted:#a8a39a;--line:#3a3936;--line-strong:#55524d;--field-line:#7d7970;
+  --c-info-bg:#1f2a33;--c-info-fg:#b3cfe6;--c-info-line:#6f95b5;--c-ok-bg:#1d2a20;--c-ok-fg:#b2d8b6;--c-ok-line:#6d9e75;--c-warn-bg:#2f2714;--c-warn-fg:#ecc983;--c-warn-line:#b98a2a;
+  --c-danger-bg:#3a1d18;--c-danger-fg:#f4ad9f;--c-danger-line:#d0644f;--c-neutral-bg:#2a2926;--c-neutral-fg:#d3cec5;--c-neutral-line:#8a857b;--c-plum-bg:#2e2230;--c-plum-fg:#e0bcd7;--c-plum-line:#a77d9c;
+  --c-sea-bg:#1a2c2b;--c-sea-fg:#a8d8d3;--c-sea-line:#5a9a95;--c-olive-bg:#2a2a1b;--c-olive-fg:#d6d8a3;--c-olive-line:#9a9d55}
+html[data-theme=dark] body.crm a:hover{color:#e8957a}
+html[data-theme=dark] body.crm .toast{background:#3a3936}
+html[data-theme=dark] body.crm .toast.tone-error{background:#8f2a1f}
+html[data-theme=dark] body.crm .toast.tone-ok{background:#2f5d3a}
+html[data-theme=dark] body.crm .cal-install{--k-bg:#33221d;--k-fg:#f0b19c}
+html[data-theme=dark] body.crm .demo-bar{background:#3a3220;color:#f3e3b5}
+html[data-theme=dark] body.crm .qd::backdrop{background:rgba(0,0,0,.6)}
+html[data-theme=dark] body.crm .stat.is-you .stat-dd{color:#e8957a}
+@media print{html[data-theme=dark] body.crm{--bg:#fff;--surface:#fff;--ink:#1c1b1a;--ink-2:#55514a;--line:#d6d2c9}}
+html[data-theme=dark] body.crm{--accent:#e08566;--accent-hover:#eda08a;--brick:#e08566}
+html[data-theme=dark] body.crm .btn:not(.btn-ghost),html[data-theme=dark] body.crm .btn:not(.btn-ghost):hover{color:#1c1b1a}
+html[data-theme=dark] body.crm .alt,html[data-theme=dark] body.crm .col,html[data-theme=dark] body.crm .estimate,html[data-theme=dark] body.crm .change-impact{--muted:#a8a39a}
+html[data-theme=dark] body.crm .cal-d.is-today .cal-n{color:#1c1b1a}
