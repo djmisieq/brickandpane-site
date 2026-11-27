@@ -2,7 +2,7 @@
 // A task is who does what by when, on a project or an enquiry. "Log a conversation" saves what was said as a done
 // task and plans the next contact as an open one, so nothing lives only in someone's head.
 import { store } from './store.js';
-import { esc, fmtDay, $, $$, toast } from './core.js';
+import { esc, fmtDay, $, $$, toast, softDelete } from './core.js';
 import { tr } from './i18n.js';
 import { linker, bindLinkers, picked } from './linker.js';
 
@@ -22,11 +22,11 @@ export function item(t, staff, opts = {}) {
   const staffOpts = staff.map((s) => `<option value="${esc(s.id)}" ${s.id === t.assignee_id ? 'selected' : ''}>${esc(s.full_name || s.email)}</option>`).join('');
   const when = t.done_at ? tr('done {date}', { date: fmtDay(t.done_at) }) : t.due_on ? (taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Due {date}', { date: fmtDay(t.due_on) })) : '';
   return `<li class="task${t.done_at ? ' is-done' : ''}${taskLate(t) ? ' is-late' : !t.done_at && t.due_on === isoDay(0) ? ' is-today' : ''}" data-task="${esc(t.id)}">
-    <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done'))}"><span><strong>${esc(t.title)}</strong>
+    <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done: {task}', { task: t.title }))}"><span><strong>${esc(t.title)}</strong>
       <span class="note">${esc(tr(KINDS[t.kind] || 'Task'))}${when ? ` · ${esc(when)}` : ''}${who ? ` · ${esc(who)}` : ''}</span>
       ${opts.project ? `<a class="note task-proj" href="${esc(opts.href)}">${esc(opts.project)}</a>` : ''}
       ${t.note ? `<span class="note task-note">${esc(t.note)}</span>` : ''}</span></label>
-    <button type="button" class="q-icon" data-task-del aria-label="${esc(tr('Delete task'))}" title="${esc(tr('Delete task'))}">×</button>
+    <button type="button" class="q-icon" data-task-del aria-label="${esc(tr('Delete task: {task}', { task: t.title }))}" title="${esc(tr('Delete task'))}">×</button>
     ${t.done_at ? '' : `<details class="task-edit"><summary class="note">${tr('Change')}</summary><form class="task-form" data-task-edit novalidate>
       <div class="field"><label for="te-t-${esc(t.id)}">${tr('Task')}</label><input id="te-t-${esc(t.id)}" name="title" maxlength="300" value="${esc(t.title)}"></div>
       <div class="field-row"><div class="field"><label for="te-d-${esc(t.id)}">${tr('By')}</label><input id="te-d-${esc(t.id)}" name="due_on" type="date" value="${esc(t.due_on || '')}"></div>
@@ -103,7 +103,7 @@ export function bindTasks(root, user) {
       try { await store.setTaskDone(c.closest('[data-task]').dataset.task, c.checked); } catch (err) { c.checked = !c.checked; toast(tr(err.message)); }
     }));
     $$('[data-task-del]', box).forEach((b) => b.addEventListener('click', async () => {
-      try { await store.deleteTask(b.closest('[data-task]').dataset.task); toast(tr('Task deleted.')); } catch (err) { toast(tr(err.message)); }
+      const row = b.closest('[data-task]'); softDelete(row, tr('Task deleted.'), () => store.deleteTask(row.dataset.task));
     }));
   });
 }

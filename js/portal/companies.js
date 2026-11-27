@@ -2,7 +2,7 @@
 // A practice, a contractor, a developer or a supplier is a company with its people; a project lists the companies
 // it works with, each in a role. Imported by admin.js alone.
 import { store } from './store.js';
-import { esc, stageBadge, $, $$, toast } from './core.js';
+import { esc, stageBadge, $, $$, toast, softDelete } from './core.js';
 import { tr } from './i18n.js';
 import { linker, bindLinkers, picked, fold } from './linker.js';
 
@@ -74,7 +74,7 @@ export async function companyView(app, id) {
     <div class="crm-grid">
       <div>
         <section class="ctl"><h2 class="panel-h">${tr('People')}</h2>
-          ${people.length ? `<ul class="task-list">${people.map((p) => `<li class="task" data-person="${esc(p.id)}" data-dnc="${p.do_not_contact ? '1' : ''}"><span><strong>${esc(p.full_name)}</strong>${p.job_title ? ` · ${esc(p.job_title)}` : ''}${p.do_not_contact ? ` <span class="tag">${tr('do not contact')}</span>` : ''}<span class="note">${[p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`, p.phone && esc(p.phone)].filter(Boolean).join(' · ')}</span></span><button type="button" class="btn btn-sm btn-ghost" data-person-dnc>${p.do_not_contact ? tr('Allow contact') : tr('Do not contact')}</button><button type="button" class="q-icon" data-person-del aria-label="${esc(tr('Remove person'))}" title="${esc(tr('Remove person'))}">×</button>
+          ${people.length ? `<ul class="task-list">${people.map((p) => `<li class="task" data-person="${esc(p.id)}" data-dnc="${p.do_not_contact ? '1' : ''}"><span><strong>${esc(p.full_name)}</strong>${p.job_title ? ` · ${esc(p.job_title)}` : ''}${p.do_not_contact ? ` <span class="tag">${tr('do not contact')}</span>` : ''}<span class="note">${[p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`, p.phone && `<a href="tel:${esc(p.phone.replace(/[^\d+]/g, ''))}">${esc(p.phone)}</a>`].filter(Boolean).join(' · ')}</span></span><button type="button" class="btn btn-sm btn-ghost" data-person-dnc>${p.do_not_contact ? tr('Allow contact') : tr('Do not contact')}</button><button type="button" class="q-icon" data-person-del aria-label="${esc(tr('Remove person'))}" title="${esc(tr('Remove person'))}">×</button>
             <details class="person-edit"><summary class="note">${tr('Edit, move or merge')}</summary>
               <form class="task-form" data-person-edit novalidate>
                 <div class="field-row">${fld(`e-name-${p.id}`, 'Name', p.full_name).replace(`name="e-name-${p.id}"`, 'name="full_name"')}${fld(`e-title-${p.id}`, 'Job title', p.job_title, 'text', 120).replace(`name="e-title-${p.id}"`, 'name="job_title"')}</div>
@@ -142,7 +142,7 @@ export async function companyView(app, id) {
     try { await store.mergePeople(keep, other.id); toast(tr('Merged.')); } catch (err) { toast(tr(err.message)); }
   }));
   $$('[data-person-dnc]', app).forEach((b) => b.addEventListener('click', async () => { const li = b.closest('[data-person]'); try { await store.savePerson({ id: li.dataset.person, do_not_contact: !li.dataset.dnc }); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); } }));
-  $$('[data-person-del]', app).forEach((b) => b.addEventListener('click', async () => { try { await store.deletePerson(b.closest('[data-person]').dataset.person); toast(tr('Person removed.')); } catch (err) { toast(tr(err.message)); } }));
+  $$('[data-person-del]', app).forEach((b) => b.addEventListener('click', async () => { const row = b.closest('[data-person]'); softDelete(row, tr('Person removed.'), () => store.deletePerson(row.dataset.person)); }));
 }
 
 

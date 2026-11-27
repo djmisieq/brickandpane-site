@@ -56,7 +56,12 @@ export async function renderAppBar(el, user, area) {
 
   const btn = $('.notif-btn', el), panel = $('#notif-panel', el);
   btn.addEventListener('click', () => { const open = panel.hidden; panel.hidden = !open; btn.setAttribute('aria-expanded', String(open)); });
-  document.addEventListener('click', (e) => { if (!e.target.closest('.notif')) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); } }, { once: true });
+  // UX audit B4: the outside click and Escape close the panel every time (the old one-shot listener was used up by the click that opened it).
+  const close = () => { if (!panel.hidden) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); } };
+  document.removeEventListener('click', renderAppBar.outside); document.removeEventListener('keydown', renderAppBar.esc);
+  renderAppBar.outside = (e) => { if (!e.target.closest('.notif')) close(); };
+  renderAppBar.esc = (e) => { if (e.key === 'Escape' && !panel.hidden) { close(); btn.focus(); } };
+  document.addEventListener('click', renderAppBar.outside); document.addEventListener('keydown', renderAppBar.esc);
   $('[data-read-all]', el)?.addEventListener('click', () => store.markRead('all'));
   $$('[data-note]', el).forEach((a) => a.addEventListener('click', () => store.markRead([a.dataset.note])));
   $('[data-signout]', el).addEventListener('click', async () => { await store.signOut(); location.href = 'login.html'; });

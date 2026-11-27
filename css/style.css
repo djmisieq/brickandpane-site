@@ -1335,7 +1335,7 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .cal-e{display:grid;gap:1px;padding:3px 5px;border-left:3px solid var(--k-line,var(--c-neutral-line));background:var(--k-bg,var(--c-neutral-bg));text-decoration:none;color:var(--ink);font-size:var(--step--2);overflow-wrap:anywhere}
 .cal-e:hover{box-shadow:inset 0 0 0 1px var(--k-line,var(--ink));color:var(--ink)}
 .cal-e .cal-k{color:var(--k-fg,var(--ink))}
-.cal-k{font-weight:600}.cal-w{color:var(--muted)}
+.cal-k{font-weight:600}.cal-w{color:var(--ink-2)}
 /* Booking kinds (colour audit 26.11.2026): every pair stays apart for red-green colour blindness too (ΔE2000 ≥ 10). */
 .cal-survey{--k-line:var(--c-info-line);--k-bg:var(--c-info-bg);--k-fg:var(--c-info-fg)}
 .cal-delivery{--k-line:var(--c-warn-line);--k-bg:var(--c-warn-bg);--k-fg:var(--c-warn-fg)}
@@ -1400,3 +1400,160 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .cost-list li.is-out{opacity:1;color:var(--muted)}.cost-list li.is-out strong{text-decoration:line-through}
 .crm .now-card.is-you{border-top-color:var(--c-info-line)}
 .stat.is-zero dd,.stat.is-zero .stat-dd{color:var(--muted)}
+
+/* ===== CRM app frame (UX audit 27.11.2026): a work tool, not a page of the website =====
+   No website header or footer; a fixed side menu (a bottom bar on phones); working type scale and controls;
+   full width; the board in one scrolling row; a thin loading bar while a view is drawn. */
+body.crm{--side-w:216px;--step--2:.75rem;--step--1:.8125rem;--step-0:.9375rem;--step-1:1.0625rem;--step-2:1.3125rem;background:var(--bg)}
+body.crm .site-header,body.crm .site-footer{display:none}
+body.crm main{margin-left:var(--side-w);min-height:100vh}
+.side-nav{position:fixed;inset:0 auto 0 0;width:var(--side-w);display:flex;flex-direction:column;gap:var(--s-s);padding:var(--s-s) var(--s-xs);background:var(--surface);border-right:1px solid var(--line);overflow-y:auto;z-index:40}
+.side-brand{display:flex;align-items:center;gap:.6rem;padding:.4rem .6rem .8rem;font-weight:600;text-decoration:none;color:var(--ink)}
+.side-brand .brand-mark{width:24px;height:24px;flex:none}
+.side-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.side-list a,.side-more{display:flex;align-items:center;gap:.65rem;width:100%;min-height:36px;padding:.4rem .6rem;border:0;border-radius:4px;background:none;font:inherit;font-size:var(--step--1);color:var(--ink-2);text-decoration:none;cursor:pointer}
+.side-list a:hover,.side-more:hover{background:var(--surface-2);color:var(--ink)}
+.side-list a.is-on{background:var(--ink);color:var(--bg)}
+.side-list .seg-count{margin-left:auto}
+.side-more-li{display:none}
+.side-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot{margin-top:auto;padding:.4rem .6rem}
+.side-foot .lang-switch{display:inline-flex;gap:.25rem}
+.side-foot .lang-switch a{display:inline-flex;align-items:center;min-height:28px;padding:0 .5rem;font-size:var(--step--1);text-decoration:none;color:var(--ink-2);border:1px solid var(--line)}
+.side-foot .lang-switch a[aria-current]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ico{flex:none;display:block}
+body.crm .appbar{position:sticky;top:0;z-index:30}
+body.crm .appbar-inner{min-height:52px}
+body.crm .appbar-title{display:none}
+body.crm .demo-bar{padding:4px var(--margin);font-size:var(--step--2)}
+.crm .container-wide,.crm .container{max-width:none;margin-inline:0;padding-inline:clamp(16px,2vw,28px)}
+.crm .section-tight{padding-block:var(--s-m) var(--s-xl)}
+.crm .app-h1{font-size:var(--step-2);margin:0}
+.crm .eyebrow{font-size:var(--step--2)}
+/* Working controls: 34 / 30 px on a mouse, 44 px on touch screens (the touch-target rule). */
+.crm .btn{min-height:34px;padding:.35em .9em;font-size:var(--step--1);border-radius:3px}
+.crm .btn-sm{min-height:30px;padding:.25em .75em}
+.crm input:not([type=checkbox]):not([type=radio]),.crm select{min-height:34px;padding:.3rem .6rem;font-size:var(--step--1);border-radius:3px}
+.crm textarea{min-height:84px;padding:.45rem .6rem;font-size:var(--step--1);border-radius:3px}
+.crm .seg a,.crm .seg button{padding:.3rem .75rem}
+@media (max-width:1099px){.crm .btn,.crm .btn-sm,.crm input:not([type=checkbox]):not([type=radio]),.crm select,.side-list a,.side-more{min-height:44px}}
+/* Data tables: proportional text, one line per row, the reference in mono, numbers aligned. */
+.crm .spec td,.crm .spec thead th{font-family:var(--font)}
+.crm .spec th,.crm .spec td{padding:.45rem .6rem .45rem 0}
+.crm .crm-table th[scope=row],.crm .crm-table th[scope=row] a{font-family:var(--mono);white-space:nowrap}
+.crm .crm-table thead th{white-space:nowrap}
+.crm .crm-table td{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crm .crm-table tbody tr:hover{background:var(--surface-2)}
+.crm .stat-dd,.crm .stats dd{font-family:var(--font);font-variant-numeric:tabular-nums;font-weight:600}
+/* The board: one row of stage columns that scrolls sideways, as on any kanban tool. */
+.crm .board{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;align-items:start;padding-bottom:var(--s-s);scroll-snap-type:x proximity}
+.crm .board .col{width:248px;scroll-snap-align:start;max-height:calc(100vh - 230px);overflow-y:auto}
+.crm .board .col-empty{width:150px}
+.crm .kcard{padding:.55rem .65rem;font-size:var(--step--1);border-radius:3px;transition:box-shadow var(--dur-1),transform var(--dur-1)}
+.crm .kcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);transform:translateY(-1px)}
+@media (prefers-reduced-motion:reduce){.crm .kcard:hover{transform:none}}
+/* Loading: the old view dims and a thin bar runs under the app bar until the new one is drawn. */
+body.crm.is-loading #app{opacity:.55;transition:opacity .15s .1s}
+body.crm.is-loading .appbar::after{content:"";position:absolute;left:0;bottom:-1px;height:2px;width:40%;background:var(--accent);animation:crm-load 1s ease-in-out infinite}
+@keyframes crm-load{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){body.crm.is-loading .appbar::after{animation:none;width:100%}}
+/* Today: who is out on site first; empty lists fold into one line. */
+.field-strip{margin:0 0 var(--s-m)}
+.field-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s-xs)}
+.field-card{display:grid;gap:2px;padding:.55rem .7rem;background:var(--k-bg,var(--surface));border:1px solid var(--line);border-left:3px solid var(--k-line,var(--line));color:var(--k-fg,inherit);text-decoration:none}
+.field-k{font-size:var(--step--2);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.field-p{font-weight:600;color:var(--ink)}.field-l{font-size:var(--step--1);color:var(--ink-2)}
+.today-clear{color:var(--ink-2);font-size:var(--step--1);margin:0}
+.today-ok{color:var(--c-ok-fg);font-weight:700}
+.today-done{font-size:var(--step-1);font-weight:600;margin:0}
+.crm .today{max-width:1100px}
+/* Phones: a bottom bar with the four daily places and "More"; the rest opens above it. */
+@media (max-width:767px){
+  body.crm main{margin-left:0;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .side-nav{inset:auto 0 0 0;width:auto;height:auto;flex-direction:row;padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);overflow:visible}
+  .side-brand,.side-foot{display:none}
+  .side-list{grid-auto-flow:column;grid-auto-columns:1fr;width:100%}
+  .side-list>li:not(.is-main):not(.side-more-li){display:none}
+  .side-more-li{display:block;position:relative}
+  .side-list a,.side-more{flex-direction:column;gap:2px;min-height:52px;padding:4px 2px;font-size:var(--step--2);justify-content:center}
+  .side-list .seg-count{position:absolute;margin:0;transform:translate(12px,-14px)}
+  .side-list li{position:relative}
+  .side-dot{position:absolute;top:6px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--c-danger-line)}
+  .side-nav.is-more .side-list{grid-auto-flow:row;grid-template-columns:repeat(4,1fr)}
+  .side-nav.is-more .side-list>li{display:block}
+  .side-nav.is-more .side-foot{display:block;position:absolute;bottom:100%;right:0;background:var(--surface)}
+  .crm .board .col{max-height:none}
+}
+/* Toasts: an error is red and stays until closed; Undo sits in the toast (UX audit 27.11.2026). */
+.toast{pointer-events:none;display:flex;align-items:center;gap:.75rem}
+.toast.is-on{pointer-events:none}.toast.is-on .toast-btn{pointer-events:auto}
+.toast.tone-error{background:var(--c-danger-fg)}
+.toast.tone-ok{background:var(--c-ok-fg)}
+.toast-btn{background:none;border:1px solid rgba(255,255,255,.6);color:#fff;font:inherit;font-weight:600;padding:.2rem .6rem;cursor:pointer;min-height:28px}
+.toast-btn:hover{background:rgba(255,255,255,.15)}
+.crm .head-acts{display:flex;flex-wrap:wrap;gap:var(--s-xs);margin:var(--s-xs) 0 0}
+.crm .head-acts .btn{gap:.4em}
+.head-photo{cursor:pointer}
+.head-photo:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.crm .head-due{width:auto;min-height:30px;padding:.15rem .4rem}
+.crm .head-due.is-late{border-color:var(--c-danger-line);color:var(--c-danger-fg)}
+/* ===== CRM U1 (UX audit 27.11.2026): dialogs, the Ctrl+K palette, editing in place, drag and drop ===== */
+.qd{border:1px solid var(--line);padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);background:var(--surface);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.18);border-radius:6px}
+.qd::backdrop{background:rgba(20,20,20,.35)}
+.qd-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-s);padding:.75rem 1rem;border-bottom:1px solid var(--line)}
+.qd-h{font-size:var(--step-1);margin:0}
+.qd-x{background:none;border:0;font-size:1.5rem;line-height:1;cursor:pointer;color:var(--ink-2);min-width:36px;min-height:36px}
+.qd-body{display:grid;gap:var(--s-s);padding:1rem}
+.qd-body[hidden]{display:none}
+.qd-tabs{margin:.75rem 1rem 0}
+.qd-acts{display:flex;gap:var(--s-xs);flex-wrap:wrap}
+.qd-pal{width:min(640px,calc(100vw - 32px));margin-top:12vh}
+.pal{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-bottom:1px solid var(--line)}
+.pal input{border:0;outline:0;min-height:40px;font-size:var(--step-0);padding:0;background:none}
+.pal input:focus{outline:0}
+.pal-ico{color:var(--muted)}
+.pal-k,.crm-k kbd,.keys kbd{font-family:var(--mono);font-size:.72rem;padding:.1rem .35rem;border:1px solid var(--line);border-radius:3px;color:var(--ink-2);background:var(--surface-2);white-space:nowrap}
+.pal-list{list-style:none;margin:0;padding:.35rem;max-height:min(60vh,440px);overflow-y:auto}
+.pal-i{display:flex;justify-content:space-between;gap:var(--s-s);padding:.5rem .65rem;border-radius:4px;cursor:pointer}
+.pal-i.is-on,.pal-i:hover{background:var(--surface-2)}
+.pal-i.is-on{box-shadow:inset 3px 0 0 var(--accent)}
+.pal-t{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-s{color:var(--ink-2);font-size:var(--step--1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.pal-action .pal-t::before{content:"+ ";color:var(--accent)}
+.pal-none{padding:.75rem;color:var(--muted)}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.4rem 1rem;padding:1rem;margin:0}
+.keys div{display:flex;gap:.6rem;align-items:center}.keys dd{margin:0}
+.crm-gsearch{display:flex;align-items:center;gap:.4rem}
+.crm-k{background:none;border:0;cursor:pointer;padding:0 .2rem;min-height:34px}
+.crm-new{gap:.3em}
+.crm-new .ico{width:16px;height:16px}
+@media (max-width:767px){.crm-k{display:none}.crm-new span{display:none}}
+/* Board drag and drop. */
+.crm .kcard[draggable]{cursor:grab}
+.crm .kcard.is-drag{opacity:.5}
+.crm .is-dragging .col{outline:1px dashed var(--line)}
+.crm .col.is-over{outline:2px solid var(--accent);outline-offset:-2px;background:var(--surface-2)}
+/* The list edits in place. */
+.cell-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit}
+.cell-btn:hover .badge{box-shadow:0 0 0 1px currentColor}
+.crm .cell-in{width:auto;max-width:170px;min-height:28px;padding:.1rem .35rem;border-color:transparent;background:transparent}
+.crm .cell-in:hover,.crm .cell-in:focus{border-color:var(--field-line);background:var(--surface)}
+.crm .cell-in.is-late{color:var(--c-danger-fg);font-weight:600}
+.crm .crm-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.row-link{color:inherit;text-decoration:none}.row-link:hover{text-decoration:underline}
+/* Project card: the next move and the update box at the top of the feed. */
+.next-move{margin:.35rem 0 0;font-size:var(--step--1)}
+.next-l{color:var(--ink-2)}
+.next-move.is-late strong{color:var(--c-danger-fg)}
+.next-move.is-none .next-l{color:var(--c-danger-fg);font-weight:600}
+.feed-compose{display:grid;gap:.4rem;margin:0 0 var(--s-s);padding:.6rem;border:1px solid var(--c-plum-line);background:var(--c-plum-bg)}
+.feed-compose textarea{min-height:56px;background:var(--surface)}
+.feed-compose-acts{display:flex;justify-content:space-between;align-items:center;gap:var(--s-xs)}
+.tag-internal{background:var(--c-plum-bg);color:var(--c-plum-fg);border-color:var(--c-plum-line)}
+.quick-task{display:flex;gap:var(--s-xs);margin:0 0 var(--s-s)}
+.quick-task input[name=title]{flex:1}
+.quick-task input[type=date]{width:auto}
+/* Phones: scrolling to a field keeps it clear of the bottom bar. */
+@media (max-width:767px){html:has(body.crm){scroll-padding-bottom:80px;scroll-padding-top:60px}}
+/* Phones: the list is cards; its column headers stay as a scrolling row of sort buttons (they were clipped to 1 px). */
+@media (max-width:600px){.crm table.crm-table.has-labels thead{position:static;width:auto;height:auto;clip:auto;display:block;overflow-x:auto}.crm table.crm-table.has-labels thead tr{display:flex;gap:.25rem}.crm table.crm-table.has-labels thead th{border:1px solid var(--line);padding:0 .5rem}.crm .th-sort{min-height:44px}}

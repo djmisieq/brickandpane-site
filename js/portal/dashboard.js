@@ -23,7 +23,9 @@ export async function dashboardView(app, nav) {
   if (!d) { app.innerHTML = `<div class="container-wide section-tight">${head}<p class="callout">${esc(tr(err || 'The dashboard is not available right now.'))}</p></div>`; bind(app, nav); return; }
   const m = d.margin || { sale: 0, cost: 0, low: [], projects: 0 };
   const mPct = Number(m.sale) > 0 ? Math.round(((m.sale - m.cost) / m.sale) * 1000) / 10 : null;
-  const funnel = [[tr('Enquiries'), d.enquiries], [tr('New projects'), d.projects_new], [tr('Quoted'), d.quoted], [tr('Won'), d.won]];
+  // UX audit 27.11.2026 (B1): the bars counted different things (form enquiries vs all projects), so the funnel grew
+  // downwards and showed "200%". Now one line of projects; form enquiries keep their own tile above.
+  const funnel = [[tr('New projects'), d.projects_new], [tr('Quoted'), d.quoted], [tr('Won'), d.won]];
   const fMax = Math.max(1, ...funnel.map((x) => x[1]));
   const src = (d.enquiries_by_source || []).map((x) => [tr(SOURCES[x.source] || x.source), x.n]);
   const months = (d.paid_by_month || []).map((x) => [x.month, Number(x.gbp), fmtMoney(x.gbp)]);
@@ -43,7 +45,7 @@ export async function dashboardView(app, nav) {
     </div>
     <div class="dash-grid">
       <section class="ctl"><h2 class="panel-h">${tr('From enquiry to order')}</h2>${bars(funnel, fMax)}
-        <p class="note">${d.enquiries ? esc(tr('{pct}% of enquiries became an order', { pct: Math.round((d.won / d.enquiries) * 100) })) : ''}</p></section>
+        <p class="note">${d.projects_new ? esc(tr('{pct}% of new projects were won', { pct: Math.min(100, Math.round((d.won / d.projects_new) * 100)) })) : ''}</p></section>
       <section class="ctl"><h2 class="panel-h">${tr('Where new projects came from')}</h2>${src.length ? bars(src, Math.max(...src.map((x) => x[1]))) : `<p class="hint">${tr('No new projects in this period.')}</p>`}
         <p class="note">${tr('Set the source on each project, in Commercial.')}</p></section>
       <section class="ctl"><h2 class="panel-h">${tr('Quotes in play')}</h2>${(d.in_play || []).length ? `<ul class="today-list">${d.in_play.map((x) => `<li><a class="today-row${age(x.sent_at) >= 14 ? ' is-late' : ''}" href="#/quotes/${esc(x.id)}"><span class="today-t">${esc(x.reference)}</span><span class="today-s">${esc(fmtMoney(x.net))}</span><span class="today-age">${esc(tr('{n} d', { n: age(x.sent_at) }))}</span></a></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote waiting for an answer.')}</p>`}</section>

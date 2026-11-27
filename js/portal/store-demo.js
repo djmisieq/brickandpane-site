@@ -114,6 +114,12 @@ function seed() {
   n(anna.id, p2, 'approval_request', 'Approval needed: Shop drawings — corner slider', 'Mews house, corner glazing', daysAgo(2));
   n(anna.id, p1, 'approval_request', 'Approval needed: Quotation Q1 — Hartley Road', 'Hartley Road rear extension', daysAgo(4), true);
   n(tom.id, p3, 'new_project', 'New project: Garden room, Dulwich', 'SE21', daysAgo(0, 9));
+  // UX audit 27.11.2026 (B12): a delivery today and a survey tomorrow, so Today and the calendar show something.
+  const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  s.bookings = [
+    { id: uid(), project_id: p5, kind: 'delivery', starts_on: day(0), ends_on: day(0), crew_company_id: null, staff_id: tom.id, note: 'Morning slot, parking bay booked', created_by: tom.id, created_at: daysAgo(3) },
+    { id: uid(), project_id: p3, kind: 'survey', starts_on: day(1), ends_on: day(1), crew_company_id: null, staff_id: tom.id, note: '', created_by: tom.id, created_at: daysAgo(1) },
+  ];
   return s;
 }
 

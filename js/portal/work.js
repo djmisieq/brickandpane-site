@@ -6,7 +6,7 @@
 //    crew or a person on the same day, and an .ics file to send to a crew.
 //  - Stage playbook: the tasks each stage starts, edited by the team.
 import { store } from './store.js';
-import { ALL_STAGES, STAGES, esc, fmtDay, stageBadge, stageLabel, $, $$, toast } from './core.js';
+import { ALL_STAGES, STAGES, esc, fmtDay, stageBadge, stageLabel, $, $$, toast, softDelete } from './core.js';
 import { tr } from './i18n.js';
 import { loadTasks, item as taskItem, bindTasks, taskLate } from './tasks.js';
 import { names } from './linker.js';
@@ -53,6 +53,7 @@ export async function myWorkView(app, nav, user) {
       <a class="btn btn-sm btn-ghost" href="#/playbook">${tr('Stage playbook')}</a></div>
     <div class="work-grid">
       <div data-tasks data-project="" data-request="">
+        <form class="quick-task" data-quick-task novalidate><label class="visually-hidden" for="qt-mw">${tr('New task')}</label><input id="qt-mw" name="title" maxlength="300" placeholder="${esc(tr('+ Add a task for today, press Enter'))}"><label class="visually-hidden" for="qt-mw-due">${tr('Due')}</label><input id="qt-mw-due" name="due" type="date" value="${t0}"></form>
         ${buckets.map(([id, name, arr]) => `<section class="today-sec" id="mw-${id}"><h2 class="panel-h">${tr(name)} <span class="today-n">${arr.length}</span></h2>${list(arr, id === 'late' ? 'Nothing late.' : 'Nothing here.')}</section>`).join('')}
         <section class="today-sec" id="mw-given"><h2 class="panel-h">${tr('Given to others')} <span class="today-n">${given.length}</span></h2>${list(given, 'Nothing given to others.')}</section>
       </div>
@@ -69,6 +70,12 @@ export async function myWorkView(app, nav, user) {
       </div>
     </div></div>`;
   bindTasks(app, user);
+  // UX audit U1: a task is added where the tasks are read; Enter saves it for the person whose work this is.
+  $('[data-quick-task]', app)?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget, title = f.title.value.trim();
+    if (!title) { f.title.focus(); return; }
+    try { await store.addTask({ title, due_on: f.due.value || null, assignee_id: whose }); f.title.value = ''; delete f.title.dataset.dirty; toast(tr('Task added.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
   $('[data-mw-who]', app).addEventListener('change', (e) => { whose = e.target.value; myWorkView(app, nav, user); });
   $$('[data-note]', app).forEach((a) => a.addEventListener('click', () => store.markRead([a.dataset.note])));
   $('[data-handover]', app).addEventListener('submit', async (e) => {
@@ -173,5 +180,5 @@ export async function playbookView(app, nav) {
     try { await store.savePlaybook({ to_stage: f.dataset.stage, title, kind: f.kind.value, offset_days: Math.max(0, Math.min(90, +f.offset_days.value || 0)), sort: list.filter((b) => b.to_stage === f.dataset.stage).length + 1 }); toast(tr('Added.')); playbookView(app, nav); } catch (err) { toast(tr(err.message)); }
   }));
   $$('[data-pb-toggle]', app).forEach((b) => b.addEventListener('click', async () => { const row = list.find((x) => x.id === b.closest('[data-pb]').dataset.pb); try { await store.savePlaybook({ id: row.id, active: !row.active }); playbookView(app, nav); } catch (err) { toast(tr(err.message)); } }));
-  $$('[data-pb-del]', app).forEach((b) => b.addEventListener('click', async () => { try { await store.deletePlaybook(b.closest('[data-pb]').dataset.pb); playbookView(app, nav); } catch (err) { toast(tr(err.message)); } }));
+  $$('[data-pb-del]', app).forEach((b) => b.addEventListener('click', async () => { const row = b.closest('[data-pb]'); softDelete(row, tr('Rule removed.'), () => store.deletePlaybook(row.dataset.pb)); }));
 }
