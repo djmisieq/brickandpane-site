@@ -1170,7 +1170,6 @@ const PL = {
   "Reply to the enquiry from {who}": "Odpowiedz na zapytanie: {who}",
   "Chase the client: no answer for {n} days": "Ponaglij klienta: brak odpowiedzi od {n} dni",
   "Chase {who}": "Ponaglij: {who}",
-  "the subcontractor": "podwykonawcę",
   "them": "ich",
   "Confirm the {what} on {date} with the client and the crew": "Potwierdź {what} ({date}) z klientem i ekipą",
   "survey": "pomiar",

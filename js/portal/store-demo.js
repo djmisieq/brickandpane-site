@@ -467,7 +467,7 @@ export const store = {
       .forEach((p) => make(r.id, p.id, p.stage_changed_at.slice(0, 10), { title: `Chase the client: no answer for ${r.days} days`, kind: 'call', project_id: p.id, assignee_id: p.assignee_id }));
     r = on('chase_date');
     if (r) s.projects.filter((p) => { const i = s.internal[p.id]; return i?.waiting_on && i.chase_on && i.chase_on <= today && !['completed', 'closed', 'on_hold'].includes(p.stage) && !done(r.id, p.id, i.chase_on); })
-      .forEach((p) => { const i = s.internal[p.id]; make(r.id, p.id, i.chase_on, { title: `Chase ${({ client: 'the client', supplier: 'the supplier', subcontractor: 'the subcontractor' })[i.waiting_on] || 'them'}`, kind: 'call', due_on: i.chase_on, project_id: p.id, assignee_id: p.assignee_id }); });
+      .forEach((p) => { const i = s.internal[p.id]; make(r.id, p.id, i.chase_on, { title: `Chase ${({ client: 'the client', supplier: 'the supplier' })[i.waiting_on] || 'them'}`, kind: 'call', due_on: i.chase_on, project_id: p.id, assignee_id: p.assignee_id }); });
     r = on('booking_confirm');
     if (r) (s.bookings || []).filter((b) => ['survey', 'delivery', 'install'].includes(b.kind) && b.starts_on >= today && b.starts_on <= plus(r.days) && !done(r.id, b.id, b.starts_on))
       .forEach((b) => { const p = s.projects.find((x) => x.id === b.project_id); make(r.id, b.id, b.starts_on, { title: `Confirm the ${b.kind === 'install' ? 'fitting' : b.kind} on ${b.starts_on} with the client and the crew`, kind: 'call', project_id: b.project_id, assignee_id: b.staff_id || p?.assignee_id || null }); });

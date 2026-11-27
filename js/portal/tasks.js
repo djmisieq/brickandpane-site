@@ -3,7 +3,7 @@
 // task and plans the next contact as an open one, so nothing lives only in someone's head.
 import { store } from './store.js';
 import { esc, fmtDay, $, $$, toast, softDelete } from './core.js';
-import { tr } from './i18n.js';
+import { tr, LANG } from './i18n.js';
 import { linker, bindLinkers, picked } from './linker.js';
 
 const KINDS = { task: 'Task', call: 'Call', email: 'Email', visit: 'Visit' };
@@ -11,7 +11,7 @@ const KINDS = { task: 'Task', call: 'Call', email: 'Email', visit: 'Visit' };
 const RULE_TITLES = [
   [/^Reply to the enquiry from (.*)$/, (m) => tr('Reply to the enquiry from {who}', { who: m[1] })],
   [/^Chase the client: no answer for (\d+) days$/, (m) => tr('Chase the client: no answer for {n} days', { n: m[1] })],
-  [/^Chase (the client|the supplier|the subcontractor|them)$/, (m) => tr('Chase {who}', { who: tr(m[1]) })],
+  [/^Chase (the client|the supplier|the subcontractor|them)$/, (m) => tr('Chase {who}', { who: m[1] === 'the subcontractor' ? (LANG === 'pl' ? 'podwykonawcę' : m[1]) : tr(m[1]) })],
   [/^Confirm the (survey|delivery|fitting) on (.*) with the client and the crew$/, (m) => tr('Confirm the {what} on {date} with the client and the crew', { what: tr(m[1]), date: m[2] })],
   [/^Payment reminder: (.*)$/, (m) => tr('Payment reminder: {label}', { label: m[1] })],
 ];
