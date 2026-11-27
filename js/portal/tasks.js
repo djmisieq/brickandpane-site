@@ -3,10 +3,19 @@
 // task and plans the next contact as an open one, so nothing lives only in someone's head.
 import { store } from './store.js';
 import { esc, fmtDay, $, $$, toast, softDelete } from './core.js';
-import { tr } from './i18n.js';
+import { tr, LANG } from './i18n.js';
 import { linker, bindLinkers, picked } from './linker.js';
 
 const KINDS = { task: 'Task', call: 'Call', email: 'Email', visit: 'Visit' };
+// Tasks made by an automation rule (0051) have English titles from the database: the Polish CRM reads them in Polish.
+const RULE_TITLES = [
+  [/^Reply to the enquiry from (.*)$/, (m) => tr('Reply to the enquiry from {who}', { who: m[1] })],
+  [/^Chase the client: no answer for (\d+) days$/, (m) => tr('Chase the client: no answer for {n} days', { n: m[1] })],
+  [/^Chase (the client|the supplier|the subcontractor|them)$/, (m) => tr('Chase {who}', { who: m[1] === 'the subcontractor' ? (LANG === 'pl' ? 'podwykonawcę' : m[1]) : tr(m[1]) })],
+  [/^Confirm the (survey|delivery|fitting) on (.*) with the client and the crew$/, (m) => tr('Confirm the {what} on {date} with the client and the crew', { what: tr(m[1]), date: m[2] })],
+  [/^Payment reminder: (.*)$/, (m) => tr('Payment reminder: {label}', { label: m[1] })],
+];
+export const taskTitle = (t) => { if (!t.rule_id) return t.title; for (const [re, f] of RULE_TITLES) { const m = t.title.match(re); if (m) return f(m); } return t.title; };
 const DAY = 86400000;
 export const isoDay = (offset = 0) => { const d = new Date(Date.now() + offset * DAY); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 // Next working day: the default due date (audit: a due date as its own field, with a default).
@@ -22,7 +31,7 @@ export function item(t, staff, opts = {}) {
   const staffOpts = staff.map((s) => `<option value="${esc(s.id)}" ${s.id === t.assignee_id ? 'selected' : ''}>${esc(s.full_name || s.email)}</option>`).join('');
   const when = t.done_at ? tr('done {date}', { date: fmtDay(t.done_at) }) : t.due_on ? (taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Due {date}', { date: fmtDay(t.due_on) })) : '';
   return `<li class="task${t.done_at ? ' is-done' : ''}${taskLate(t) ? ' is-late' : !t.done_at && t.due_on === isoDay(0) ? ' is-today' : ''}" data-task="${esc(t.id)}">
-    <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done: {task}', { task: t.title }))}"><span><strong>${esc(t.title)}</strong>
+    <label class="task-check"><input type="checkbox" data-task-done ${t.done_at ? 'checked' : ''} aria-label="${esc(tr('Done: {task}', { task: t.title }))}"><span><strong>${esc(taskTitle(t))}</strong>${t.rule_id ? ` <span class="tag tag-auto" title="${esc(tr('Made by an automation rule'))}">${tr('auto')}</span>` : ''}
       <span class="note">${esc(tr(KINDS[t.kind] || 'Task'))}${when ? ` · ${esc(when)}` : ''}${who ? ` · ${esc(who)}` : ''}</span>
       ${opts.project ? `<a class="note task-proj" href="${esc(opts.href)}">${esc(opts.project)}</a>` : ''}
       ${t.note ? `<span class="note task-note">${esc(t.note)}</span>` : ''}</span></label>

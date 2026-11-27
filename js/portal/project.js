@@ -15,6 +15,7 @@ import { SOURCES } from './dashboard.js';
 import { loadProjectCompanies, projectCompaniesBox, bindProjectCompanies, ROLES as CO_ROLES, PERSON_ROLES } from './companies.js';
 import { linker, bindLinkers, picked, names } from './linker.js';
 import { ICON } from './icons.js';
+import { bindMentions } from './crm-quick.js';
 
 // Team words kept out of i18n.js (audit.spec keeps them off client-facing text; costs.js does the same).
 export const t = (en, pl, vars) => (LANG === 'pl' ? pl : en).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? '');
@@ -320,6 +321,7 @@ export async function projectView(app, id, ctx) {
   };
   $$('[data-quick]', app).forEach((b) => b.addEventListener('click', () => QUICK_DO[b.dataset.quick]?.()));
   $('[data-next-add]', app)?.addEventListener('click', () => QUICK_DO.task?.());
+  bindMentions($('#qn-body', app), staff); bindMentions($('#msg-body', app), staff);
   $('[data-quick-note]', app)?.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.currentTarget, body = f.body.value.trim();
     if (!body) { f.body.focus(); return; }

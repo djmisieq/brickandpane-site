@@ -8,13 +8,14 @@ import { tr } from './i18n.js';
 import { route, renderAppBar } from './ui.js';
 import { quotesView, sentQuotes, findQuotes } from './quotes.js';
 import { mailView } from './mail.js';
-import { loadTasks, tasksBox, bindTasks, taskDue, taskLate } from './tasks.js';
+import { loadTasks, tasksBox, bindTasks, taskDue, taskLate, taskTitle } from './tasks.js';
 import { dashboardView, SOURCES } from './dashboard.js';
 import { replyBox, bindEnquiryReply } from './enquiry-reply.js';
 import { linker, bindLinkers, picked, linkerBusy } from './linker.js';
 import { projectView, WAITING, BOOKING_KINDS } from './project.js';
 import { ICON } from './icons.js';
 import { stageDialog, newDialog, palette, bindKeys, rememberRecent } from './crm-quick.js';
+import { automationsView } from './automations.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
@@ -88,6 +89,7 @@ async function draw(fromStore) {
     else if (r.name === 'my') await myWorkView(app, viewSwitch('my', await listRequests()), user);
     else if (r.name === 'calendar') await calendarView(app, viewSwitch('calendar', await listRequests()), user);
     else if (r.name === 'playbook') await playbookView(app, viewSwitch('', await listRequests()));
+    else if (r.name === 'automations') await automationsView(app);
     else if (r.name === 'mail') await mailView(app, viewSwitch('mail', await listRequests()));
     else if (r.name === 'board' || r.name === 'list') await board(r.name === 'list');
     else await today(); // the start screen (owner, 25.11.2026)
@@ -99,6 +101,14 @@ async function draw(fromStore) {
 }
 
 let boardMine = false, listSort = { by: 'updated', dir: 1 };
+// Group by: label, the group of a project, the order of the groups.
+const GROUPS = {
+  none: ['No grouping', () => '', () => 0],
+  stage: ['Group by stage', (p) => tr(stage(p.stage).staffLabel || stage(p.stage).label), (p) => ALL_STAGES.findIndex((s) => s.id === p.stage)],
+  phase: ['Group by phase', (p) => tr(stage(p.stage).phase || 'Other'), (p) => ['Quotation', 'Design', 'Delivery'].indexOf(stage(p.stage).phase) + 1 || 9],
+  am: ['Group by account manager', (p) => p.assignee?.full_name || tr('Unassigned'), (p) => (p.assignee ? 0 : 1)],
+  waiting: ['Group by who we wait on', (p) => (p.internal?.waiting_on ? tr(WAITING[p.internal.waiting_on]) : tr('Nobody: our move')), (p) => (p.internal?.waiting_on ? 0 : 1)],
+};
 async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
   const [all, requests, openT, staff] = await Promise.all([store.listProjects(), listRequests(), loadTasks({ open: true }), asList ? store.listStaff().catch(() => []) : []]);
@@ -110,6 +120,9 @@ async function board(asList) {
   const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const SORT = { ref: (p) => p.ref, name: (p) => p.name.toLowerCase(), client: (p) => clientName(p).toLowerCase(), stage: (p) => ALL_STAGES.findIndex((s) => s.id === p.stage), am: (p) => p.assignee?.full_name || '~', due: (p) => p.due_at || '9999', value: (p) => -(Number(p.internal?.value_gbp) || 0), waiting: (p) => p.internal?.waiting_on || '~', updated: (p) => `${9e15 - new Date(p.updated_at).getTime()}` };
   const sorted = [...projects].sort((a, b) => { const f = SORT[listSort.by] || SORT.updated, x = f(a), y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * listSort.dir; });
+  // UX audit U2: the list groups by a field, each group with its count and value; the setting lives in the address.
+  const group = GROUPS[route().q.group] ? route().q.group : 'none';
+  const grouped = group === 'none' ? [[null, sorted]] : [...sorted.reduce((m, p) => { const k = GROUPS[group][1](p); m.set(k, [...(m.get(k) || []), p]); return m; }, new Map())].sort((a, b) => GROUPS[group][2](a[1][0]) - GROUPS[group][2](b[1][0]));
   const th = (k, label) => `<th scope="col" aria-sort="${listSort.by === k ? (listSort.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${tr(label)}${listSort.by === k ? (listSort.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`;
   const open = all.filter((p) => !['completed', 'closed'].includes(p.stage));
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
@@ -140,16 +153,18 @@ async function board(asList) {
         <div class="seg" role="group" aria-label="${tr('Projects of')}"><button type="button" class="${boardMine ? 'is-on' : ''}" aria-pressed="${boardMine}" data-board-mine="1">${tr('Mine')}</button><button type="button" class="${boardMine ? '' : 'is-on'}" aria-pressed="${!boardMine}" data-board-mine="">${tr('Everyone')}</button></div>
         <label class="visually-hidden" for="crm-q">${tr('Search projects')}</label>
         <input id="crm-q" type="search" placeholder="${tr('Search ref, name, client, location')}" value="${esc(queries.board)}">
+        ${asList ? `<label class="visually-hidden" for="list-group">${tr('Group by')}</label><select id="list-group" data-list-group>${Object.entries(GROUPS).map(([k, [l]]) => `<option value="${k}" ${k === group ? 'selected' : ''}>${esc(tr(l))}</option>`).join('')}</select>
+          <button type="button" class="btn btn-sm btn-ghost" data-list-csv>${tr('Export CSV')}</button>` : ''}
       </div>
       ${asList ? `
-        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead><tbody>
-          ${sorted.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
+        <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead>${grouped.map(([gl, rows]) => `<tbody>${gl == null ? '' : `<tr class="grp-h"><th colspan="9" scope="rowgroup"><span>${esc(gl)}</span> <span class="grp-n">${rows.length}</span><span class="grp-sum">${fmtMoney(sum(rows))}</span></th></tr>`}
+          ${rows.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
             <td><button type="button" class="cell-btn" data-cell-stage="${esc(p.id)}" aria-label="${esc(tr('Move {ref} to another stage', { ref: p.ref }))}">${stageBadge(p.stage, 'staff')}</button></td>
             <td><label class="visually-hidden" for="am-${esc(p.id)}">${tr('Account manager')}</label><select class="cell-in" id="am-${esc(p.id)}" data-cell-am="${esc(p.id)}"><option value="">—</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></td>
             <td>${p.internal?.waiting_on ? esc(tr(WAITING[p.internal.waiting_on])) : '—'}</td>
             <td><label class="visually-hidden" for="due-${esc(p.id)}">${tr('Due')}</label><input class="cell-in${isOverdue(p) ? ' is-late' : ''}" type="date" id="due-${esc(p.id)}" data-cell-due="${esc(p.id)}" value="${p.due_at ? esc(new Date(p.due_at).toISOString().slice(0, 10)) : ''}"></td>
             <td class="num">${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
-        </tbody></table></div>`
+        </tbody>`).join('')}</table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
           return `<section class="col st-${stageTone(s.id)} ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" data-stage="${esc(s.id)}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h"><span class="col-dot" aria-hidden="true"></span>${esc(tr(s.staffLabel || s.label))}${s.court === 'you' ? ` <span class="col-wait" title="${esc(tr('Waiting on client'))}">⏳</span>` : ''} <span class="col-n">${items.length}</span></h2>${items.map(card).join('')}</section>`;
@@ -171,6 +186,15 @@ async function board(asList) {
   $$('[data-cell-am]', app).forEach((s) => s.addEventListener('change', async () => { try { await store.updateProject(s.dataset.cellAm, { assignee_id: s.value || null }); toast(tr('Account manager saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
   $$('[data-cell-due]', app).forEach((i) => i.addEventListener('change', async () => { try { await store.updateProject(i.dataset.cellDue, { due_at: i.value ? new Date(`${i.value}T17:00:00`).toISOString() : null }); toast(tr('Due date saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
   $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
+  $('[data-list-group]', app)?.addEventListener('change', (e) => { const v = e.target.value; history.replaceState(null, '', `#/list${v === 'none' ? '' : `?group=${v}`}`); board(true); });
+  // CSV of what the list shows now (search, mine and order kept); amounts in £ as plain numbers.
+  $('[data-list-csv]', app)?.addEventListener('click', () => {
+    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = ['Ref', 'Project', 'Client', 'Location', 'Stage', 'Account manager', 'Waiting on', 'Due', 'Value (GBP)', 'Probability (%)', 'Updated'].map((h) => tr(h));
+    const lines = sorted.map((p) => [p.ref, p.name, clientName(p), p.location, tr(stage(p.stage).staffLabel || stage(p.stage).label), p.assignee?.full_name, p.internal?.waiting_on ? tr(WAITING[p.internal.waiting_on]) : '', p.due_at ? p.due_at.slice(0, 10) : '', p.internal?.value_gbp ?? '', p.internal?.probability ?? '', (p.updated_at || '').slice(0, 10)]);
+    const blob = new Blob(['﻿' + [head, ...lines].map((r) => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
   $$('[data-sort]', app).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.sort; listSort = { by: k, dir: listSort.by === k ? -listSort.dir : 1 }; board(true); }));
   const qi = $('#crm-q', app);
   qi.addEventListener('input', () => { queries.board = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => board(asList).then(() => { const n = $('#crm-q', app); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); });
@@ -212,7 +236,7 @@ async function today() {
   const row = ({ href, title, sub, age, late }) => `<li><a class="today-row${late ? ' is-late' : ''}" href="${href}"><span class="today-t">${title}</span><span class="today-s">${sub}</span><span class="today-age">${age}</span></a></li>`;
   const SECTIONS = [
     ['fresh', 'New enquiries, no reply yet', fresh, (r) => row({ href: `#/enquiries/${esc(r.id)}`, title: esc(`${r.name}${r.company ? `, ${r.company}` : ''}`), sub: `${esc(r.location || r.email || '')}${Date.now() - new Date(r.created_at) > 2 * DAY ? ` · <strong>${esc(tr('no reply for over 48 h'))}</strong>` : ''}`, age: days(r.created_at), late: Date.now() - new Date(r.created_at) > DAY }), 'No new enquiries.'],
-    ['tasks', 'Tasks for today and late', dueT, (t) => { const p = t.project_id && pOf(t.project_id); return row({ href: p ? `#/p/${esc(p.id)}` : t.request_id ? `#/enquiries/${esc(t.request_id)}` : '#/today', title: esc(t.title), sub: p ? pname(p) : esc(tr(t.request_id ? 'Enquiry' : 'General')), age: esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Today')), late: taskLate(t) }); }, 'No task due today.'],
+    ['tasks', 'Tasks for today and late', dueT, (t) => { const p = t.project_id && pOf(t.project_id); return row({ href: p ? `#/p/${esc(p.id)}` : t.request_id ? `#/enquiries/${esc(t.request_id)}` : '#/today', title: esc(taskTitle(t)), sub: p ? pname(p) : esc(tr(t.request_id ? 'Enquiry' : 'General')), age: esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : tr('Today')), late: taskLate(t) }); }, 'No task due today.'],
     ['overdue', 'Overdue (with us)', overdue, (p) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: `${stageBadge(p.stage, 'staff')} ${esc(p.next_step || '')}`, age: esc(tr('Overdue {date}', { date: fmtDay(p.due_at) })), late: true }), 'Nothing overdue.'],
     ['answer', 'Email came in, our move', answer, ({ p, m }) => row({ href: `#/p/${esc(p.id)}`, title: pname(p), sub: esc(`${m.from_name || m.from_addr}: ${m.subject || tr('(no subject)')}`), age: days(m.sent_at), late: daysSince(m.sent_at) >= 2 }), 'No email waiting for a reply.'],
     ['quotes', 'Quotes sent, no answer: chase', chase, (x) => {
@@ -264,9 +288,9 @@ async function today() {
 const viewSwitch = () => '';
 const NAV = [
   ['today', '#/today', 'Today', 1], ['my', '#/my', 'My work', 1], ['board', '#/board', 'Projects', 1], ['enquiries', '#/enquiries', 'Enquiries', 0],
-  ['calendar', '#/calendar', 'Calendar', 1], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0],
+  ['calendar', '#/calendar', 'Calendar', 1], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0], ['automations', '#/automations', 'Automations', 0],
 ];
-const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'my', '': 'today' };
+const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'automations', '': 'today' };
 let side = null;
 async function sideNav(r) {
   if (!side) {

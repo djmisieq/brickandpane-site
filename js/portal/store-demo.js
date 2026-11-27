@@ -129,6 +129,9 @@ const log = (s, project_id, entity, entity_id, field, old_val, new_val) => { s.c
 const note = (s, user_id, project_id, type, title, body = '') => s.notifications.push({ id: uid(), user_id, project_id, type, title, body, created_at: now(), read_at: null });
 // The stage playbook (migration 0050), the same starting list.
 const PLAYBOOK = [['in_review', 'Check the drawings and the openings; list the questions for the client', 'task', 1], ['quote_issued', 'Follow up the quotation', 'call', 5], ['accepted', 'Book the survey with the client', 'call', 1], ['accepted', 'Send the deposit invoice', 'task', 1], ['survey', 'Enter the measured sizes and photos', 'task', 1], ['drawings', 'Send the shop drawings for approval', 'task', 2], ['production', 'Place the order with the supplier', 'task', 1], ['production', 'Enter the supplier’s confirmation and production date', 'task', 3], ['delivery', 'Confirm transport, access and unloading', 'call', 1], ['delivery', 'Book the fitting crew', 'task', 1], ['installation', 'Handover: openings checked, photos taken', 'visit', 0], ['handover', 'Send the O&M manual, warranty and final invoice', 'task', 2], ['completed', 'Aftercare call', 'call', 30]];
+// The five automation rules of migration 0051, with the same defaults.
+const RULES = [['enquiry_unanswered', 1], ['client_silent', 7], ['chase_date', 0], ['booking_confirm', 1], ['payment_late', 3]];
+const rules = (s) => { if (!s.rules) s.rules = RULES.map(([id, days]) => ({ id, days, active: true })); return s.rules; };
 const playbook = (s) => { if (!s.playbook) s.playbook = PLAYBOOK.map(([to_stage, title, kind, offset_days], i) => ({ id: `pb-${i + 1}`, to_stage, title, kind, offset_days, sort: i, active: true })); return s.playbook; };
 const addWorkdays = (n) => { const d = new Date(); let left = Math.max(n, 0); while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) left--; } while (!(d.getDay() % 6)) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const taskFor = (s, t) => { // on_task_assigned: a task given to someone else tells them
@@ -440,6 +443,40 @@ export const store = {
   },
   async deleteBooking(id) { const s = load(); needStaff(s); const b = (s.bookings || []).find((x) => x.id === id); s.bookings = (s.bookings || []).filter((x) => x.id !== id); if (b) log(s, b.project_id, 'booking', id, 'removed', `${b.kind} · ${b.starts_on}`, null); save(s); },
   async listPlaybook() { const s = load(); needStaff(s); return [...playbook(s)]; }, // read only: saving here would redraw the page
+  // Automation rules (migration 0051): the same five rules as run_rules(), run here when someone asks.
+  async listRules() { const s = load(); needStaff(s); return rules(s).map((r) => ({ ...r })); },
+  async saveRule(id, patch) {
+    const s = load(); needStaff(s); const r = rules(s).find((x) => x.id === id); if (!r) return;
+    if ('days' in patch) { const d = Number(patch.days); if (!Number.isInteger(d) || d < 0 || d > 365) throw new Error('Days must be a whole number from 0 to 365.'); r.days = d; }
+    if ('active' in patch) r.active = !!patch.active;
+    save(s);
+  },
+  async ruleRuns() { const s = load(); needStaff(s); return [...(s.ruleRuns || [])]; },
+  async runRules() {
+    const s = load(); const me = needStaff(s).id; s.tasks ||= []; s.ruleRuns ||= [];
+    const on = (id) => rules(s).find((r) => r.id === id && r.active);
+    const ago = (iso, d) => iso && Date.now() - new Date(iso).getTime() > d * 864e5;
+    const today = new Date().toISOString().slice(0, 10), plus = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+    const done = (rule, obj, cycle = '') => s.ruleRuns.some((x) => x.rule_id === rule && x.object_id === obj && x.cycle === cycle);
+    let n = 0;
+    const make = (rule, obj, cycle, t) => { const task = { id: uid(), kind: 'task', note: '', due_on: today, assignee_id: null, project_id: null, request_id: null, done_at: null, done_by: null, created_by: null, created_at: now(), updated_at: now(), rule_id: rule, ...t }; s.tasks.push(task); taskFor(s, task); s.ruleRuns.push({ rule_id: rule, object_id: obj, cycle, task_id: task.id, created_at: now() }); n += 1; };
+    let r = on('enquiry_unanswered');
+    if (r) s.requests.filter((q) => q.status === 'new' && ago(q.created_at, r.days) && !ago(q.created_at, 30) && !done(r.id, q.id)).forEach((q) => make(r.id, q.id, '', { title: `Reply to the enquiry from ${q.name || 'the website'}${q.company ? `, ${q.company}` : ''}`, kind: 'email', request_id: q.id }));
+    r = on('client_silent');
+    if (r) s.projects.filter((p) => ['clarification', 'quote_issued', 'drawings'].includes(p.stage) && !s.internal[p.id]?.waiting_on && ago(p.stage_changed_at, Math.max(1, r.days)) && !ago(p.stage_changed_at, 60) && !done(r.id, p.id, p.stage_changed_at.slice(0, 10)))
+      .forEach((p) => make(r.id, p.id, p.stage_changed_at.slice(0, 10), { title: `Chase the client: no answer for ${r.days} days`, kind: 'call', project_id: p.id, assignee_id: p.assignee_id }));
+    r = on('chase_date');
+    if (r) s.projects.filter((p) => { const i = s.internal[p.id]; return i?.waiting_on && i.chase_on && i.chase_on <= today && !['completed', 'closed', 'on_hold'].includes(p.stage) && !done(r.id, p.id, i.chase_on); })
+      .forEach((p) => { const i = s.internal[p.id]; make(r.id, p.id, i.chase_on, { title: `Chase ${({ client: 'the client', supplier: 'the supplier' })[i.waiting_on] || 'them'}`, kind: 'call', due_on: i.chase_on, project_id: p.id, assignee_id: p.assignee_id }); });
+    r = on('booking_confirm');
+    if (r) (s.bookings || []).filter((b) => ['survey', 'delivery', 'install'].includes(b.kind) && b.starts_on >= today && b.starts_on <= plus(r.days) && !done(r.id, b.id, b.starts_on))
+      .forEach((b) => { const p = s.projects.find((x) => x.id === b.project_id); make(r.id, b.id, b.starts_on, { title: `Confirm the ${b.kind === 'install' ? 'fitting' : b.kind} on ${b.starts_on} with the client and the crew`, kind: 'call', project_id: b.project_id, assignee_id: b.staff_id || p?.assignee_id || null }); });
+    r = on('payment_late');
+    if (r) (s.payments || []).filter((y) => !y.paid_at && y.due_date && ago(y.due_date, r.days) && !ago(y.due_date, 60) && !done(r.id, y.id))
+      .forEach((y) => { const p = s.projects.find((x) => x.id === y.project_id); make(r.id, y.id, '', { title: `Payment reminder: ${y.label}`, kind: 'email', project_id: y.project_id, assignee_id: p?.assignee_id || null }); });
+    if (n) save(s);
+    return n;
+  },
   async savePlaybook({ id = null, ...b }) { const s = load(); needStaff(s); const list = playbook(s); const row = id && list.find((x) => x.id === id); if (row) Object.assign(row, b); else list.push({ id: uid(), kind: 'task', offset_days: 1, sort: list.length, active: true, ...b }); save(s); },
   async deletePlaybook(id) { const s = load(); needStaff(s); s.playbook = playbook(s).filter((x) => x.id !== id); save(s); },
   async deleteTask(id) { const s = load(); needStaff(s); s.tasks = (s.tasks || []).filter((x) => x.id !== id); save(s); },

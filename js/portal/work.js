@@ -105,7 +105,10 @@ export async function calendarView(app, nav, user) {
   anchor ||= today();
   const start = mode === 'week' ? monday(anchor) : monday(`${anchor.slice(0, 8)}01`);
   const days = mode === 'week' ? 7 : 42, end = plus(start, days - 1);
-  const [bookings, projects, staff, nameOf] = await Promise.all([store.listBookings ? store.listBookings({ from: start, to: end }).catch(() => []) : [], store.listProjects(), store.listStaff(), names()]);
+  const [bookings, projects, staff, nameOf, everyBooking] = await Promise.all([store.listBookings ? store.listBookings({ from: start, to: end }).catch(() => []) : [], store.listProjects(), store.listStaff(), names(), store.listBookings ? store.listBookings({ from: today() }).catch(() => []) : []]);
+  // UX audit U2: what still needs a date. An ordered project needs a survey; one being made needs its fitting.
+  const NEEDS = { accepted: 'survey', survey: 'install', drawings: 'install', production: 'install', delivery: 'install' };
+  const toSchedule = projects.filter((p) => NEEDS[p.stage] && !everyBooking.some((b) => b.project_id === p.id && b.kind === NEEDS[p.stage]));
   const pOf = (id) => projects.find((p) => p.id === id);
   const shown = bookings.filter((b) => (!calWho || b.staff_id === calWho || pOf(b.project_id)?.assignee_id === calWho) && (!calKind || b.kind === calKind));
   // The client's delivery and fitting dates, where no booking of that kind covers them yet.
@@ -143,6 +146,9 @@ export async function calendarView(app, nav, user) {
         <span class="cal-n">${esc(fmtDay(`${d}T12:00:00`))}</span>${on.map((b) => entry(b, d)).join('')}</div>`; }).join('')}
     </div>
     <p class="hint">${tr('Bookings are added on the project card, in Dates & bookings. Client dates without a booking show faded.')}</p>
+    <section class="today-sec cal-todo" aria-labelledby="cal-todo-h"><h2 class="panel-h" id="cal-todo-h">${tr('To schedule')} <span class="today-n">${toSchedule.length}</span></h2>
+      ${toSchedule.length ? `<ul class="today-list">${toSchedule.map((p) => `<li><a class="today-row" href="#/p/${esc(p.id)}"><span class="today-t">${esc(p.ref)} · ${esc(p.name)}</span><span class="today-s">${esc(tr('needs a {what} date', { what: tr(NEEDS[p.stage] === 'install' ? 'fitting' : 'survey') }))}${p.location ? ` · ${esc(p.location)}` : ''}</span></a></li>`).join('')}</ul>` : `<p class="note">${tr('Every ordered project has its next date.')}</p>`}
+    </section>
   </div>`;
   const again = () => calendarView(app, nav, user);
   $$('[data-cal]', app).forEach((b) => b.addEventListener('click', () => { const n = +b.dataset.cal; anchor = n === 0 ? today() : mode === 'week' ? plus(anchor, 7 * n) : (() => { const d = new Date(`${anchor.slice(0, 8)}15T12:00:00`); d.setMonth(d.getMonth() + n); return isoDay(d); })(); again(); }));

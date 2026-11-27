@@ -1557,3 +1557,25 @@ body.crm.is-loading .appbar::after{content:"";position:absolute;left:0;bottom:-1
 @media (max-width:767px){html:has(body.crm){scroll-padding-bottom:80px;scroll-padding-top:60px}}
 /* Phones: the list is cards; its column headers stay as a scrolling row of sort buttons (they were clipped to 1 px). */
 @media (max-width:600px){.crm table.crm-table.has-labels thead{position:static;width:auto;height:auto;clip:auto;display:block;overflow-x:auto}.crm table.crm-table.has-labels thead tr{display:flex;gap:.25rem}.crm table.crm-table.has-labels thead th{border:1px solid var(--line);padding:0 .5rem}.crm .th-sort{min-height:44px}}
+/* Automations (UX audit U2): each rule a sentence with its number of days and a switch. */
+.rules{list-style:none;margin:0;padding:0;display:grid;gap:var(--s-xs);max-width:980px}
+.rule{display:grid;grid-template-columns:auto 1fr;gap:.2rem .9rem;align-items:center;padding:.75rem 1rem;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--c-ok-line)}
+.rule.is-off{border-left-color:var(--c-neutral-line)}
+.rule.is-off .rule-t{color:var(--ink-2)}
+.rule-sw{grid-row:1 / 3;display:flex;align-items:center}
+.rule-sw input{width:20px;height:20px;accent-color:var(--c-ok-line)}
+.rule-t{margin:0}
+.rule-s{margin:0;grid-column:2}
+.crm .rule-n{display:inline-block;width:4.2em;min-height:28px;margin:0 .3em;padding:.1rem .3rem;text-align:center}
+.rule-arrow{color:var(--muted);margin:0 .2em}
+.tag-auto{background:var(--c-olive-bg);color:var(--c-olive-fg);border-color:var(--c-olive-line)}
+/* U2: list groups and @mentions. */
+.crm .grp-h th{background:var(--surface-2);font-family:var(--font);font-weight:600;padding:.45rem .6rem;border-top:2px solid var(--line)}
+.grp-n{color:var(--muted);font-weight:400;margin-left:.4rem}
+.grp-sum{float:right;font-variant-numeric:tabular-nums}
+.mention-list{list-style:none;margin:2px 0 0;padding:.25rem;border:1px solid var(--line);background:var(--surface);box-shadow:0 6px 18px rgba(0,0,0,.1);max-width:320px;position:relative;z-index:5}
+.mention-list li{padding:.35rem .5rem;cursor:pointer;border-radius:3px}
+.mention-list li.is-on,.mention-list li:hover{background:var(--surface-2)}
+.mention-who{margin:.2rem 0 0;color:var(--c-plum-fg)}
+.mention-who:empty{display:none}
+.cal-todo{margin-top:var(--s-l);max-width:900px}

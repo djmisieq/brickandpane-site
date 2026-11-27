@@ -284,6 +284,11 @@ export const store = {
   },
   async deleteBooking(id) { ok(await sb.from('project_bookings').delete().eq('id', id)); emit(); },
   async listPlaybook() { return ok(await sb.from('stage_playbook').select('*').order('to_stage').order('sort')) || []; },
+  // Automation rules (migration 0051). Before the migration is applied the view says so instead of failing.
+  async listRules() { const { data, error } = await sb.from('automation_rules').select('*').order('id'); if (error) { if (error.code === '42P01' || error.code === 'PGRST205') return null; ok({ error }); } return data || []; },
+  async saveRule(id, patch) { const p = {}; if ('active' in patch) p.active = !!patch.active; if ('days' in patch) p.days = Number(patch.days); p.updated_at = new Date().toISOString(); ok(await sb.from('automation_rules').update(p).eq('id', id)); },
+  async ruleRuns() { return ok(await sb.from('automation_runs').select('rule_id, object_id, cycle, task_id, created_at').gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(500)) || []; },
+  async runRules() { const n = ok(await sb.rpc('run_rules')); emit(); return n; },
   async savePlaybook({ id = null, ...b }) { if (id) ok(await sb.from('stage_playbook').update(b).eq('id', id)); else ok(await sb.from('stage_playbook').insert(b)); emit(); },
   async deletePlaybook(id) { ok(await sb.from('stage_playbook').delete().eq('id', id)); emit(); },
   // Mail: a read-only copy of the Zimbra mailboxes (migration 0035, staff only).

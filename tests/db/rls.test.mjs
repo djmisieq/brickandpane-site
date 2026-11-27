@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -958,4 +958,35 @@ test('team work: the stage playbook, team notifications, mentions and bookings; 
   }
   await db.exec('reset role');
   assert.equal((await db.query(`select public.add_workdays('2026-11-27'::date, 1) d`)).rows[0].d.toISOString().slice(0, 10), '2026-11-30'); // Friday + 1 = Monday
+});
+
+// 0051 (UX audit 27.11.2026, U2): rules make tasks for people while nobody looks; once per thing; staff only.
+test('automation rules: a late enquiry, a silent client, a booking and a late payment each make one task', async () => {
+  const { db, as, fails } = await setup();
+  await db.exec('reset role');
+  const r = (await db.query(`insert into public.contact_requests (name, email, consent_at, created_at) values ('Sam', 'sam@x.com', now(), now() - interval '3 days') returning id`)).rows[0].id;
+  const P = (await db.query(`insert into public.projects (name, owner_id, assignee_id, stage, stage_changed_at) values ('Rules', $1, $2, 'quote_issued', now() - interval '9 days') returning id`, [A, S])).rows[0].id;
+  await db.query(`insert into public.project_bookings (project_id, kind, starts_on, ends_on) values ($1, 'survey', current_date + 1, current_date + 1)`, [P]);
+  await db.query(`insert into public.payments (project_id, label, amount, due_date) values ($1, 'Deposit', 100, now() - interval '5 days')`, [P]);
+  await as(A);
+  await fails('select public.run_rules()');
+  assert.equal((await db.query('select * from public.automation_rules')).rows.length, 0);
+  await as(S);
+  assert.equal((await db.query('select public.run_rules() n')).rows[0].n, 4);
+  assert.equal((await db.query('select public.run_rules() n')).rows[0].n, 0); // the second pass finds nothing new
+  const made = (await db.query('select rule_id, assignee_id, request_id, project_id from public.tasks where rule_id is not null order by rule_id')).rows;
+  assert.deepEqual(made.map((t) => t.rule_id), ['booking_confirm', 'client_silent', 'enquiry_unanswered', 'payment_late']);
+  assert.equal(made.find((t) => t.rule_id === 'enquiry_unanswered').request_id, r);
+  assert.equal(made.find((t) => t.rule_id === 'client_silent').assignee_id, S);
+  // A rule switched off does nothing; the number of days is the team's to change, within limits.
+  await db.query(`update public.automation_rules set active = false where id = 'payment_late'`);
+  assert.equal((await db.query(`select active from public.automation_rules where id = 'payment_late'`)).rows[0].active, false);
+  await fails(`update public.automation_rules set days = -1 where id = 'client_silent'`);
+  assert.equal((await db.query('select count(*)::int n from public.automation_runs')).rows[0].n, 4);
+  // Clients never see the rules or the runs.
+  await as(A);
+  assert.equal((await db.query('select * from public.automation_runs')).rows.length, 0);
+  await db.query(`update public.automation_rules set active = false`);
+  await as(S);
+  assert.equal((await db.query('select count(*)::int n from public.automation_rules where active')).rows[0].n, 4);
 });
