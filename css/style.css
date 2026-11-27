@@ -1335,7 +1335,7 @@ html[lang="pl"] .pair-q::before{content:"„"}
 .cal-e{display:grid;gap:1px;padding:3px 5px;border-left:3px solid var(--k-line,var(--c-neutral-line));background:var(--k-bg,var(--c-neutral-bg));text-decoration:none;color:var(--ink);font-size:var(--step--2);overflow-wrap:anywhere}
 .cal-e:hover{box-shadow:inset 0 0 0 1px var(--k-line,var(--ink));color:var(--ink)}
 .cal-e .cal-k{color:var(--k-fg,var(--ink))}
-.cal-k{font-weight:600}.cal-w{color:var(--muted)}
+.cal-k{font-weight:600}.cal-w{color:var(--ink-2)}
 /* Booking kinds (colour audit 26.11.2026): every pair stays apart for red-green colour blindness too (ΔE2000 ≥ 10). */
 .cal-survey{--k-line:var(--c-info-line);--k-bg:var(--c-info-bg);--k-fg:var(--c-info-fg)}
 .cal-delivery{--k-line:var(--c-warn-line);--k-bg:var(--c-warn-bg);--k-fg:var(--c-warn-fg)}
@@ -1441,7 +1441,7 @@ body.crm .demo-bar{padding:4px var(--margin);font-size:var(--step--2)}
 .crm .spec td,.crm .spec thead th{font-family:var(--font)}
 .crm .spec th,.crm .spec td{padding:.45rem .6rem .45rem 0}
 .crm .crm-table th[scope=row],.crm .crm-table th[scope=row] a{font-family:var(--mono);white-space:nowrap}
-.crm .crm-table thead th{position:sticky;top:52px;background:var(--bg);z-index:1;white-space:nowrap}
+.crm .crm-table thead th{white-space:nowrap}
 .crm .crm-table td{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crm .crm-table tbody tr:hover{background:var(--surface-2)}
 .crm .stat-dd,.crm .stats dd{font-family:var(--font);font-variant-numeric:tabular-nums;font-weight:600}
@@ -1486,7 +1486,7 @@ body.crm.is-loading .appbar::after{content:"";position:absolute;left:0;bottom:-1
 }
 /* Toasts: an error is red and stays until closed; Undo sits in the toast (UX audit 27.11.2026). */
 .toast{pointer-events:none;display:flex;align-items:center;gap:.75rem}
-.toast.is-on{pointer-events:auto}
+.toast.is-on{pointer-events:none}.toast.is-on .toast-btn{pointer-events:auto}
 .toast.tone-error{background:var(--c-danger-fg)}
 .toast.tone-ok{background:var(--c-ok-fg)}
 .toast-btn{background:none;border:1px solid rgba(255,255,255,.6);color:#fff;font:inherit;font-weight:600;padding:.2rem .6rem;cursor:pointer;min-height:28px}
@@ -1497,3 +1497,63 @@ body.crm.is-loading .appbar::after{content:"";position:absolute;left:0;bottom:-1
 .head-photo:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 .crm .head-due{width:auto;min-height:30px;padding:.15rem .4rem}
 .crm .head-due.is-late{border-color:var(--c-danger-line);color:var(--c-danger-fg)}
+/* ===== CRM U1 (UX audit 27.11.2026): dialogs, the Ctrl+K palette, editing in place, drag and drop ===== */
+.qd{border:1px solid var(--line);padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);background:var(--surface);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.18);border-radius:6px}
+.qd::backdrop{background:rgba(20,20,20,.35)}
+.qd-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-s);padding:.75rem 1rem;border-bottom:1px solid var(--line)}
+.qd-h{font-size:var(--step-1);margin:0}
+.qd-x{background:none;border:0;font-size:1.5rem;line-height:1;cursor:pointer;color:var(--ink-2);min-width:36px;min-height:36px}
+.qd-body{display:grid;gap:var(--s-s);padding:1rem}
+.qd-body[hidden]{display:none}
+.qd-tabs{margin:.75rem 1rem 0}
+.qd-acts{display:flex;gap:var(--s-xs);flex-wrap:wrap}
+.qd-pal{width:min(640px,calc(100vw - 32px));margin-top:12vh}
+.pal{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-bottom:1px solid var(--line)}
+.pal input{border:0;outline:0;min-height:40px;font-size:var(--step-0);padding:0;background:none}
+.pal input:focus{outline:0}
+.pal-ico{color:var(--muted)}
+.pal-k,.crm-k kbd,.keys kbd{font-family:var(--mono);font-size:.72rem;padding:.1rem .35rem;border:1px solid var(--line);border-radius:3px;color:var(--ink-2);background:var(--surface-2);white-space:nowrap}
+.pal-list{list-style:none;margin:0;padding:.35rem;max-height:min(60vh,440px);overflow-y:auto}
+.pal-i{display:flex;justify-content:space-between;gap:var(--s-s);padding:.5rem .65rem;border-radius:4px;cursor:pointer}
+.pal-i.is-on,.pal-i:hover{background:var(--surface-2)}
+.pal-i.is-on{box-shadow:inset 3px 0 0 var(--accent)}
+.pal-t{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-s{color:var(--ink-2);font-size:var(--step--1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.pal-action .pal-t::before{content:"+ ";color:var(--accent)}
+.pal-none{padding:.75rem;color:var(--muted)}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.4rem 1rem;padding:1rem;margin:0}
+.keys div{display:flex;gap:.6rem;align-items:center}.keys dd{margin:0}
+.crm-gsearch{display:flex;align-items:center;gap:.4rem}
+.crm-k{background:none;border:0;cursor:pointer;padding:0 .2rem;min-height:34px}
+.crm-new{gap:.3em}
+.crm-new .ico{width:16px;height:16px}
+@media (max-width:767px){.crm-k{display:none}.crm-new span{display:none}}
+/* Board drag and drop. */
+.crm .kcard[draggable]{cursor:grab}
+.crm .kcard.is-drag{opacity:.5}
+.crm .is-dragging .col{outline:1px dashed var(--line)}
+.crm .col.is-over{outline:2px solid var(--accent);outline-offset:-2px;background:var(--surface-2)}
+/* The list edits in place. */
+.cell-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit}
+.cell-btn:hover .badge{box-shadow:0 0 0 1px currentColor}
+.crm .cell-in{width:auto;max-width:170px;min-height:28px;padding:.1rem .35rem;border-color:transparent;background:transparent}
+.crm .cell-in:hover,.crm .cell-in:focus{border-color:var(--field-line);background:var(--surface)}
+.crm .cell-in.is-late{color:var(--c-danger-fg);font-weight:600}
+.crm .crm-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.row-link{color:inherit;text-decoration:none}.row-link:hover{text-decoration:underline}
+/* Project card: the next move and the update box at the top of the feed. */
+.next-move{margin:.35rem 0 0;font-size:var(--step--1)}
+.next-l{color:var(--ink-2)}
+.next-move.is-late strong{color:var(--c-danger-fg)}
+.next-move.is-none .next-l{color:var(--c-danger-fg);font-weight:600}
+.feed-compose{display:grid;gap:.4rem;margin:0 0 var(--s-s);padding:.6rem;border:1px solid var(--c-plum-line);background:var(--c-plum-bg)}
+.feed-compose textarea{min-height:56px;background:var(--surface)}
+.feed-compose-acts{display:flex;justify-content:space-between;align-items:center;gap:var(--s-xs)}
+.tag-internal{background:var(--c-plum-bg);color:var(--c-plum-fg);border-color:var(--c-plum-line)}
+.quick-task{display:flex;gap:var(--s-xs);margin:0 0 var(--s-s)}
+.quick-task input[name=title]{flex:1}
+.quick-task input[type=date]{width:auto}
+/* Phones: scrolling to a field keeps it clear of the bottom bar. */
+@media (max-width:767px){html:has(body.crm){scroll-padding-bottom:80px;scroll-padding-top:60px}}
+/* Phones: the list is cards; its column headers stay as a scrolling row of sort buttons (they were clipped to 1 px). */
+@media (max-width:600px){.crm table.crm-table.has-labels thead{position:static;width:auto;height:auto;clip:auto;display:block;overflow-x:auto}.crm table.crm-table.has-labels thead tr{display:flex;gap:.25rem}.crm table.crm-table.has-labels thead th{border:1px solid var(--line);padding:0 .5rem}.crm .th-sort{min-height:44px}}

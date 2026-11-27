@@ -326,7 +326,8 @@ test('tasks: a task on the project shows on Today; a logged call plans the next 
   await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
   await page.locator('[data-fold="tasks"] .task', { hasText: 'Send the revised drawings' }).locator('[data-task-done]').check();
   await page.goto('/admin.html#/today');
-  await expect(page.locator('#t-tasks')).not.toContainText('Send the revised drawings');
+  await expect(page.locator('.today')).toBeVisible();
+  await expect(page.locator('.today')).not.toContainText('Send the revised drawings');
   // The client on the project: no tasks anywhere.
   const client = await context.newPage();
   await client.goto('/login.html');
@@ -1370,4 +1371,62 @@ test('stage playbook: the team switches a task off and adds its own', async ({ p
   await page.locator('#ctl-stage').selectOption('accepted');
   await expect(page.locator('[data-stage-tasks]')).toContainText('Order the samples (TEST)');
   await expect(page.locator('[data-stage-tasks]')).not.toContainText('Send the deposit invoice');
+});
+
+// ---------- UX audit 27.11.2026, stage U1 ----------
+test('U1: a project from a phone call through + New, found again with Ctrl+K', async ({ page }) => {
+  await staffOn(page, '#/today');
+  await page.locator('[data-crm-new]').click();
+  await page.locator('#qn-name').fill('Loft windows (TEST)');
+  await page.locator('#qn-loc').fill('Hackney, E8');
+  await page.locator('#qn-who').fill('Pat Caller');
+  await page.locator('#qn-tel').fill('07700 900123');
+  await page.locator('[data-new="project"] button[type="submit"]').click();
+  await expect(page.locator('.project-head h1')).toHaveText('Loft windows (TEST)');
+  await expect(page.locator('.head-acts a[href^="tel:"]')).toHaveAttribute('href', 'tel:07700900123');
+  await expect(page.locator('.next-move.is-none')).toBeVisible();
+  await page.goto('/admin.html#/today');
+  await page.locator('#crm-gq').click();
+  await page.keyboard.press('Control+k');
+  await page.locator('#pal-q').fill('loft hackney');
+  await expect(page.locator('.pal-i').first()).toContainText('Loft windows (TEST)');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.project-head h1')).toHaveText('Loft windows (TEST)');
+});
+
+test('U1: the list edits the due date in place; a stage moves through the dialog without telling the client', async ({ page }) => {
+  await staffOn(page, '#/list');
+  const row = page.locator('.crm-table tbody tr', { hasText: 'Hartley Road' });
+  await row.locator('[data-cell-due]').fill('2031-05-04');
+  await row.locator('[data-cell-due]').dispatchEvent('change');
+  await expect(page.locator('.toast')).toContainText('Due date saved.');
+  await expect(row.locator('[data-cell-due]')).toHaveValue('2031-05-04');
+  await row.locator('[data-cell-stage]').click();
+  await page.locator('#qs-stage').selectOption('accepted');
+  await expect(page.locator('dialog [name="visible"]')).not.toBeChecked();
+  await page.locator('dialog button[type="submit"]').click();
+  await expect(page.locator('.toast')).toContainText('hidden from client');
+  await expect(page.locator('.crm-table tbody tr', { hasText: 'Hartley Road' })).toContainText('Order confirmed');
+});
+
+test('U1: an update written at the top of the feed stays with the team', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('#qn-body').fill('Checked the threshold on site (TEST)');
+  await page.locator('[data-quick-note] button[type="submit"]').click();
+  await expect(page.locator('.feed')).toContainText('Checked the threshold on site (TEST)');
+  await page.goto('/admin.html#/my');
+  await page.locator('#qt-mw').fill('Order samples (TEST)');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#my-work')).toContainText('Order samples (TEST)');
+});
+
+test('U1: a card dragged to another column opens the stage dialog', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'drag and drop is for a mouse');
+  await staffOn(page);
+  await page.locator('.kcard', { hasText: 'Garden room' }).dragTo(page.locator('.col[data-stage="in_review"]'));
+  await expect(page.locator('dialog.qd-stage')).toBeVisible();
+  await expect(page.locator('#qs-stage')).toHaveValue('in_review');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('dialog.qd-stage')).toHaveCount(0);
 });

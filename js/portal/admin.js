@@ -14,6 +14,7 @@ import { replyBox, bindEnquiryReply } from './enquiry-reply.js';
 import { linker, bindLinkers, picked, linkerBusy } from './linker.js';
 import { projectView, WAITING, BOOKING_KINDS } from './project.js';
 import { ICON } from './icons.js';
+import { stageDialog, newDialog, palette, bindKeys, rememberRecent } from './crm-quick.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
@@ -63,7 +64,13 @@ async function draw(fromStore) {
   // The app bar is drawn again on every update: what someone is typing in its search must survive that.
   const gq = $('#crm-gq', bar), typed = gq ? { v: gq.value, focus: document.activeElement === gq, at: gq.selectionStart } : null;
   await renderAppBar(bar, user, 'admin'); bindSearch(fromStore ? typed : null);
+  // UX audit U1: "+ New" and the palette button sit in the app bar on every view.
+  $('.appbar-actions', bar)?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn btn-sm crm-new" data-crm-new>${ICON.plus}<span>${tr('New')}</span></button>`);
+  $('.crm-gsearch', bar)?.insertAdjacentHTML('beforeend', `<button type="button" class="crm-k" data-palette title="${esc(tr('Find or go to'))}"><kbd>Ctrl K</kbd></button>`);
+  $('[data-crm-new]', bar)?.addEventListener('click', () => newDialog(user));
+  $('[data-palette]', bar)?.addEventListener('click', () => palette(user));
   const r = route();
+  if (!fromStore) rememberRecent(location.hash);
   await sideNav(r);
   // The quote builder keeps its own state: live updates of projects must not redraw it while someone types.
   if (fromStore && r.name === 'quotes') return;
@@ -94,7 +101,7 @@ async function draw(fromStore) {
 let boardMine = false, listSort = { by: 'updated', dir: 1 };
 async function board(asList) {
   document.title = `${tr('Projects CRM')} | Brick & Pane`;
-  const [all, requests, openT] = await Promise.all([store.listProjects(), listRequests(), loadTasks({ open: true })]);
+  const [all, requests, openT, staff] = await Promise.all([store.listProjects(), listRequests(), loadTasks({ open: true }), asList ? store.listStaff().catch(() => []) : []]);
   const q = queries.board.toLowerCase();
   // Projects audit 26.11.2026: mine or everyone's, and the list sorts by any column.
   const projects = (q ? all.filter((p) => [p.ref, p.name, p.location, clientOf(p)?.full_name, clientOf(p)?.company, p.assignee?.full_name].join(' ').toLowerCase().includes(q)) : all)
@@ -108,7 +115,7 @@ async function board(asList) {
   const quoting = open.filter((p) => stage(p.stage).phase === 'Quotation');
   const sum = (arr, w = false) => arr.reduce((t, p) => t + (Number(p.internal?.value_gbp) || 0) * (w ? (p.internal?.probability ?? 0) / 100 : 1), 0);
   const card = (p) => `
-    <a class="kcard ${isOverdue(p) ? 'is-overdue' : ''}" href="#/p/${esc(p.id)}">
+    <a class="kcard ${isOverdue(p) ? 'is-overdue' : ''}" href="#/p/${esc(p.id)}" draggable="true" data-pid="${esc(p.id)}">
       <span class="kcard-ref">${esc(p.ref)}</span>
       <span class="kcard-name">${esc(p.name)}</span>
       <span class="kcard-client">${esc(clientName(p))}${clientOf(p)?.account_type === 'homeowner' ? ` <span class="tag">${tr('homeowner')}</span>` : ''}</span>
@@ -136,13 +143,33 @@ async function board(asList) {
       </div>
       ${asList ? `
         <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead><tbody>
-          ${sorted.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td>${esc(p.name)}</td><td>${esc(clientName(p))}</td><td>${stageBadge(p.stage, 'staff')}</td><td>${esc(p.assignee?.full_name || '—')}</td><td>${p.internal?.waiting_on ? esc(tr(WAITING[p.internal.waiting_on])) : '—'}</td><td>${p.due_at ? fmtDay(p.due_at) : '—'}</td><td>${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
+          ${sorted.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
+            <td><button type="button" class="cell-btn" data-cell-stage="${esc(p.id)}" aria-label="${esc(tr('Move {ref} to another stage', { ref: p.ref }))}">${stageBadge(p.stage, 'staff')}</button></td>
+            <td><label class="visually-hidden" for="am-${esc(p.id)}">${tr('Account manager')}</label><select class="cell-in" id="am-${esc(p.id)}" data-cell-am="${esc(p.id)}"><option value="">—</option>${staff.map((s) => `<option value="${esc(s.id)}" ${s.id === p.assignee_id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></td>
+            <td>${p.internal?.waiting_on ? esc(tr(WAITING[p.internal.waiting_on])) : '—'}</td>
+            <td><label class="visually-hidden" for="due-${esc(p.id)}">${tr('Due')}</label><input class="cell-in${isOverdue(p) ? ' is-late' : ''}" type="date" id="due-${esc(p.id)}" data-cell-due="${esc(p.id)}" value="${p.due_at ? esc(new Date(p.due_at).toISOString().slice(0, 10)) : ''}"></td>
+            <td class="num">${fmtMoney(p.internal?.value_gbp)}</td><td>${ago(p.updated_at)}</td></tr>`).join('')}
         </tbody></table></div>`
       : `<div class="board">${[...STAGES, ...SIDE_STAGES].filter((s) => s.id !== 'closed' || projects.some((p) => p.stage === 'closed')).map((s) => {
           const items = projects.filter((p) => p.stage === s.id);
-          return `<section class="col st-${stageTone(s.id)} ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h"><span class="col-dot" aria-hidden="true"></span>${esc(tr(s.staffLabel || s.label))}${s.court === 'you' ? ` <span class="col-wait" title="${esc(tr('Waiting on client'))}">⏳</span>` : ''} <span class="col-n">${items.length}</span></h2>${items.map(card).join('')}</section>`;
+          return `<section class="col st-${stageTone(s.id)} ${s.court === 'you' ? 'col-you' : ''} ${items.length ? '' : 'col-empty'}" data-stage="${esc(s.id)}" aria-label="${esc(tr(s.staffLabel || s.label))}"><h2 class="col-h"><span class="col-dot" aria-hidden="true"></span>${esc(tr(s.staffLabel || s.label))}${s.court === 'you' ? ` <span class="col-wait" title="${esc(tr('Waiting on client'))}">⏳</span>` : ''} <span class="col-n">${items.length}</span></h2>${items.map(card).join('')}</section>`;
         }).join('')}</div>`}
     </div>`;
+  // UX audit U1: a card dragged to another column opens the stage dialog (the client hears only when ticked).
+  const byId = (id) => all.find((p) => p.id === id);
+  $$('.kcard[draggable]', app).forEach((c) => {
+    c.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', c.dataset.pid); e.dataTransfer.effectAllowed = 'move'; c.classList.add('is-drag'); app.classList.add('is-dragging'); });
+    c.addEventListener('dragend', () => { c.classList.remove('is-drag'); app.classList.remove('is-dragging'); $$('.col.is-over', app).forEach((x) => x.classList.remove('is-over')); });
+  });
+  $$('.col[data-stage]', app).forEach((col) => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; col.classList.add('is-over'); });
+    col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('is-over'); });
+    col.addEventListener('drop', (e) => { e.preventDefault(); col.classList.remove('is-over'); const p = byId(e.dataTransfer.getData('text/plain')); if (p && p.stage !== col.dataset.stage) stageDialog(p, col.dataset.stage); });
+  });
+  // The list edits in place: stage through the dialog, account manager and due date saved on change.
+  $$('[data-cell-stage]', app).forEach((b) => b.addEventListener('click', () => { const p = byId(b.dataset.cellStage); if (p) stageDialog(p); }));
+  $$('[data-cell-am]', app).forEach((s) => s.addEventListener('change', async () => { try { await store.updateProject(s.dataset.cellAm, { assignee_id: s.value || null }); toast(tr('Account manager saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
+  $$('[data-cell-due]', app).forEach((i) => i.addEventListener('change', async () => { try { await store.updateProject(i.dataset.cellDue, { due_at: i.value ? new Date(`${i.value}T17:00:00`).toISOString() : null }); toast(tr('Due date saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } }));
   $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
   $$('[data-sort]', app).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.sort; listSort = { by: k, dir: listSort.by === k ? -listSort.dir : 1 }; board(true); }));
   const qi = $('#crm-q', app);
@@ -439,4 +466,6 @@ function bindReqFiles() {
 let t = null;
 store.onChange(() => { clearTimeout(t); t = setTimeout(() => render(true), 120); });
 addEventListener('hashchange', () => render());
+// Keyboard: Ctrl+K or / finds anything, N a new project, T a task, G then a letter goes to a place, ? lists them.
+bindKeys(() => user);
 render();

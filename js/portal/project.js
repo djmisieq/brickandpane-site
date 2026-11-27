@@ -111,7 +111,12 @@ function feed(d, ctx) {
 const FILTERS = { all: 'Everything', client: 'What the client sees', internal: 'Team only', mail: 'Email', task: 'Tasks', log: 'Changes to links and dates' };
 function activityPanel(items) {
   const shown = items.filter((x) => feedFilter === 'all' || (feedFilter === 'client' ? !x.internal : feedFilter === 'internal' ? x.internal : feedFilter === 'task' ? x.kind === 'task' : feedFilter === 'log' ? x.kind === 'log' || x.kind === 'booking' : x.kind === feedFilter));
+  // UX audit U1: an update is written where it is read, at the top of the feed (team only; the client gets
+  // messages from the Messages tab, on purpose a separate step).
   return `<div class="activity" data-activity>
+    <form class="feed-compose" data-quick-note novalidate><label class="visually-hidden" for="qn-body">${tr('Write an update for the team')}</label>
+      <textarea id="qn-body" name="body" rows="2" maxlength="8000" placeholder="${esc(tr('Write an update for the team… (@Name tells a colleague)'))}"></textarea>
+      <div class="feed-compose-acts"><span class="tag tag-internal">${tr('team only')}</span><button class="btn btn-sm" type="submit">${tr('Add update')}</button></div></form>
     <div class="seg seg-wrap" role="group" aria-label="${tr('Show')}">${Object.entries(FILTERS).map(([k, v]) => `<button type="button" data-feed="${k}" aria-pressed="${feedFilter === k}" class="${feedFilter === k ? 'is-on' : ''}">${esc(tr(v))}</button>`).join('')}</div>
     ${shown.length ? `<ol class="feed">${shown.slice(0, 200).map((x) => `<li class="feed-i feed-${x.kind}${x.internal ? ' is-internal' : ''}" ${x.extra}>
       <span class="feed-icon" aria-hidden="true">${x.icon}</span>
@@ -119,6 +124,17 @@ function activityPanel(items) {
         <span class="feed-meta" title="${esc(fmtDate(x.at, true))}">${esc(ago(x.at))}${x.actor ? ` · ${esc(x.actor)}` : ''}${x.internal ? '' : ` · <span class="tag">${tr('client sees')}</span>`}</span></div></li>`).join('')}</ol>`
       : `<p class="hint">${tr('Nothing here yet.')}</p>`}
   </div>`;
+}
+
+// "Next move" (UX audit U1): the nearest open task, else who we wait on; nothing at all is flagged with a way to fix it.
+function nextMove(openTasks, wait, staff) {
+  const t = [...(openTasks || [])].sort((a, b) => (a.due_on || '9999').localeCompare(b.due_on || '9999'))[0];
+  if (t) {
+    const who = staff.find((s) => s.id === t.assignee_id)?.full_name;
+    return `<p class="next-move${taskLate(t) ? ' is-late' : ''}"><span class="next-l">${tr('Next move:')}</span> <strong>${esc(t.title)}</strong>${who ? ` · ${esc(who)}` : ''}${t.due_on ? ` · ${esc(taskLate(t) ? tr('Overdue {date}', { date: fmtDay(t.due_on) }) : fmtDay(t.due_on))}` : ''}</p>`;
+  }
+  if (wait?.waiting_on) return `<p class="next-move"><span class="next-l">${tr('Next move:')}</span> ${esc(tr('waiting on {who}', { who: tr(WAITING[wait.waiting_on]) }))}${wait.chase_on ? ` · ${esc(tr('chase {date}', { date: fmtDay(wait.chase_on) }))}` : ''}</p>`;
+  return `<p class="next-move is-none"><span class="next-l">${tr('No next step.')}</span> <button type="button" class="linkish" data-next-add>${tr('Add a task')}</button></p>`;
 }
 
 // ---------- the header ----------
@@ -169,6 +185,7 @@ export async function projectView(app, id, ctx) {
       <nav class="breadcrumb" aria-label="${tr('Breadcrumb')}"><ol><li><a href="#/board">${tr('Pipeline')}</a></li><li aria-current="page">${esc(p.ref)}</li></ol></nav>
       <div class="detail-head project-head">
         <div><h1 class="app-h1">${esc(p.name)}</h1><p class="note">${esc(p.ref)} · ${esc(p.location || '')} · ${headClient(p, d.invites)}</p>
+          ${nextMove(openTasks, wait, staff)}
           <p class="head-acts">${phoneOf(pco, src) ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(phoneOf(pco, src).replace(/[^\d+]/g, ''))}">${ICON.phone}${tr('Call now')}</a>` : ''}${p.location ? `<a class="btn btn-sm btn-ghost" href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(p.location)}" target="_blank" rel="noopener">${ICON.map}${tr('Directions')}</a>` : ''}<label class="btn btn-sm btn-ghost head-photo">${ICON.camera}${tr('Photo')}<input type="file" accept="image/*" capture="environment" multiple data-site-photo class="visually-hidden"></label></p></div>
         ${suggested ? `<button type="button" class="btn btn-sm" data-next-stage="${esc(suggested)}">${esc(tr('Next stage: {stage}', { stage: tr(stage(suggested).staffLabel || stage(suggested).label) }))} ▸</button>` : ''}
       </div>
@@ -302,6 +319,14 @@ export async function projectView(app, id, ctx) {
     cost: () => toTab('money', () => { const el = $('#cost-sup', app); el?.scrollIntoView({ block: 'center' }); el?.focus({ preventScroll: true }); }),
   };
   $$('[data-quick]', app).forEach((b) => b.addEventListener('click', () => QUICK_DO[b.dataset.quick]?.()));
+  $('[data-next-add]', app)?.addEventListener('click', () => QUICK_DO.task?.());
+  $('[data-quick-note]', app)?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget, body = f.body.value.trim();
+    if (!body) { f.body.focus(); return; }
+    const btn = $('button[type="submit"]', f); if (btn.disabled) return; btn.disabled = true;
+    try { await store.addMessage(id, body, true); f.body.value = ''; delete f.body.dataset.dirty; toast(tr('Update added for the team.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); } finally { btn.disabled = false; }
+  });
+  $('[data-quick-note] textarea', app)?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) e.currentTarget.form.requestSubmit(); });
 
   // The stage form: the next stage one tap away; the client is told only when ticked, and sees in advance what they
   // get; the stage's playbook tasks are named before they are made (0050).

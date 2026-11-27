@@ -53,6 +53,7 @@ export async function myWorkView(app, nav, user) {
       <a class="btn btn-sm btn-ghost" href="#/playbook">${tr('Stage playbook')}</a></div>
     <div class="work-grid">
       <div data-tasks data-project="" data-request="">
+        <form class="quick-task" data-quick-task novalidate><label class="visually-hidden" for="qt-mw">${tr('New task')}</label><input id="qt-mw" name="title" maxlength="300" placeholder="${esc(tr('+ Add a task for today, press Enter'))}"><label class="visually-hidden" for="qt-mw-due">${tr('Due')}</label><input id="qt-mw-due" name="due" type="date" value="${t0}"></form>
         ${buckets.map(([id, name, arr]) => `<section class="today-sec" id="mw-${id}"><h2 class="panel-h">${tr(name)} <span class="today-n">${arr.length}</span></h2>${list(arr, id === 'late' ? 'Nothing late.' : 'Nothing here.')}</section>`).join('')}
         <section class="today-sec" id="mw-given"><h2 class="panel-h">${tr('Given to others')} <span class="today-n">${given.length}</span></h2>${list(given, 'Nothing given to others.')}</section>
       </div>
@@ -69,6 +70,12 @@ export async function myWorkView(app, nav, user) {
       </div>
     </div></div>`;
   bindTasks(app, user);
+  // UX audit U1: a task is added where the tasks are read; Enter saves it for the person whose work this is.
+  $('[data-quick-task]', app)?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.currentTarget, title = f.title.value.trim();
+    if (!title) { f.title.focus(); return; }
+    try { await store.addTask({ title, due_on: f.due.value || null, assignee_id: whose }); f.title.value = ''; delete f.title.dataset.dirty; toast(tr('Task added.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
   $('[data-mw-who]', app).addEventListener('change', (e) => { whose = e.target.value; myWorkView(app, nav, user); });
   $$('[data-note]', app).forEach((a) => a.addEventListener('click', () => store.markRead([a.dataset.note])));
   $('[data-handover]', app).addEventListener('submit', async (e) => {
