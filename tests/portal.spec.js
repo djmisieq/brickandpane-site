@@ -1119,7 +1119,8 @@ test('Today: a sent quote about to lapse is on the chase list', async ({ page })
 const staffOn = async (page, hash = '#/board') => { await page.goto(`/admin.html${hash}`); await page.locator('[data-demo-login="staff"]').click(); };
 const pick = async (page, id, text, option) => { await page.locator(`#${id}`).fill(text); await page.locator(`#${id}-list [role="option"]`, { hasText: option || text }).first().click(); };
 const fold = async (page, key) => { const d = page.locator(`[data-fold="${key}"]`); if (!(await d.evaluate((e) => e.open))) await d.locator(':scope > summary').click(); };
-const asKate = async (context) => { const p = await context.newPage(); await p.goto('/login.html'); await p.evaluate(() => sessionStorage.setItem('bp-portal-demo-session', 'u-kate')); await p.goto('/admin.html#/my'); return p; };
+// Kate's session is set before the page loads: going through login.html first raced its own redirect on slow CI.
+const asKate = async (context) => { const p = await context.newPage(); await p.addInitScript(() => sessionStorage.setItem('bp-portal-demo-session', 'u-kate')); await p.goto('/admin.html#/my'); return p; };
 const card = async (page, name) => { await page.goto('/admin.html#/board'); await page.locator('.kcard', { hasText: name }).click(); await expect(page.locator('.project-head h1')).toContainText(name); };
 
 test('project card: the facts on top, the next stage one tap away, and one activity feed', async ({ page }) => {
