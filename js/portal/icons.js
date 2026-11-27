@@ -12,6 +12,7 @@ export const ICON = {
   companies: svg('<path d="M4 21V5l8-2v18M12 9h8v12M4 21h16"/><path d="M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2"/>'),
   quotes: svg('<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/>'),
   owner: svg('<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>'),
+  automations: svg('<path d="M13 3 5 13h6l-1 8 8-10h-6z"/>'),
   more: svg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   phone: svg('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z"/>'),

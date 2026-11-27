@@ -90,7 +90,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/]);
+  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/, /Automations/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -1429,4 +1429,44 @@ test('U1: a card dragged to another column opens the stage dialog', async ({ pag
   await expect(page.locator('#qs-stage')).toHaveValue('in_review');
   await page.keyboard.press('Escape');
   await expect(page.locator('dialog.qd-stage')).toHaveCount(0);
+});
+
+// ---------- UX audit 27.11.2026, stage U2 ----------
+test('U2: automations make tasks for people, once; a rule switched off makes none', async ({ page }) => {
+  await staffOn(page, '#/automations');
+  await expect(page.locator('h1')).toHaveText('Automations');
+  await expect(page.locator('.rule')).toHaveCount(5);
+  await page.locator('[data-rule-on="enquiry_unanswered"]').uncheck();
+  await expect(page.locator('.rule[data-rule="enquiry_unanswered"]')).toHaveClass(/is-off/);
+  await page.locator('[data-rules-run]').click();
+  await expect(page.locator('.toast')).toContainText('2 new task(s) made.'); // the delivery today and the survey tomorrow
+  await page.locator('[data-rules-run]').click();
+  await expect(page.locator('.toast')).toContainText('Nothing new');
+  await page.goto('/admin.html#/today');
+  await expect(page.locator('#t-tasks')).toContainText('Confirm the delivery');
+  await expect(page.locator('#t-tasks')).not.toContainText('Reply to the enquiry');
+});
+
+test('U2: the list groups by account manager with each group’s value, and the setting stays in the address', async ({ page }) => {
+  await staffOn(page, '#/list');
+  await page.locator('[data-list-group]').selectOption('am');
+  await expect(page).toHaveURL(/#\/list\?group=am/);
+  await expect(page.locator('.grp-h').first()).toContainText('Tom Reid');
+  await page.reload();
+  await expect(page.locator('[data-list-group]')).toHaveValue('am');
+  const download = page.waitForEvent('download');
+  await page.locator('[data-list-csv]').click();
+  expect((await download).suggestedFilename()).toMatch(/^projects-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
+test('U2: typing @ in a team update lists the team and says who will be told', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('#qn-body').fill('Please check this @To');
+  await page.locator('#qn-body').press('End');
+  await page.locator('#qn-body').pressSequentially('m', { delay: 20 });
+  await expect(page.locator('#qn-body-mentions li').first()).toContainText('Tom Reid');
+  await page.locator('#qn-body').press('Enter');
+  await expect(page.locator('#qn-body')).toHaveValue(/@Tom $/);
+  await expect(page.locator('.mention-who').first()).toContainText('Tom Reid');
 });

@@ -49,7 +49,7 @@ test('CRM and portal: text contrast holds on every main view', async ({ page }, 
   await page.locator('[data-demo-login="staff"]').click();
   await page.locator('.today').waitFor();
   await check('today');
-  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook']) {
+  for (const hash of ['#/board', '#/list', '#/my', '#/calendar', '#/enquiries', '#/owner', '#/companies', '#/quotes', '#/playbook', '#/automations']) {
     await page.goto(`/admin.html${hash}`);
     await check(hash);
   }

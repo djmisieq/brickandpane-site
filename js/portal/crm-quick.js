@@ -174,3 +174,45 @@ function keysHelp() {
   const d = dialog('qd-keys', `${head(tr('Keyboard shortcuts'))}<dl class="keys">${rows.map(([k, l]) => `<div><dt><kbd>${esc(k)}</kbd></dt><dd>${esc(tr(l))}</dd></div>`).join('')}</dl>`);
   bindClose(d);
 }
+
+// ---------- @mentions ----------
+// Typing "@" in a team note lists the team; picking one writes "@Firstname" (what the database trigger looks for,
+// migration 0050) and the line under the box says who will be told. UX audit U2.
+export function bindMentions(ta, staff) {
+  if (!ta || ta.dataset.mentions) return; ta.dataset.mentions = '1';
+  const people = (staff || []).filter((s) => s.full_name).map((s) => ({ id: s.id, name: s.full_name, first: s.full_name.split(/\s+/)[0] }));
+  if (!people.length) return;
+  const box = document.createElement('ul'); box.className = 'mention-list'; box.setAttribute('role', 'listbox'); box.id = `${ta.id}-mentions`; box.hidden = true;
+  const who = document.createElement('p'); who.className = 'hint mention-who'; who.setAttribute('aria-live', 'polite');
+  ta.after(box); box.after(who);
+  ta.setAttribute('aria-controls', box.id); ta.setAttribute('aria-autocomplete', 'list');
+  let shown = [], at = 0;
+  const word = () => { const m = ta.value.slice(0, ta.selectionStart).match(/(^|\s)@([\p{L}'-]*)$/u); return m ? m[2] : null; };
+  const tellWho = () => { const named = people.filter((p) => new RegExp(`(^|\\s)@${p.first}(?![\\p{L}])`, 'iu').test(ta.value)); who.textContent = named.length ? tr('Will tell: {names}', { names: named.map((p) => p.name).join(', ') }) : ''; };
+  const draw = () => {
+    const w = word();
+    shown = w == null ? [] : people.filter((p) => p.name.toLowerCase().split(/\s+/).some((x) => x.startsWith(w.toLowerCase()))).slice(0, 6);
+    at = Math.min(at, Math.max(0, shown.length - 1));
+    box.hidden = !shown.length;
+    box.innerHTML = shown.map((p, i) => `<li role="option" id="${box.id}-${i}" aria-selected="${i === at}" class="${i === at ? 'is-on' : ''}" data-i="${i}">${esc(p.name)}</li>`).join('');
+    ta.setAttribute('aria-expanded', String(!box.hidden));
+    if (shown.length) ta.setAttribute('aria-activedescendant', `${box.id}-${at}`); else ta.removeAttribute('aria-activedescendant');
+  };
+  const pick = (p) => {
+    const end = ta.selectionStart, start = ta.value.slice(0, end).lastIndexOf('@');
+    ta.value = `${ta.value.slice(0, start)}@${p.first} ${ta.value.slice(end)}`;
+    const c = start + p.first.length + 2; ta.setSelectionRange(c, c); ta.dataset.dirty = '1';
+    box.hidden = true; shown = []; tellWho(); ta.focus();
+  };
+  ta.addEventListener('input', () => { at = 0; draw(); tellWho(); });
+  ta.addEventListener('keydown', (e) => {
+    if (box.hidden || !shown.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); at = (at + 1) % shown.length; draw(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); at = (at - 1 + shown.length) % shown.length; draw(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(shown[at]); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); box.hidden = true; }
+  });
+  box.addEventListener('mousedown', (e) => { const li = e.target.closest('[data-i]'); if (li) { e.preventDefault(); pick(shown[Number(li.dataset.i)]); } });
+  ta.addEventListener('blur', () => setTimeout(() => { box.hidden = true; }, 150));
+  tellWho();
+}

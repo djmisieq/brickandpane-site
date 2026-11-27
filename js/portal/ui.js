@@ -9,10 +9,11 @@ import { layoutName } from '../layouts.js';
 
 const ADMIN = 'admin.html';
 
+// #/list?group=am&who=me: the part after "?" is the view's settings (UX audit U2), so a view can be linked and survives a reload.
 export const route = () => {
-  const h = location.hash.replace(/^#\/?/, '');
+  const [h, qs = ''] = location.hash.replace(/^#\/?/, '').split('?');
   const [name = '', id = ''] = h.split('/');
-  return { name, id };
+  return { name, id, q: Object.fromEntries(new URLSearchParams(qs)) };
 };
 
 // ---------- app bar with notifications ----------
