@@ -1578,3 +1578,74 @@ test('openings: the schedule edits like Excel and takes a pasted schedule with h
   await expect(page.locator('.g-table tbody')).toContainText('W05');
   await expect(page.locator('.g-table tbody tr', { hasText: 'W05' })).toContainText('1200');
 });
+
+// ---------- audit of the sheets 28.11.2026: values must never land wrong ----------
+test('sheet: numbers are read in either language and dates must be real', async ({ page }) => {
+  await staffOn(page, '#/list');
+  const r = await page.evaluate(async () => { const g = await import('/js/portal/grid.js'); const t = (s) => { try { return g.num(s); } catch { return 'err'; } }; return [t('2,5'), t('1 200,50'), t('1,200'), t('1.200,5'), t('£12,000'), t('12.5%'), t('abc')]; });
+  expect(r).toEqual([2.5, 1200.5, 1200, 1200.5, 12000, 12.5, 'err']);
+  const cell = page.locator('.g-table tbody tr', { hasText: 'Garden room' }).locator('td[id$="-value"]');
+  await cell.click();
+  await page.keyboard.type('2,5');
+  await page.keyboard.press('Enter');
+  await expect(cell).not.toContainText('25'); // 2.5, not 25
+  const due = page.locator('.g-table tbody tr', { hasText: 'Garden room' }).locator('td[id$="-chase_on"]');
+  await due.click();
+  await pasteInto(page, '11/28/2026'); // US order: there is no 28th month
+  await expect(page.locator('.toast').last()).toContainText('Nothing pasted');
+});
+
+test('sheet: a refused value keeps its cell; a click elsewhere never saves it there', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="openings"]').click();
+  const row = page.locator('.g-table tbody tr', { hasText: 'D01' });
+  const qty = row.locator('td[id$="-qty"]'), before = await qty.innerText();
+  await row.locator('td[id$="-width_mm"]').click();
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.toast').last()).toContainText('300 to 30000');
+  await qty.click();
+  await expect(qty).toHaveText(before);
+  await expect(row.locator('td[id$="-width_mm"] .g-editor')).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
+test('openings: rows pasted below the table go through the same checks, with metres as mm', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="openings"]').click();
+  const last = page.locator('.g-table tbody tr').last().locator('[role="rowheader"]');
+  await last.click();
+  const n = await page.locator('.g-table tbody tr').count();
+  await page.keyboard.press('ArrowDown');
+  await pasteInto(page, 'W08\tWindows\t\t900\t1200\t\t\t1\t\nW09\tWindows\t\t2,4\t1.2\t\t\t1\t\nW10\tWindows\t\t50\t1200\t\t\t1\t');
+  await expect(page.locator('.g-table tbody tr')).toHaveCount(n + 1);
+  await expect(page.locator('.g-table tbody tr', { hasText: 'W09' })).toContainText('2400');
+  await expect(page.locator('.toast', { hasText: 'not added' })).toBeVisible();
+});
+
+test('sheet: a paste into the filter search stays there; a view keeps its columns', async ({ page }) => {
+  await staffOn(page, '#/list');
+  const p = page.locator('.g-table tbody tr', { hasText: 'Garden room' }).locator('td[id$="-probability"]');
+  await p.click();
+  const before = await p.innerText();
+  await page.locator('[data-g-filter="location"]').click();
+  await page.locator('.g-pop-q').focus();
+  await pasteInto(page, '99');
+  await expect(p).toHaveText(before);
+  await page.keyboard.press('Escape');
+  await page.locator('[data-g-cols]').click();
+  await page.locator('.g-pop-cols li', { hasText: 'Location' }).locator('input').uncheck();
+  await page.locator('.g-pop-cols [data-p-ok]').click();
+  await page.locator('[data-sheet-save]').click();
+  await page.locator('#sv-name').fill('No location (TEST)');
+  await page.locator('dialog button[type="submit"]').click();
+  await expect(page.locator('[data-sheet-view]')).toContainText('No location (TEST)');
+  await page.locator('[data-g-cols]').click();
+  await page.locator('.g-pop-cols [data-p-reset]').click();
+  await expect(page.locator('.g-table thead')).toContainText('Location');
+  await page.locator('[data-sheet-view]').selectOption({ label: 'All projects' });
+  await page.locator('[data-sheet-view]').selectOption({ label: 'No location (TEST)' });
+  await expect(page.locator('.g-table thead')).not.toContainText('Location');
+});

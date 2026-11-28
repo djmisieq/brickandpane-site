@@ -1,9 +1,9 @@
 // The CRM's sheets (Excel audit 28.11.2026): projects as a spreadsheet with saved views, and the openings schedule
 // of a project, pasted from an architect's Excel. Staff only (imported by admin.js and project.js).
 import { store } from './store.js';
-import { SYSTEMS, MATERIALS, stage, esc, stageBadge, isOverdue, estimatePanel, $, toast } from './core.js';
+import { SYSTEMS, MATERIALS, ALL_STAGES, stage, esc, stageBadge, isOverdue, estimatePanel, $, toast } from './core.js';
 import { tr, LANG } from './i18n.js';
-import { grid } from './grid.js';
+import { grid, num } from './grid.js';
 import { stageDialog, dialog, head, bindClose } from './crm-quick.js';
 
 const DAY = 864e5;
@@ -21,7 +21,7 @@ const BUILT_IN = [
 let viewId = 'all';
 
 export async function projectSheet(host, projects, { staff, tasksOf }) {
-  const [fields, saved] = await Promise.all([store.listFields ? store.listFields().catch(() => []) : [], store.listViews ? store.listViews('projects').catch(() => []) : []]);
+  const [fields, saved, me] = await Promise.all([store.listFields ? store.listFields().catch(() => []) : [], store.listViews ? store.listViews('projects').catch(() => []) : [], store.getUser().catch(() => null)]);
   const people = staff.map((s) => ({ value: s.id, label: s.full_name || s.email }));
   const custom = fields.map((f) => ({
     field: `custom.${f.key}`, label: f.label, type: f.kind === 'number' ? 'number' : f.kind === 'date' ? 'date' : 'text',
@@ -33,7 +33,8 @@ export async function projectSheet(host, projects, { staff, tasksOf }) {
     { field: 'client', label: tr('Client'), editable: false, get: clientName, width: 160 },
     { field: 'location', label: tr('Location'), editable: false, width: 140 },
     // The stage moves through its dialog: whether the client is told is a decision, never a cell edit.
-    { field: 'stage', label: tr('Stage'), type: 'action', width: 160, get: (p) => tr(stage(p.stage).staffLabel || stage(p.stage).label), render: (p) => stageBadge(p.stage, 'staff'), onActivate: (p) => stageDialog(p) },
+    // Filtered by its id (a view works in both languages), shown and sorted in the order of the pipeline.
+    { field: 'stage', label: tr('Stage'), type: 'action', width: 160, get: (p) => p.stage, fmt: (v) => tr(stage(v).staffLabel || stage(v).label), order: (v) => ALL_STAGES.findIndex((s) => s.id === v), render: (p) => stageBadge(p.stage, 'staff'), onActivate: (p) => stageDialog(p) },
     { field: 'phase', label: tr('Phase'), editable: false, get: (p) => stage(p.stage).phase || '', render: (p) => esc(tr(stage(p.stage).phase || '—')), width: 110 },
     { field: 'assignee_id', label: tr('Account manager'), type: 'select', options: people, width: 150 },
     { field: 'waiting_on', label: tr('Waiting on'), type: 'select', options: Object.entries(WAITING).map(([value, l]) => ({ value, label: tr(l) })), get: (p) => p.internal?.waiting_on ?? null, width: 140 },
@@ -50,23 +51,29 @@ export async function projectSheet(host, projects, { staff, tasksOf }) {
     { field: 'created', label: tr('Created'), type: 'date', editable: false, hidden: true, get: (p) => p.created_at?.slice(0, 10), width: 120 },
     ...custom,
   ];
-  const views = [...BUILT_IN.map((v) => ({ ...v, name: tr(v.name), builtIn: true })), ...saved];
-  const onSave = async (id, field, v) => {
-    const p = projects.find((x) => x.id === id);
-    if (field === 'assignee_id') return store.updateProject(id, { assignee_id: v || null });
-    if (field === 'due_at') return store.updateProject(id, { due_at: v ? new Date(`${v}T17:00:00`).toISOString() : null });
-    if (field === 'value') return store.updateInternal(id, { value_gbp: v });
-    if (field === 'probability') return store.updateInternal(id, { probability: v == null ? null : Math.round(v) });
-    if (field === 'chase_on') return store.updateInternal(id, { chase_on: v || null });
-    if (field === 'waiting_on') return store.updateInternal(id, { waiting_on: v || null, waiting_note: v ? p?.internal?.waiting_note || '' : '', waiting_since: v ? (p?.internal?.waiting_since || new Date().toISOString()) : null, chase_on: v ? p?.internal?.chase_on || null : null });
-    if (field.startsWith('custom.')) { const next = { ...(p?.internal?.custom || {}), [field.slice(7)]: v }; if (p) (p.internal ||= {}).custom = next; return store.updateInternal(id, { custom: next }); }
-    throw new Error('This column cannot be changed here.');
+  const views = [...BUILT_IN.map((v) => ({ ...v, name: tr(v.name), builtIn: true })), ...saved.map((v) => ({ ...v, mine: !v.owner_id || !me || v.owner_id === me.id }))];
+  // All the cells of one row in at most two requests: the project, and its internal record.
+  const onSaveRow = async (id, patch) => {
+    const p = projects.find((x) => x.id === id), pub = {}, int = {};
+    for (const [field, v] of Object.entries(patch)) {
+      if (field === 'assignee_id') pub.assignee_id = v || null;
+      else if (field === 'due_at') pub.due_at = v ? new Date(`${v}T17:00:00`).toISOString() : null;
+      else if (field === 'value') int.value_gbp = v;
+      else if (field === 'probability') int.probability = v == null ? null : Math.round(v);
+      else if (field === 'chase_on') int.chase_on = v || null;
+      else if (field === 'waiting_on') Object.assign(int, { waiting_on: v || null, waiting_note: v ? p?.internal?.waiting_note || '' : '', waiting_since: v ? (p?.internal?.waiting_since || new Date().toISOString()) : null }, 'chase_on' in int ? {} : { chase_on: v ? p?.internal?.chase_on || null : null });
+      else if (field.startsWith('custom.')) { int.custom = { ...(int.custom || p?.internal?.custom || {}), [field.slice(7)]: v }; }
+      else throw new Error('This column cannot be changed here.');
+    }
+    if (int.custom && p) (p.internal ||= {}).custom = int.custom;
+    if (Object.keys(pub).length) await store.updateProject(id, pub);
+    if (Object.keys(int).length) await store.updateInternal(id, int);
   };
   const view = views.find((v) => v.id === viewId) || views[0];
   const toolbar = `<label class="visually-hidden" for="sheet-view">${tr('View')}</label><select id="sheet-view" data-sheet-view>${views.map((v) => `<option value="${esc(v.id)}" ${v.id === view.id ? 'selected' : ''}>${esc(v.name)}${v.shared === false ? ` (${esc(tr('mine'))})` : ''}</option>`).join('')}</select>
     <button type="button" class="btn btn-sm btn-ghost" data-sheet-save>${tr('Save view')}</button>${view.builtIn ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-sheet-del>${tr('Delete view')}</button>`}`;
   const g = grid(host, {
-    id: 'projects', label: tr('Projects'), rows: projects, rowId: (p) => p.id, columns, onSave, tools: toolbar,
+    id: 'projects', label: tr('Projects'), rows: projects, rowId: (p) => p.id, columns, onSaveRow, tools: toolbar,
     state: projectSheet.applied === viewId ? null : view.state,
     onDraw: () => bindTools(),
     rowClass: (p) => (isOverdue(p) ? 'is-overdue' : ''),
@@ -76,7 +83,10 @@ export async function projectSheet(host, projects, { staff, tasksOf }) {
   function bindTools() {
     $('[data-sheet-view]', host)?.addEventListener('change', (e) => { viewId = e.target.value; dispatchEvent(new HashChangeEvent('hashchange')); }); // redraw: the new view's filters apply
     $('[data-sheet-save]', host)?.addEventListener('click', () => saveViewDialog(g, view, () => { location.hash = '#/list'; dispatchEvent(new HashChangeEvent('hashchange')); }));
-    $('[data-sheet-del]', host)?.addEventListener('click', async () => { try { await store.deleteView(view.id); viewId = 'all'; toast(tr('View deleted.'), { tone: 'ok' }); dispatchEvent(new HashChangeEvent('hashchange')); } catch (err) { toast(tr(err.message), { tone: 'error' }); } });
+    $('[data-sheet-del]', host)?.addEventListener('click', async () => {
+      if (view.mine === false) { toast(tr('Only the person who saved this view can delete it.'), { tone: 'error' }); return; }
+      try { await store.deleteView(view.id); viewId = 'all'; toast(tr('View deleted.'), { tone: 'ok' }); dispatchEvent(new HashChangeEvent('hashchange')); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+    });
   }
   return g;
 }
@@ -116,19 +126,34 @@ export function openingsSheet(host, pid, openings, { locked = false } = {}) {
     { field: 'kg', label: tr('Panel kg'), type: 'number', editable: false, get: (o) => (sliding(o) ? estimatePanel(o)?.kg ?? null : null), width: 90 },
     { field: 'notes', label: tr('Notes (the client sees them)'), width: 220 },
   ].map((c) => (locked && c.editable !== false ? { ...c, editable: false } : c));
+  // A row pasted below the table, read as the "Paste a schedule" dialog reads one (audit 28.11.2026: "2.4" became
+  // 2.4 mm): sizes in metres become mm, numbers in either language, the same checks as a typed cell.
   const toRow = (cells, cols) => {
     const o = { ref: '', system: 'lift-slide', material: '', width_mm: null, height_mm: null, config: '', glazing: '', qty: 1, notes: '' };
-    cols.forEach((c, i) => { const v = cells[i]; if (v == null || v === '' || c.editable === false) return; try { o[c.field] = c.options ? (c.options.find((x) => x.label.toLowerCase() === String(v).trim().toLowerCase() || x.value === String(v).trim())?.value ?? o[c.field]) : c.type === 'number' ? Number(String(v).replace(/[^\d.]/g, '')) || null : String(v).trim(); } catch { /* keep the default */ } });
-    return o;
+    let bad = '';
+    cols.forEach((c, i) => {
+      const v = cells[i]; if (v == null || String(v).trim() === '' || c.editable === false) return;
+      const t = String(v).trim();
+      try {
+        if (c.options) o[c.field] = c.options.find((x) => x.label.toLowerCase() === t.toLowerCase() || x.value === t)?.value ?? o[c.field];
+        else if (c.field === 'width_mm' || c.field === 'height_mm') { const n = num(t); o[c.field] = n == null ? null : n < 30 ? Math.round(n * 1000) : Math.round(n); }
+        else if (c.type === 'number') o[c.field] = num(t);
+        else o[c.field] = c.field === 'notes' ? t.slice(0, 500) : t.slice(0, 20);
+      } catch { bad ||= tr('That is not a valid {kind}.', { kind: tr('number') }); }
+    });
+    cols.forEach((c) => { const m = c.validate?.(o[c.field], o); if (m) bad ||= tr(m); });
+    return { o, bad };
   };
   return grid(host, {
     id: `openings-${pid}`, label: tr('Openings'), rows: openings, rowId: (o) => o.id, columns,
-    onSave: (id, field, v) => store.updateOpening(id, { [field]: v ?? (field === 'notes' || field === 'config' || field === 'glazing' || field === 'material' ? '' : null) }),
+    onSaveRow: (id, patch) => store.updateOpening(id, Object.fromEntries(Object.entries(patch).map(([field, v]) => [field, v ?? (['notes', 'config', 'glazing', 'material'].includes(field) ? '' : null)]))),
     // Rows pasted below the last one become new openings (an architect's schedule, straight from Excel).
     onAddRows: locked ? null : async (rowsIn, cols) => {
-      const made = rowsIn.map((r) => toRow(r, cols)).filter((o) => o.ref || o.width_mm);
-      if (!made.length) return;
-      try { await store.addOpenings(pid, made); toast(tr('{n} openings added from the paste.', { n: made.length }), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+      const read = rowsIn.map((r) => toRow(r, cols)).filter(({ o }) => o.ref || o.width_mm);
+      const made = read.filter((x) => !x.bad).map((x) => x.o), refused = read.filter((x) => x.bad);
+      const notAdded = () => refused.length && toast(tr('{n} pasted rows were not added: {why}', { n: refused.length, why: refused[0].bad }), { tone: 'error' });
+      if (!made.length) { notAdded(); return; }
+      try { await store.addOpenings(pid, made); if (refused.length) notAdded(); else toast(tr('{n} openings added from the paste.', { n: made.length }), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
     },
     cellClass: (o, c) => (c.field === 'kg' && sliding(o) && estimatePanel(o)?.over ? 'cf-warn' : ''),
   });
