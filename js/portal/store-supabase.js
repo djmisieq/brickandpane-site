@@ -459,3 +459,36 @@ export const store = {
     return data.signedUrl;
   },
 };
+
+// Offline queue (UX audit U3). Without a connection, these changes are kept in this browser and sent, in order,
+// as soon as it is back; the page shows how many are waiting. Only simple, staff-side changes are queued:
+// tasks, notes and messages, the facts of a project. Nothing else is attempted offline.
+const QUEUE_KEY = 'bp-crm-queue';
+const QUEUED = ['addTask', 'setTaskDone', 'updateTask', 'addMessage', 'updateInternal', 'updateProject'];
+const readQ = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } };
+const writeQ = (q) => { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* private mode: nothing kept */ } };
+const real = {};
+QUEUED.forEach((name) => {
+  real[name] = store[name].bind(store);
+  store[name] = async (...args) => {
+    if (navigator.onLine === false) { writeQ([...readQ(), { name, args, at: new Date().toISOString() }]); dispatchEvent(new Event('bp-queue')); return null; }
+    return real[name](...args);
+  };
+});
+store.queued = () => readQ().length;
+let flushing = false;
+store.flushQueue = async () => {
+  if (flushing || navigator.onLine === false) return 0;
+  flushing = true; let sent = 0, failed = 0;
+  try {
+    for (let q = readQ(); q.length; q = readQ()) {
+      const [job, ...rest] = q;
+      try { await real[job.name](...job.args); sent += 1; } catch (err) { failed += 1; console.warn('Queued change not saved', job.name, err.message); }
+      writeQ(rest);
+    }
+  } finally { flushing = false; dispatchEvent(new CustomEvent('bp-queue', { detail: { sent, failed } })); }
+  if (sent) emit();
+  return sent;
+};
+addEventListener('online', () => store.flushQueue());
+if (navigator.onLine !== false && readQ().length) setTimeout(() => store.flushQueue(), 1500);

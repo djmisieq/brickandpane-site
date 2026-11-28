@@ -1636,3 +1636,6 @@ html[data-theme=dark] body.crm{--accent:#e08566;--accent-hover:#eda08a;--brick:#
 html[data-theme=dark] body.crm .btn:not(.btn-ghost),html[data-theme=dark] body.crm .btn:not(.btn-ghost):hover{color:#1c1b1a}
 html[data-theme=dark] body.crm .alt,html[data-theme=dark] body.crm .col,html[data-theme=dark] body.crm .estimate,html[data-theme=dark] body.crm .change-impact{--muted:#a8a39a}
 html[data-theme=dark] body.crm .cal-d.is-today .cal-n{color:#1c1b1a}
+.mail-thread{border:1px solid var(--line);border-left:3px solid var(--line);padding:.4rem .6rem;display:grid;gap:4px;background:var(--surface)}
+.mail-thread.is-waiting{border-left-color:var(--c-info-line)}
+.mail-thread-h{font-size:var(--step--1);margin:0 0 .2rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}

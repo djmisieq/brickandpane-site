@@ -1510,3 +1510,16 @@ test('U3: a field of our own is added once and filled in on a project card', asy
   await fold(page, 'fields');
   await expect(page.locator('#pfv-ral_colour')).toHaveValue('7016');
 });
+
+test('U3: an email and its reply read as one thread on the project; going offline says so at once', async ({ page, context }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="mail"]').click();
+  const thread = page.locator('.mail-thread', { hasText: 'threshold detail' });
+  await expect(thread).toContainText('2 emails');
+  await expect(thread.locator('details.mail')).toHaveCount(2);
+  await context.setOffline(true);
+  await expect(page.locator('.offline-bar')).toBeVisible();
+  await context.setOffline(false);
+  await expect(page.locator('.offline-bar')).toBeHidden();
+});
