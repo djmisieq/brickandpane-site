@@ -143,6 +143,15 @@ export function watchOnline() {
   const bar = document.createElement('div'); bar.className = 'offline-bar'; bar.setAttribute('role', 'status'); bar.hidden = navigator.onLine !== false;
   bar.textContent = tr('You are offline. What you see may be out of date and changes will not save until the connection is back.');
   document.body.prepend(bar);
-  addEventListener('offline', () => { bar.hidden = false; });
+  const text = bar.textContent;
+  const show = () => { const n = store.queued ? store.queued() : 0; bar.textContent = n ? `${text} ${tr('{n} change(s) wait on this device.', { n })}` : text; };
+  addEventListener('offline', () => { bar.hidden = false; show(); });
   addEventListener('online', () => { bar.hidden = true; toast(tr('Back online.'), { tone: 'ok' }); });
+  // Queued changes (store-supabase.js): say when they are kept, sent, or could not be saved.
+  addEventListener('bp-queue', (e) => {
+    show();
+    if (!e.detail) { toast(tr('No connection: kept on this device, sent when you are back online.')); return; }
+    if (e.detail.failed) toast(tr('{n} change(s) made offline could not be saved. Check them and try again.', { n: e.detail.failed }), { tone: 'error' });
+    else if (e.detail.sent) toast(tr('{n} change(s) made offline are saved.', { n: e.detail.sent }), { tone: 'ok' });
+  });
 }

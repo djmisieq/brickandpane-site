@@ -1232,6 +1232,12 @@ const PL = {
   "Back on the list for us.": "Wróciło na naszą listę.",
   "Dark mode": "Tryb ciemny",
   "Light mode": "Tryb jasny",
+  "{n} change(s) wait on this device.": "Zmiany czekające na tym urządzeniu: {n}.",
+  "No connection: kept on this device, sent when you are back online.": "Brak połączenia: zapisane na tym urządzeniu, wyślą się po powrocie internetu.",
+  "{n} change(s) made offline could not be saved. Check them and try again.": "Nie udało się zapisać zmian z trybu offline: {n}. Sprawdź je i spróbuj ponownie.",
+  "{n} change(s) made offline are saved.": "Zapisano zmiany z trybu offline: {n}.",
+  "{n} emails": "Maile: {n}",
+  "waiting for us": "czeka na nas",
 };
 
 export const tr = (s, vars) => {

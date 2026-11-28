@@ -53,12 +53,31 @@ function item(m, { projects = null } = {}) {
 }
 
 // On a project: its mail, newest first.
+// Threads (UX audit U3): replies hang under the email they answer (In-Reply-To), the rest by subject without
+// "Re:/Fwd:". A thread whose newest email came in and is not dealt with is "waiting for us".
+const subjKey = (s) => String(s || '').toLowerCase().replace(/^\s*((re|fw|fwd|aw|odp|pd|wg)\s*(\[\d+\])?\s*:\s*)+/g, '').replace(/\s+/g, ' ').trim();
+export function threads(list) {
+  const byMsg = new Map(list.filter((m) => m.message_id).map((m) => [m.message_id, m]));
+  const root = (m, seen = new Set()) => { const up = m.in_reply_to && byMsg.get(m.in_reply_to); if (!up || seen.has(up.id)) return m; seen.add(up.id); return root(up, seen); };
+  const groups = new Map();
+  // The other side of the conversation: who wrote to us, or whom we wrote to. Same subject with someone else = another thread.
+  const party = (m) => String((m.direction === 'out' ? (m.to_addrs || [])[0] : m.from_addr) || '').toLowerCase();
+  list.forEach((m) => { const r = root(m); const k = subjKey(r.subject) ? `${subjKey(r.subject)}|${party(r)}` : `id:${r.id}`; groups.set(k, [...(groups.get(k) || []), m]); });
+  return [...groups.values()].map((ms) => ms.sort((a, b) => b.sent_at.localeCompare(a.sent_at))).sort((a, b) => b[0].sent_at.localeCompare(a[0].sent_at));
+}
+const threadBox = (ms, opts) => {
+  if (ms.length === 1) return item(ms[0], opts);
+  const last = ms[0], waiting = last.direction === 'in' && !last.handled_at;
+  return `<section class="mail-thread${waiting ? ' is-waiting' : ''}" aria-label="${esc(last.subject || tr('(no subject)'))}">
+    <h3 class="mail-thread-h"><span>${esc(last.subject || tr('(no subject)'))}</span> <span class="tag">${tr('{n} emails', { n: ms.length })}</span>${waiting ? ` <span class="tag tone-info">${tr('waiting for us')}</span>` : ''}</h3>
+    ${ms.map((m) => item(m, opts)).join('')}</section>`;
+};
 export function mailPanel(list) {
   const head = `<h2 class="panel-h">${tr('Email')} <span class="tag">${tr('staff only')}</span></h2>`;
   if (list == null) return `<section class="mail-panel" data-mail-panel>${head}<p class="hint">${tr('Mail is not available right now.')}</p></section>`;
   return `<section class="mail-panel" data-mail-panel>${head}
     <p class="hint">${tr('A copy of the Zimbra mailboxes. A reply written here goes out only after you check it and press Send.')}</p>
-    ${list.length ? `<div class="mail-list">${list.map((m) => item(m)).join('')}</div>` : `<p class="hint">${tr('No email with this project’s client yet.')}</p>`}
+    ${list.length ? `<div class="mail-list">${threads(list).map((ms) => threadBox(ms)).join('')}</div>` : `<p class="hint">${tr('No email with this project’s client yet.')}</p>`}
     <div data-mail-compose-slot>${composeForm()}</div>
     ${draft ? '' : `<button type="button" class="btn btn-sm" data-mail-new>${tr('New email')}</button>`}
     <form class="mail-keywords" data-mail-keywords>
@@ -175,7 +194,7 @@ export async function mailView(app, switcher) {
           <button type="button" class="${filter === 'all' ? 'is-on' : ''}" data-mail-filter="all">${tr('All')}</button>
         </div>
       </div>
-      ${list.length ? `<div class="mail-list">${list.map((m) => item(m, { projects: open })).join('')}</div>` : `<p class="callout">${tr(filter === 'unassigned' ? 'Every email is on a project.' : 'No email yet.')}</p>`}
+      ${list.length ? `<div class="mail-list">${threads(list).map((ms) => threadBox(ms, { projects: open })).join('')}</div>` : `<p class="callout">${tr(filter === 'unassigned' ? 'Every email is on a project.' : 'No email yet.')}</p>`}
       <div class="mail-side">
         <section class="ctl"><h2 class="panel-h">${tr('Mailboxes')}</h2><ul class="mail-accounts">${status || `<li class="note">${tr('No mailbox connected.')}</li>`}</ul></section>
         <form class="ctl" data-mail-contact>
