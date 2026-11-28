@@ -43,7 +43,7 @@ export async function renderAppBar(el, user, area) {
               </ul>
             </div>
           </div>
-          <details class="usermenu"><summary>${esc(user.full_name || user.email)}</summary>
+          <details class="usermenu"><summary aria-label="${esc(user.full_name || user.email)}"><span class="um-av" aria-hidden="true">${esc(String(user.full_name || user.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><span class="um-name">${esc(user.full_name || user.email)}</span></summary>
             <div class="usermenu-panel">
               <span class="note">${esc(user.email || '')}${user.role === 'staff' ? ` · ${tr('staff')}` : ''}</span>
               ${area === 'portal' ? `<a href="#/settings">${tr('Settings')}</a>` : `<a href="portal.html">${tr('Client view')}</a>`}
