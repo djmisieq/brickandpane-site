@@ -4,7 +4,7 @@
 // messages, email, files, tasks, supplier quotes, bookings and every relink in time order. The side keeps the forms:
 // stage, waiting on, who is on the project, tasks, dates and bookings, commercial, sharing a file, payments.
 import { store } from './store.js';
-import { STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, isOverdue, $, $$, toast, softDelete } from './core.js';
+import { STAGES, ALL_STAGES, DOC_KINDS, ACCOUNT_TYPES, SYSTEMS, stage, esc, fmtDate, fmtDay, fmtMoney, ago, stageBadge, isOverdue, $, $$, toast, softDelete } from './core.js';
 import { tr, LANG } from './i18n.js';
 import { pipeline, nowCard, overviewPanel, documentsPanel, changesPanel, messagesPanel, bindDetail, counts } from './ui.js';
 import { projectQuotes, newQuoteFor } from './quotes.js';
@@ -17,12 +17,55 @@ import { linker, bindLinkers, picked, names } from './linker.js';
 import { ICON } from './icons.js';
 import { bindMentions } from './crm-quick.js';
 import { projectFieldsBox, bindProjectFields } from './u3.js';
+import { openingsSheet } from './sheets.js';
+import { parseTSV } from './grid.js';
+import { dialog, head, bindClose } from './crm-quick.js';
+
+// The openings schedule as a sheet (Excel audit 28.11.2026), plus a paste box for a whole schedule with headers.
+const COLS_OF = { ref: /^(ref|mark|no|nr|item|pozycja|oznaczenie)/i, system: /^(type|system|product|produkt|rodzaj)/i, material: /^(material|materiał|frame)/i, width_mm: /^(w|width|szer)/i, height_mm: /^(h|height|wys)/i, config: /^(layout|config|układ|konfig)/i, glazing: /^(glaz|glass|szyb|szkl)/i, qty: /^(qty|quantity|ilo|szt|no\.? off)/i, notes: /^(note|notes|uwag|comment|remarks)/i };
+const guessSystem = (v) => { const t = String(v || '').toLowerCase(); return /lift|hs|podnosz/.test(t) ? 'lift-slide' : /bi-?fold|fold|harmon/.test(t) ? 'bifold' : /slid|przesuw/.test(t) ? 'sliding' : /door|drzwi/.test(t) ? 'doors' : /roof|lantern|dach/.test(t) ? 'rooflight' : /window|okno|casement|tilt/.test(t) ? 'windows' : ''; };
+const guessGlazing = (v) => { const t = String(v || '').toLowerCase(); const tri = /tri|potr|3/.test(t), lam = /lam/.test(t); return tri ? (lam ? 'tl' : 't') : /doub|dwu|2/.test(t) ? (lam ? 'dl' : 'd') : ''; };
+const guessMaterial = (v) => { const t = String(v || '').toLowerCase(); return /alu.*tim|tim.*alu|drew.*alu/.test(t) ? 'alutimber' : /alu/.test(t) ? 'alu' : /timber|wood|drew/.test(t) ? 'timber' : /pvc|upvc/.test(t) ? 'pvc' : ''; };
+const mm = (v) => { const n = Number(String(v || '').replace(/[^\d.,]/g, '').replace(',', '.')); return !n ? null : n < 30 ? Math.round(n * 1000) : Math.round(n); }; // 2.4 (metres) → 2400
+function bindOpenings(app, pid, openings) {
+  const host = $('[data-grid-host="openings"]', app); if (!host) return;
+  openingsSheet(host, pid, openings);
+  $('[data-op-add]', app)?.addEventListener('click', async () => {
+    try { await store.addOpenings(pid, [{ ref: `D${String(openings.length + 1).padStart(2, '0')}`, system: 'lift-slide', qty: 1 }]); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
+  $('[data-op-paste]', app)?.addEventListener('click', () => {
+    const d = dialog('qd-paste', `${head(tr('Paste a schedule from Excel'))}<div class="qd-body">
+      <p class="hint">${tr('Copy the rows from Excel, with the header row, and paste them here. Columns are matched by their names (ref, type, width, height, layout, glazing, qty, notes). Sizes in metres become mm.')}</p>
+      <label class="visually-hidden" for="op-paste">${tr('Schedule')}</label><textarea id="op-paste" rows="8"></textarea>
+      <div data-op-preview></div>
+      <div class="qd-acts"><button class="btn" type="button" data-op-go disabled>${tr('Add the openings')}</button><button class="btn btn-ghost" type="button" data-close>${tr('Cancel')}</button></div></div>`);
+    bindClose(d);
+    let ready = [];
+    $('#op-paste', d).addEventListener('input', (e) => {
+      const rows = parseTSV(e.target.value.trim()); const headRow = rows[0] || [];
+      const map = headRow.map((h) => Object.keys(COLS_OF).find((k) => COLS_OF[k].test(String(h).trim())) || null);
+      const body = map.some(Boolean) ? rows.slice(1) : rows;
+      ready = body.filter((r) => r.some((x) => String(x).trim())).map((r) => {
+        const v = (k) => { const i = map.indexOf(k); return i < 0 ? '' : r[i]; };
+        const o = { ref: String(v('ref') || '').trim().slice(0, 20), system: guessSystem(v('system')) || 'lift-slide', material: guessMaterial(v('material')), width_mm: mm(v('width_mm')), height_mm: mm(v('height_mm')), config: String(v('config') || '').trim().slice(0, 20), glazing: guessGlazing(v('glazing')), qty: Math.max(1, parseInt(v('qty'), 10) || 1), notes: String(v('notes') || '').trim().slice(0, 500) };
+        o.bad = !o.width_mm || o.width_mm < 300 || o.width_mm > 30000 ? 'width' : !o.height_mm || o.height_mm < 300 || o.height_mm > 6000 ? 'height' : '';
+        return o;
+      });
+      $('[data-op-preview]', d).innerHTML = ready.length ? `<div class="table-scroll"><table class="dash-table"><thead><tr><th>${tr('Ref')}</th><th>${tr('Product')}</th><th>${tr('Width (mm)')}</th><th>${tr('Height (mm)')}</th><th>${tr('Qty')}</th></tr></thead><tbody>${ready.map((o) => `<tr class="${o.bad ? 'cf-danger' : ''}"><td>${esc(o.ref || '—')}</td><td>${esc(tr(SYSTEMS[o.system] || o.system))}</td><td>${o.width_mm ?? '?'}</td><td>${o.height_mm ?? '?'}</td><td>${o.qty}</td></tr>`).join('')}</tbody></table></div><p class="note">${tr('{n} rows ready, {bad} with a size out of range (left out).', { n: ready.filter((o) => !o.bad).length, bad: ready.filter((o) => o.bad).length })}</p>` : '';
+      $('[data-op-go]', d).disabled = !ready.some((o) => !o.bad);
+    });
+    $('[data-op-go]', d).addEventListener('click', async () => {
+      const good = ready.filter((o) => !o.bad).map(({ bad, ...o }) => o);
+      try { await store.addOpenings(pid, good); d.close(); toast(tr('{n} openings added from the paste.', { n: good.length }), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+    });
+  });
+}
 
 // Team words kept out of i18n.js (audit.spec keeps them off client-facing text; costs.js does the same).
 export const t = (en, pl, vars) => (LANG === 'pl' ? pl : en).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? '');
 export const WAITING = { client: 'the client', supplier: 'the supplier', subcontractor: t('the subcontractor', 'podwykonawcę'), other: 'someone else' };
 export const BOOKING_KINDS = { survey: 'Survey', delivery: 'Delivery', install: 'Fitting', service: 'Service visit', other: 'Other' };
-const TABS = [['activity', 'Activity'], ['overview', 'Overview'], ['documents', 'Documents'], ['changes', 'Changes'], ['messages', 'Messages'], ['mail', 'Email'], ['money', 'Quotes & costs']];
+const TABS = [['activity', 'Activity'], ['openings', 'Openings'], ['overview', 'Overview'], ['documents', 'Documents'], ['changes', 'Changes'], ['messages', 'Messages'], ['mail', 'Email'], ['money', 'Quotes & costs']];
 const DAY = 86400e3;
 const daysSince = (iso) => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / DAY)) : 0);
 const isoDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -175,6 +218,13 @@ export async function projectView(app, id, ctx) {
   const items = feed(d, { tasks, mail, costs, log, staff, pco, bookings, nameOf });
   const panel = activeTab === 'documents' ? documentsPanel(d, 'staff', user) : activeTab === 'changes' ? changesPanel(d, 'staff', user) : activeTab === 'messages' ? messagesPanel(d, user)
     : activeTab === 'overview' ? overviewPanel(d, 'staff', 'staff', user) : activeTab === 'mail' ? mailPanel(mail)
+    : activeTab === 'openings' ? `<section class="ctl" data-openings-tab>
+        <div class="pq-head"><h2 class="panel-h">${tr('Openings schedule')} <span class="today-n">${(d.openings || []).reduce((n, o) => n + (o.qty || 1), 0)}</span></h2>
+          <span class="btn-row"><button type="button" class="btn btn-sm btn-ghost" data-op-add>${tr('+ Opening')}</button><button type="button" class="btn btn-sm btn-ghost" data-op-paste>${tr('Paste a schedule from Excel')}</button></span></div>
+        ${['drawings', 'production', 'delivery', 'installation', 'handover', 'completed'].includes(p.stage) ? `<p class="callout">${tr('Drawings are approved at this stage: a change to an opening is a change for the client. Record it in Changes as well.')}</p>` : ''}
+        <p class="hint">${tr('Click a cell and type; Enter or Tab saves. Copy and paste blocks from Excel; rows pasted below the last one are added. The client sees these openings.')}</p>
+        <div data-grid-host="openings"></div>
+      </section>`
     : activeTab === 'money' ? `<section class="ctl pq" data-project-quotes>
         <div class="pq-head"><h2 class="panel-h">${tr('Quotes')}</h2><button type="button" class="btn btn-sm" data-new-quote>+ ${tr('New quote')}</button></div>
         ${pq.length ? `<ul class="pq-list">${pq.map((x) => `<li><a href="#/quotes/${esc(x.id)}">${esc(x.reference)}${x.revision && x.revision !== '00' ? ` rev ${esc(x.revision)}` : ''}</a> <span class="tag">${esc(x.statusName)}</span> <span class="pq-total">${esc(fmtMoney(x.total))}</span></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote yet. A new one takes the client, the site and the openings from this project.')}</p>`}
@@ -298,6 +348,7 @@ export async function projectView(app, id, ctx) {
   const redraw = () => projectView(app, id, ctx);
   bindDetail(app, d, (tab) => { activeTab = tab; redraw(); });
   if (activeTab === 'money') bindCosts(app, id);
+  if (activeTab === 'openings') bindOpenings(app, id, d.openings || []);
   bindTasks(app, user);
   bindProjectCompanies(app, id);
   if (activeTab === 'mail') bindMail(app, id);

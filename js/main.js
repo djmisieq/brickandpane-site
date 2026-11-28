@@ -87,6 +87,7 @@ import { captcha } from './captcha.js';
   // Small screens: matrix tables become stacked cards, so give each cell its column name.
   const labelTables = (root = document) => {
     $$('table', root).forEach((t) => {
+      if (t.matches('[role=grid]')) return; // CRM sheets (js/portal/grid.js) lay themselves out on phones
       const heads = $$('thead th', t).map((th) => th.textContent.trim());
       if (!heads.length) return;
       $$('tbody tr', t).forEach((tr) => [...tr.children].forEach((cell, i) => { if (!cell.dataset.label && heads[i] && cell.colSpan === 1) cell.dataset.label = heads[i]; }));

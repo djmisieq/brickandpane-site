@@ -16,6 +16,8 @@ import { projectView, WAITING, BOOKING_KINDS } from './project.js';
 import { ICON } from './icons.js';
 import { stageDialog, newDialog, palette, bindKeys, rememberRecent } from './crm-quick.js';
 import { automationsView } from './automations.js';
+import { gridBusy, gridCSV } from './grid.js';
+import { projectSheet } from './sheets.js';
 import { inboxView, peekProject, timelineView, watchOnline } from './u3.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
@@ -83,6 +85,8 @@ async function draw(fromStore) {
   if (fromStore && r.name === 'quotes') return;
   // Someone is picking in a search box: the redraw waits until they have picked (it would close the list).
   if (fromStore && linkerBusy()) { clearTimeout(render.wait); render.wait = setTimeout(() => render(true), 1500); return; }
+  // Someone is editing a cell or dragging a selection in a sheet: the redraw waits too.
+  if (fromStore && gridBusy()) { clearTimeout(render.wait); render.wait = setTimeout(() => render(true), 1500); return; }
   try {
     if (r.name === 'p' && r.id) await projectView(app, r.id, { user, listRequests, REQ_TOPICS, bindReqFiles });
     else if (r.name === 'quotes') await quotesView(app, r.id, r.id ? '' : viewSwitch('quotes', await listRequests()));
@@ -165,7 +169,7 @@ async function board(asList) {
         ${asList ? `<label class="visually-hidden" for="list-group">${tr('Group by')}</label><select id="list-group" data-list-group>${Object.entries(GROUPS).map(([k, [l]]) => `<option value="${k}" ${k === group ? 'selected' : ''}>${esc(tr(l))}</option>`).join('')}</select>
           <button type="button" class="btn btn-sm btn-ghost" data-list-csv>${tr('Export CSV')}</button>` : ''}
       </div>
-      ${asList ? `
+      ${asList && group === 'none' ? '<div data-grid-host="projects"></div>' : asList ? `
         <div style="overflow-x:auto"><table class="spec spec-compact crm-table"><thead><tr>${th('ref', 'Ref')}${th('name', 'Project')}${th('client', 'Client')}${th('stage', 'Stage')}${th('am', 'Account manager')}${th('waiting', 'Waiting on')}${th('due', 'Due')}${th('value', 'Value')}${th('updated', 'Updated')}</tr></thead>${grouped.map(([gl, rows]) => `<tbody>${gl == null ? '' : `<tr class="grp-h"><th colspan="9" scope="rowgroup"><span>${esc(gl)}</span> <span class="grp-n">${rows.length}</span><span class="grp-sum">${fmtMoney(sum(rows))}</span></th></tr>`}
           ${rows.map((p) => `<tr class="${isOverdue(p) ? 'is-overdue' : ''}" data-row="${esc(p.id)}"><th scope="row"><a href="#/p/${esc(p.id)}">${esc(p.ref)}</a> <button type="button" class="kpeek kpeek-row" data-peek="${esc(p.id)}" aria-label="${esc(tr('Preview {ref}', { ref: p.ref }))}">${ICON.eye}</button></th><td><a class="row-link" href="#/p/${esc(p.id)}">${esc(p.name)}</a></td><td>${esc(clientName(p))}</td>
             <td><button type="button" class="cell-btn" data-cell-stage="${esc(p.id)}" aria-label="${esc(tr('Move {ref} to another stage', { ref: p.ref }))}">${stageBadge(p.stage, 'staff')}</button></td>
@@ -198,6 +202,11 @@ async function board(asList) {
   $$('[data-board-mine]', app).forEach((b) => b.addEventListener('click', () => { boardMine = !!b.dataset.boardMine; board(asList); }));
   $('[data-list-group]', app)?.addEventListener('change', (e) => { const v = e.target.value; history.replaceState(null, '', `#/list${v === 'none' ? '' : `?group=${v}`}`); board(true); });
   // CSV of what the list shows now (search, mine and order kept); amounts in £ as plain numbers.
+  // Excel audit 28.11.2026: without grouping the list is a spreadsheet (grid.js): edit in the cell, filter, sort, sum.
+  const gh = $('[data-grid-host="projects"]', app);
+  let sheet = null;
+  if (gh) sheet = await projectSheet(gh, projects, { staff, tasksOf });
+  $('[data-list-csv]', app)?.addEventListener('click', (e) => { if (sheet) { e.stopImmediatePropagation(); gridCSV(sheet, 'projects'); } }, { capture: true });
   $('[data-list-csv]', app)?.addEventListener('click', () => {
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const head = ['Ref', 'Project', 'Client', 'Location', 'Stage', 'Account manager', 'Waiting on', 'Due', 'Value (GBP)', 'Probability (%)', 'Updated'].map((h) => tr(h));

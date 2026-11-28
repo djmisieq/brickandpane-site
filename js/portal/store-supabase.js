@@ -22,7 +22,7 @@ const subscribe = () => {
   if (channel) return;
   channel = sb.channel('portal');
   // The CRM tables too (migrations 0049/0050), so a second person sees links, tasks, bookings and notes change.
-  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members', 'tasks', 'project_companies', 'project_people', 'project_internal', 'supplier_quotes', 'project_bookings', 'contact_requests', 'mail_messages'].forEach((table) =>
+  ['projects', 'stage_events', 'documents', 'messages', 'notifications', 'changes', 'payments', 'project_members', 'tasks', 'project_companies', 'project_people', 'project_internal', 'supplier_quotes', 'project_bookings', 'contact_requests', 'mail_messages', 'openings'].forEach((table) =>
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, emit));
   channel.subscribe();
 };
@@ -298,6 +298,18 @@ export const store = {
     const at = new Map(done.map((m) => [m.id, m.handled_at]));
     return (rows || []).map((m) => ({ ...m, handled_at: at.get(m.id) || null }));
   },
+  // Sheets (migration 0054): saved views and the openings schedule.
+  async listViews(table) { const { data, error } = await sb.from('crm_views').select('*').eq('table_key', table).order('name'); if (error) return []; return data || []; },
+  async saveView({ id = null, table_key, name, shared = true, state }) { const row = { table_key, name, shared, state, updated_at: new Date().toISOString() }; const res = id ? ok(await sb.from('crm_views').update(row).eq('id', id).select().single()) : ok(await sb.from('crm_views').insert(row).select().single()); return res; },
+  async deleteView(id) { ok(await sb.from('crm_views').delete().eq('id', id)); },
+  async updateOpening(id, patch) { const allowed = {}; ['ref', 'system', 'material', 'width_mm', 'height_mm', 'config', 'glazing', 'qty', 'notes', 'sort'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; }); ok(await sb.from('openings').update(allowed).eq('id', id)); emit(); },
+  async addOpenings(pid, list) {
+    const { data: last } = await sb.from('openings').select('sort').eq('project_id', pid).order('sort', { ascending: false }).limit(1);
+    let n = last?.[0]?.sort || 0;
+    ok(await sb.from('openings').insert(list.map((o) => ({ project_id: pid, ref: o.ref || '', system: o.system || 'lift-slide', material: o.material || '', width_mm: o.width_mm, height_mm: o.height_mm, config: o.config || '', glazing: o.glazing || '', qty: o.qty || 1, notes: o.notes || '', sort: (n += 1) }))));
+    emit();
+  },
+  async deleteOpening(id) { ok(await sb.from('openings').delete().eq('id', id)); emit(); },
   async markMailHandled(id, on = true) { const { data: { user } } = await authUser(); ok(await sb.from('mail_messages').update({ handled_at: on ? new Date().toISOString() : null, handled_by: on ? user.id : null }).eq('id', id)); emit(); },
   // Notifications put off until later (0053).
   async snoozeNote(id, until) { ok(await sb.from('notifications').update({ snooze_until: until }).eq('id', id)); emit(); },
@@ -359,7 +371,7 @@ export const store = {
     const me = await this.getUser();
     const [project, openings, events, documents, approvals, messages] = await Promise.all([
       sb.from('projects').select(`*, owner:profiles!projects_owner_id_fkey(${PROFILE}), assignee:profiles!projects_assignee_id_fkey(${PROFILE})`).eq('id', id).single().then(ok),
-      sb.from('openings').select('*').eq('project_id', id).then(ok),
+      sb.from('openings').select('*').eq('project_id', id).order('sort').order('ref').then(ok),
       sb.from('stage_events').select(`*, actor:profiles(${PROFILE})`).eq('project_id', id).order('created_at').then(ok),
       sb.from('documents').select(`*, uploader:profiles(${PROFILE})`).eq('project_id', id).order('created_at', { ascending: false }).then(ok),
       sb.from('approvals').select(`*, actor:profiles(${PROFILE})`).eq('project_id', id).then(ok),

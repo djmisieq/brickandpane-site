@@ -157,7 +157,7 @@ const GO = { t: '#/today', m: '#/my', p: '#/board', l: '#/list', e: '#/enquiries
 export function bindKeys(getUser) {
   let g = 0;
   document.addEventListener('keydown', (e) => {
-    const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('dialog[open]');
+    const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"], [role=grid]') || document.querySelector('dialog[open]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!document.querySelector('dialog[open]')) palette(getUser()); return; }
     if (typing || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === '/') { e.preventDefault(); palette(getUser()); return; }

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -1013,4 +1013,22 @@ test('own project fields and their values are for staff; a client cannot add or 
   assert.equal((await db.query('select snooze_until from public.notifications where id = $1', [n])).rows[0].snooze_until, null);
   await db.query(`update public.notifications set snooze_until = now() + interval '1 day' where id = $1`, [n]);
   assert.notEqual((await db.query('select snooze_until from public.notifications where id = $1', [n])).rows[0].snooze_until, null);
+});
+
+// 0054 (Excel audit 28.11.2026): saved views are the team's; editing an opening is logged and stamped.
+test('sheets: saved views for staff only; an opening edited by the team is logged with who and when', async () => {
+  const { db, as, fails } = await setup();
+  await db.exec('reset role');
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Sheet', $1) returning id`, [A])).rows[0].id;
+  const O = (await db.query(`insert into public.openings (project_id, ref, system, width_mm, height_mm) values ($1, 'D01', 'lift-slide', 4000, 2400) returning id`, [P])).rows[0].id;
+  await as(S);
+  await db.query(`insert into public.crm_views (table_key, name, state) values ('projects', 'Quotes', '{"filters":{}}')`);
+  await fails(`insert into public.crm_views (table_key, name, state) values ('nope', 'x', '{}')`);
+  await db.query(`update public.openings set width_mm = 4200 where id = $1`, [O]);
+  const o = (await db.query('select updated_by, sort from public.openings where id = $1', [O])).rows[0];
+  assert.equal(o.updated_by, S);
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where entity = 'opening' and field = 'width_mm'`)).rows[0].n, 1);
+  await as(A);
+  assert.equal((await db.query('select * from public.crm_views')).rows.length, 0);
+  await fails(`insert into public.crm_views (table_key, name, state) values ('projects', 'Mine', '{}')`);
 });
