@@ -1264,9 +1264,9 @@ test('waiting on: who has the ball and when to chase, on the card, the board and
   await page.goto('/admin.html#/today');
   await expect(page.locator('#t-chase')).toContainText('Production date from the factory');
   await page.goto('/admin.html#/list');
-  await expect(page.locator('.crm-table tbody tr').first()).toBeVisible();
-  await page.locator('[data-sort="waiting"]').click();
-  await expect(page.locator('.crm-table tbody tr').first()).toContainText('Hartley Road');
+  await expect(page.locator('.g-table tbody tr').first()).toBeVisible();
+  await page.locator('[data-g-sort="waiting_on"]').click();
+  await expect(page.locator('.g-table tbody tr').first()).toContainText('Hartley Road');
 });
 
 test('the team: a project handed to a colleague tells them; My work shows their tasks; hand over for a holiday', async ({ page, context }) => {
@@ -1397,17 +1397,17 @@ test('U1: a project from a phone call through + New, found again with Ctrl+K', a
 
 test('U1: the list edits the due date in place; a stage moves through the dialog without telling the client', async ({ page }) => {
   await staffOn(page, '#/list');
-  const row = page.locator('.crm-table tbody tr', { hasText: 'Hartley Road' });
-  await row.locator('[data-cell-due]').fill('2031-05-04');
-  await row.locator('[data-cell-due]').dispatchEvent('change');
-  await expect(page.locator('.toast')).toContainText('Due date saved.');
-  await expect(row.locator('[data-cell-due]')).toHaveValue('2031-05-04');
-  await row.locator('[data-cell-stage]').click();
+  const row = page.locator('.g-table tbody tr', { hasText: 'Hartley Road' });
+  await row.locator('td[id$="-due_at"]').dblclick();
+  await page.locator('.g-editor').fill('2031-05-04');
+  await page.keyboard.press('Enter');
+  await expect(row.locator('td[id$="-due_at"]')).toContainText('4 May');
+  await row.locator('td[id$="-stage"]').dblclick();
   await page.locator('#qs-stage').selectOption('accepted');
   await expect(page.locator('dialog [name="visible"]')).not.toBeChecked();
   await page.locator('dialog button[type="submit"]').click();
   await expect(page.locator('.toast')).toContainText('hidden from client');
-  await expect(page.locator('.crm-table tbody tr', { hasText: 'Hartley Road' })).toContainText('Order confirmed');
+  await expect(page.locator('.g-table tbody tr', { hasText: 'Hartley Road' })).toContainText('Order confirmed');
 });
 
 test('U1: an update written at the top of the feed stays with the team', async ({ page }) => {
@@ -1522,4 +1522,59 @@ test('U3: an email and its reply read as one thread on the project; going offlin
   await expect(page.locator('.offline-bar')).toBeVisible();
   await context.setOffline(false);
   await expect(page.locator('.offline-bar')).toBeHidden();
+});
+
+// ---------- Excel audit 28.11.2026: sheets ----------
+const pasteInto = (page, text) => page.evaluate((t) => { const dt = new DataTransfer(); dt.setData('text/plain', t); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }, text);
+
+test('sheet: a value typed into a cell saves, Ctrl+Z puts it back, and the totals row adds up', async ({ page }) => {
+  await staffOn(page, '#/list');
+  const cell = page.locator('.g-table tbody tr', { hasText: 'Garden room' }).locator('td[id$="-value"]');
+  await cell.click();
+  await page.keyboard.type('12000');
+  await page.keyboard.press('Enter');
+  await expect(cell).toContainText('£12,000');
+  await expect(page.locator('.g-total')).toContainText('£');
+  await cell.click();
+  await page.keyboard.press('Control+z');
+  await expect(cell).not.toContainText('£12,000');
+});
+
+test('sheet: a block pasted from Excel fills several cells; the view keeps filters and can be saved', async ({ page }) => {
+  await staffOn(page, '#/list');
+  await page.locator('.g-table tbody tr', { hasText: 'Garden room' }).locator('td[id$="-probability"]').click();
+  await page.keyboard.press('Shift+ArrowDown');
+  await pasteInto(page, '40');
+  await expect(page.locator('.toast')).toContainText('2 cells pasted');
+  await page.locator('[data-g-filter="phase"]').click();
+  await page.locator('.g-pop [data-p-all]').uncheck();
+  await page.locator('.g-pop-list label', { hasText: 'Quotation' }).locator('input').check();
+  await page.locator('.g-pop [data-p-ok]').click();
+  await expect(page.locator('.grid-count')).toContainText('3 of 5');
+  await page.locator('[data-sheet-save]').click();
+  await page.locator('#sv-name').fill('Quotation (TEST)');
+  await page.locator('dialog button[type="submit"]').click();
+  await expect(page.locator('[data-sheet-view]')).toContainText('Quotation (TEST)');
+});
+
+test('openings: the schedule edits like Excel and takes a pasted schedule with headers', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Hartley Road');
+  await page.locator('[data-tab="openings"]').click();
+  const w = page.locator('.g-table tbody tr', { hasText: 'D01' }).locator('td[id$="-width_mm"]');
+  await w.click();
+  await page.keyboard.type('5800');
+  await page.keyboard.press('Enter');
+  await expect(w).toContainText('5800');
+  await w.click();
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.toast')).toContainText('300 to 30000');
+  await page.keyboard.press('Escape');
+  await page.locator('[data-op-paste]').click();
+  await page.locator('#op-paste').fill('Ref\tType\tWidth\tHeight\tQty\nW05\tCasement window\t1.2\t1.4\t2\nW06\tWindow\t900\t1200\t1');
+  await expect(page.locator('[data-op-preview]')).toContainText('2 rows ready');
+  await page.locator('[data-op-go]').click();
+  await expect(page.locator('.g-table tbody')).toContainText('W05');
+  await expect(page.locator('.g-table tbody tr', { hasText: 'W05' })).toContainText('1200');
 });

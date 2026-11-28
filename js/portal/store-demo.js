@@ -557,7 +557,7 @@ export const store = {
     const byId = (uid2) => s.users.find((x) => x.id === uid2);
     return {
       project: { ...p, owner: byId(p.owner_id), assignee: byId(p.assignee_id) },
-      openings: s.openings.filter((o) => o.project_id === id),
+      openings: s.openings.filter((o) => o.project_id === id).sort((a, b) => (a.sort || 0) - (b.sort || 0) || String(a.ref).localeCompare(String(b.ref))),
       events: s.events.filter((e) => e.project_id === id && (staff || e.visible_to_client)).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((e) => ({ ...e, actor: byId(e.actor_id) })),
       documents: s.documents.filter((d) => d.project_id === id && (staff || d.visible_to_client)).sort((a, b) => b.created_at.localeCompare(a.created_at)).map((d) => ({ ...d, uploader: byId(d.uploaded_by) })),
       approvals: s.approvals.filter((a) => a.project_id === id).map((a) => ({ ...a, actor: byId(a.actor_id) })),
@@ -731,6 +731,29 @@ export const store = {
   async fileUrl() { return null; }, // demo: files are not stored
   // UX audit U3 (migration 0053): snoozed notifications, mail dealt with, the team's own project fields.
   async snoozeNote(id, until) { const s = load(); const u = need(s); const n = s.notifications.find((x) => x.id === id && x.user_id === u.id); if (n) { n.snooze_until = until; save(s); } },
+  // Sheets (migration 0054): saved views and the openings schedule.
+  async listViews(table) { const s = load(); const u = needStaff(s); return (s.views || []).filter((v) => v.table_key === table && (v.shared || v.owner_id === u.id)); },
+  async saveView({ id = null, table_key, name, shared = true, state }) {
+    const s = load(); const u = needStaff(s); s.views ||= [];
+    if (!name?.trim()) throw new Error('Give the view a name.');
+    const old = id && s.views.find((v) => v.id === id);
+    const row = old ? Object.assign(old, { name, shared, state, updated_at: now() }) : { id: uid(), table_key, name, shared, state, owner_id: u.id, created_at: now(), updated_at: now() };
+    if (!old) s.views.push(row); save(s); return { ...row };
+  },
+  async deleteView(id) { const s = load(); needStaff(s); s.views = (s.views || []).filter((v) => v.id !== id); save(s); },
+  async updateOpening(id, patch) {
+    const s = load(); needStaff(s); const o = s.openings.find((x) => x.id === id); if (!o) return;
+    if ('width_mm' in patch && patch.width_mm != null && (patch.width_mm < 300 || patch.width_mm > 30000)) throw new Error('Width is from 300 to 30000 mm.');
+    if ('height_mm' in patch && patch.height_mm != null && (patch.height_mm < 300 || patch.height_mm > 6000)) throw new Error('Height is from 300 to 6000 mm.');
+    ['ref', 'system', 'material', 'width_mm', 'height_mm', 'config', 'glazing', 'qty', 'notes', 'sort'].forEach((k) => { if (k in patch) o[k] = patch[k]; });
+    save(s);
+  },
+  async addOpenings(pid, list) {
+    const s = load(); needStaff(s); let n = Math.max(0, ...s.openings.filter((o) => o.project_id === pid).map((o) => o.sort || 0));
+    list.forEach((o) => s.openings.push({ id: uid(), project_id: pid, ref: o.ref || '', system: o.system || 'lift-slide', material: o.material || '', width_mm: o.width_mm, height_mm: o.height_mm, config: o.config || '', glazing: o.glazing || '', qty: o.qty || 1, notes: o.notes || '', sort: (n += 1) }));
+    save(s);
+  },
+  async deleteOpening(id) { const s = load(); needStaff(s); s.openings = s.openings.filter((o) => o.id !== id); save(s); },
   async markMailHandled(id, on = true) { const s = load(); const u = needStaff(s); demoMail(s); const m = s.mail.find((x) => x.id === id); if (m) { m.handled_at = on ? now() : null; m.handled_by = on ? u.id : null; save(s); } },
   async listFields() { const s = load(); needStaff(s); return [...(s.fields || [])].sort((a, b) => a.sort - b.sort); },
   async saveField(f) {
