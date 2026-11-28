@@ -202,7 +202,8 @@ export function grid(host, opt) {
     // Every way into a cell (typing, paste, Ctrl+D, Delete, undo) passes the same checks (audit 28.11.2026: a paste
     // skipped them and a probability of 150 went in).
     let refused = null;
-    const batch = changes.map(({ r, c, value }) => ({ row: rows[r], rowId: opt.rowId(rows[r]), col: cols[c], value, old: raw(rows[r], cols[c]), r, c }))
+    // A change names its cell by position, or by row and column (bulk edit: the column may be hidden).
+    const batch = changes.map(({ r, c, value, row: R, col: C }) => { const row = R || rows[r], col = C || cols[c]; return { row, rowId: opt.rowId(row), col, value, old: raw(row, col), r, c }; })
       .filter((b) => b.value !== b.old && !(b.value == null && b.old === ''))
       .filter((b) => { const msg = invalid(b.col, b.row, b.value); if (!msg) return true; refused ||= msg; td(b.r, b.c)?.classList.add('is-error'); return false; });
     if (refused) toast(tr(refused), { tone: 'error' });
@@ -447,6 +448,12 @@ export function grid(host, opt) {
     state: () => ({ filters: st.filters, sort: st.sort, hidden: p.hidden || [], order: p.order || cols.map((c) => c.field) }),
     setState(s) { st.filters = s.filters || {}; st.sort = s.sort || []; if (s.hidden) p.hidden = s.hidden; if (s.order) p.order = s.order; keep(opt.id, p); draw(); },
     rows: () => rows, columns: () => cols, text: (row, c) => text(row, c), raw: (row, c) => raw(row, c),
+    // The rows under the selection, and one value written to a field of each (bulk edit, with undo).
+    selectedRows: () => { if (!rows.length) return []; const { r0, r1 } = range(); return rows.slice(r0, r1 + 1); },
+    setMany(field, value, list) {
+      const col = opt.columns.find((c) => c.field === field); if (!col) return Promise.resolve();
+      return save(list.filter((row) => editable(col, row)).map((row) => ({ row, col, value })), 'changed');
+    },
   };
   draw();
   return api;

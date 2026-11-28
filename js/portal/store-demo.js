@@ -277,6 +277,19 @@ export const store = {
   },
   async moveCost(id, pid) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c && c.project_id !== pid) { log(s, pid, 'supplier_quote', id, 'project_id', c.project_id, pid); log(s, c.project_id, 'supplier_quote', id, 'project_id', c.project_id, pid); c.project_id = pid; save(s); } },
   async setCostStatus(id, status) { const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (c) { c.status = status; save(s); } },
+  async placeOrder(id) {
+    const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (!c) throw new Error('Supplier quote not found.');
+    if (c.po_number) return c.po_number;
+    if (c.status !== 'accepted') throw new Error('Accept the supplier quote before ordering.');
+    s.poSeq = (s.poSeq || 0) + 1; c.po_number = `PO-${new Date().getFullYear()}-${String(s.poSeq).padStart(4, '0')}`; c.ordered_at = now(); c.ordered_by = sessionId();
+    log(s, c.project_id, 'supplier_quote', id, 'po_number', null, c.po_number); save(s); return c.po_number;
+  },
+  async updateCostOrder(id, { confirmed_on = null, eta = null }) {
+    const s = load(); needStaff(s); const c = (s.costs || []).find((x) => x.id === id); if (!c) return;
+    if ((c.eta || null) !== eta) log(s, c.project_id, 'supplier_quote', id, 'eta', c.eta, eta);
+    if ((c.confirmed_on || null) !== confirmed_on) log(s, c.project_id, 'supplier_quote', id, 'confirmed_on', c.confirmed_on, confirmed_on);
+    c.confirmed_on = confirmed_on; c.eta = eta; save(s);
+  },
   async deleteCost(id) { const s = load(); needStaff(s); s.costs = (s.costs || []).filter((x) => x.id !== id); save(s); },
   async costPdfUrl() { return null; },
   // Tasks in demo mode: kept with the projects in this browser (live order in migration 0042).
@@ -301,6 +314,20 @@ export const store = {
   },
   async setTaskDone(id, done) { const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (t) { t.done_at = done ? now() : null; t.done_by = done ? (needStaff(s).id) : null; save(s); } },
   // The owner's dashboard in demo mode: the same figures as owner_dashboard (migration 0043), from this browser's data.
+  // The server search of the live CRM (0057), over the demo's notes, messages, openings and tasks.
+  async search(q) {
+    const s = load(); needStaff(s);
+    const fold = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+    const words = fold(q).split(/\s+/).filter((w) => w.length >= 2); if (!words.length) return [];
+    const hit = (hay) => words.every((w) => fold(hay).includes(w));
+    return [
+      ...s.messages.filter((m) => hit(m.body)).map((m) => ({ kind: 'message', id: m.id, project_id: m.project_id, title: m.internal ? 'Note' : 'Message', snippet: m.body.slice(0, 400), at: m.created_at })),
+      ...(s.tasks || []).filter((t) => hit(`${t.title} ${t.note || ''}`)).map((t) => ({ kind: 'task', id: t.id, project_id: t.project_id, title: t.title, snippet: t.note || '', at: t.created_at })),
+      ...s.openings.filter((o) => hit(`${o.ref} ${o.system} ${o.notes || ''}`)).map((o) => ({ kind: 'opening', id: o.id, project_id: o.project_id, title: o.ref, snippet: `${o.system} · ${o.width_mm}×${o.height_mm} · ${o.notes || ''}`, at: o.created_at })),
+    ].slice(0, 30);
+  },
+  async stageHistory() { const s = load(); needStaff(s); return s.events.map((e) => ({ project_id: e.project_id, to_stage: e.to_stage, created_at: e.created_at })).sort((a, b) => a.created_at.localeCompare(b.created_at)); },
+  async allPayments() { const s = load(); needStaff(s); return (s.payments || []).map((x) => ({ project_id: x.project_id, amount: x.amount, due_date: x.due_date, paid_at: x.paid_at })); },
   async ownerDashboard(days = 90) {
     const s = load(); needStaff(s);
     const since = Date.now() - days * 864e5, t = (x) => new Date(x).getTime(), med = (a) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return Math.round((b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2) * 10) / 10; };

@@ -1671,3 +1671,64 @@ test('payments: paid needs the date the money arrived; undo needs a reason; both
   await page.locator('.qd-pay button[type="submit"]').click();
   await expect(row).not.toContainText('Paid');
 });
+
+test('supplier order: an accepted supplier quote becomes an order with a PO number, confirmation and promised delivery', async ({ page }) => {
+  await page.goto('/admin.html#/board');
+  await page.locator('[data-demo-login="staff"]').click();
+  await page.locator('.kcard', { hasText: 'Hartley Road' }).click();
+  await page.locator('[data-tab="money"]').click();
+  const box = page.locator('[data-costs]');
+  await box.locator('#cost-sup').fill('Okna (TEST)');
+  await box.locator('#cost-amt').fill('5000');
+  await box.locator('[data-cost-add] button[type="submit"]').click();
+  const row = () => page.locator('[data-costs] [data-cost]', { hasText: 'Okna (TEST)' });
+  await expect(row().locator('[data-cost-order]')).toHaveCount(0); // not before it is accepted
+  await row().locator('[data-cost-set="accepted"]').click();
+  await row().locator('[data-cost-order]').click();
+  await expect(page.locator('.toast').last()).toContainText('PO-');
+  await expect(row()).toContainText(/PO-\d{4}-0001/);
+  await row().locator('[name="eta"]').fill('2026-12-20');
+  await row().locator('[data-cost-po] button[type="submit"]').click();
+  await expect(row().locator('[name="eta"]')).toHaveValue('2026-12-20');
+  await page.locator('[data-tab="activity"]').click();
+  await expect(page.locator('body')).toContainText('Delivery promised for');
+});
+
+test('sheet: several selected projects get one account manager at once, and a task each', async ({ page }) => {
+  await staffOn(page, '#/list');
+  await page.locator('.g-table tbody tr').first().locator('td[id$="-probability"]').click();
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.locator('[data-sheet-bulk]').click();
+  await expect(page.locator('.qd-bulk h2')).toContainText('3');
+  await page.locator('.qd-bulk [name="f"]').selectOption('probability');
+  await page.locator('.qd-bulk [name="v"]').fill('35');
+  await page.locator('.qd-bulk button[type="submit"]').click();
+  for (const i of [0, 1, 2]) await expect(page.locator('.g-table tbody tr').nth(i).locator('td[id$="-probability"]')).toContainText('35%');
+  await page.locator('.g-table tbody tr').first().locator('td[id$="-probability"]').click();
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.locator('[data-sheet-bulk]').click();
+  await page.locator('.qd-bulk [name="f"]').selectOption('task');
+  await page.locator('.qd-bulk [name="v"]').fill('Chase (TEST)');
+  await page.locator('.qd-bulk button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('2 tasks added');
+});
+
+test('dashboard: the pipeline stage by stage, with conversion, days in stage, weighted value and money expected', async ({ page }) => {
+  await staffOn(page, '#/owner');
+  const t = page.locator('.dash-pipe-t');
+  await expect(t).toContainText('Went on');
+  await expect(t.locator('tbody tr')).toHaveCount(12);
+  await expect(page.locator('.dash-pipe')).toContainText('Money expected from instalments');
+  await expect(page.locator('.dash-pipe')).toContainText('£');
+});
+
+test('palette: Ctrl+K finds words inside messages and notes, not only names, and opens the project', async ({ page }) => {
+  await staffOn(page, '#/today');
+  await expect(async () => { await page.locator('#crm-gq').click(); await page.keyboard.press('Control+k'); await expect(page.locator('#pal-q')).toBeVisible({ timeout: 1000 }); }).toPass();
+  await page.locator('#pal-q').fill('slab recess');
+  const hit = page.locator('.pal-i', { hasText: 'Message' }).first();
+  await expect(hit).toContainText('flush threshold');
+  await hit.click();
+  await expect(page.locator('.project-head h1')).toContainText('Hartley Road');
+});

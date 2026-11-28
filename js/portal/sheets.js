@@ -71,7 +71,8 @@ export async function projectSheet(host, projects, { staff, tasksOf }) {
   };
   const view = views.find((v) => v.id === viewId) || views[0];
   const toolbar = `<label class="visually-hidden" for="sheet-view">${tr('View')}</label><select id="sheet-view" data-sheet-view>${views.map((v) => `<option value="${esc(v.id)}" ${v.id === view.id ? 'selected' : ''}>${esc(v.name)}${v.shared === false ? ` (${esc(tr('mine'))})` : ''}</option>`).join('')}</select>
-    <button type="button" class="btn btn-sm btn-ghost" data-sheet-save>${tr('Save view')}</button>${view.builtIn ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-sheet-del>${tr('Delete view')}</button>`}`;
+    <button type="button" class="btn btn-sm btn-ghost" data-sheet-save>${tr('Save view')}</button>${view.builtIn ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-sheet-del>${tr('Delete view')}</button>`}
+    <button type="button" class="btn btn-sm btn-ghost" data-sheet-bulk title="${esc(tr('Select rows first: click a cell, then Shift+click or Shift+arrows'))}">${tr('Edit selected rows')}</button>`;
   const g = grid(host, {
     id: 'projects', label: tr('Projects'), rows: projects, rowId: (p) => p.id, columns, onSaveRow, tools: toolbar,
     state: projectSheet.applied === viewId ? null : view.state,
@@ -83,12 +84,52 @@ export async function projectSheet(host, projects, { staff, tasksOf }) {
   function bindTools() {
     $('[data-sheet-view]', host)?.addEventListener('change', (e) => { viewId = e.target.value; dispatchEvent(new HashChangeEvent('hashchange')); }); // redraw: the new view's filters apply
     $('[data-sheet-save]', host)?.addEventListener('click', () => saveViewDialog(g, view, () => { location.hash = '#/list'; dispatchEvent(new HashChangeEvent('hashchange')); }));
+    $('[data-sheet-bulk]', host)?.addEventListener('click', () => bulkDialog(g, people));
     $('[data-sheet-del]', host)?.addEventListener('click', async () => {
       if (view.mine === false) { toast(tr('Only the person who saved this view can delete it.'), { tone: 'error' }); return; }
       try { await store.deleteView(view.id); viewId = 'all'; toast(tr('View deleted.'), { tone: 'ok' }); dispatchEvent(new HashChangeEvent('hashchange')); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
     });
   }
   return g;
+}
+
+// Bulk edit (top-CRM audit 28.11.2026): one value for every selected project, or a task on each. The stage is not
+// here on purpose: it moves through its dialog, where the team decides whether the client is told.
+function bulkDialog(g, people) {
+  const list = g.selectedRows();
+  if (list.length < 1) { toast(tr('Select the rows first: click a cell, then Shift+click another row.'), { tone: 'error' }); return; }
+  const FIELDS = [
+    ['assignee_id', tr('Account manager'), `<select name="v"><option value="">${tr('Unassigned')}</option>${people.map((p) => `<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('')}</select>`],
+    ['waiting_on', tr('Waiting on'), `<select name="v"><option value="">${tr('Nobody')}</option>${Object.entries(WAITING).map(([v, l]) => `<option value="${v}">${esc(tr(l))}</option>`).join('')}</select>`],
+    ['chase_on', tr('Chase on'), '<input type="date" name="v">'],
+    ['due_at', tr('Due'), '<input type="date" name="v">'],
+    ['probability', tr('Probability'), '<input type="number" name="v" min="0" max="100" step="1">'],
+    ['task', tr('A task on each'), `<input name="v" maxlength="200" placeholder="${esc(tr('e.g. Chase the drawings'))}"> <input type="date" name="due" aria-label="${esc(tr('Due'))}">`],
+  ];
+  const d = dialog('qd-bulk', `${head(tr('Edit {n} projects', { n: list.length }))}<form class="qd-body" novalidate>
+    <p class="hint">${list.slice(0, 6).map((p) => esc(p.ref || p.name)).join(', ')}${list.length > 6 ? ` ${esc(tr('and {n} more', { n: list.length - 6 }))}` : ''}</p>
+    <div class="field"><label for="bulk-f">${tr('What to change')}</label><select id="bulk-f" name="f">${FIELDS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
+    <div class="field" data-bulk-v>${FIELDS[0][2]}</div>
+    <p class="hint">${tr('Ctrl+Z in the sheet puts the old values back.')}</p>
+    <div class="qd-acts"><button class="btn" type="submit">${tr('Apply')}</button><button class="btn btn-ghost" type="button" data-close>${tr('Cancel')}</button></div></form>`);
+  bindClose(d);
+  const f = $('form', d);
+  f.f.addEventListener('change', () => { $('[data-bulk-v]', d).innerHTML = FIELDS.find((x) => x[0] === f.f.value)[2]; });
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const field = f.f.value, raw = f.v.value.trim();
+    try {
+      if (field === 'task') {
+        if (!raw) { f.v.focus(); return; }
+        for (const p of list) await store.addTask({ title: raw, project_id: p.id, due_on: f.due.value || null });
+        toast(tr('{n} tasks added.', { n: list.length }), { tone: 'ok' });
+      } else {
+        const v = field === 'probability' ? (raw === '' ? null : Math.max(0, Math.min(100, Math.round(Number(raw))))) : raw || null;
+        await g.setMany(field, v, list);
+      }
+      d.close();
+    } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  });
 }
 
 function saveViewDialog(g, current, done) {

@@ -68,7 +68,16 @@ function row(c, best) {
       c.valid_until ? `<span class="${expired ? 'q-warn' : ''}">${esc(expired ? tr('expired {d}', { d: fmtDate(c.valid_until) }) : tr('valid until {d}', { d: fmtDate(c.valid_until) }))}</span>` : ''];
   const acts = c.status === 'requested'
     ? `<button type="button" class="btn btn-sm" data-cost-price>${tr('Price received')}</button><button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('No reply')}</button>`
-    : `${c.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="accepted">${tr('Accept')}</button>` : ''}${c.status !== 'rejected' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('Reject')}</button>` : ''}`;
+    : `${c.status !== 'accepted' ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="accepted">${tr('Accept')}</button>` : ''}${c.status !== 'rejected' && !c.po_number ? `<button type="button" class="btn btn-sm btn-ghost" data-cost-set="rejected">${tr('Reject')}</button>` : ''}${c.status === 'accepted' && !c.po_number ? `<button type="button" class="btn btn-sm" data-cost-order>${tr('Place order')}</button>` : ''}`;
+  // ERP audit 28.11.2026: the order to the supplier, its number, the supplier's confirmation and the delivery date
+  // they promised (each change of that date is in the project's history).
+  const order = c.po_number ? `<form class="cost-po" data-cost-po novalidate>
+      <span class="tag tone-ok">${esc(c.po_number)}</span> <span class="note">${esc(tr('ordered {d}', { d: fmtDate(c.ordered_at) }))}</span>
+      <label>${tr('Confirmed by the supplier on')} <input type="date" name="confirmed_on" value="${esc(c.confirmed_on || '')}"></label>
+      <label>${tr('Delivery promised for')} <input type="date" name="eta" value="${esc(c.eta || '')}"></label>
+      <button class="btn btn-sm btn-ghost" type="submit">${tr('Save')}</button>
+      ${c.po_number && !c.confirmed_on && daysSince(String(c.ordered_at || '').slice(0, 10)) > 3 ? `<span class="note q-warn">${tr('Not confirmed by the supplier yet')}</span>` : ''}
+    </form>` : '';
   // Projects audit 26.11.2026: a quote entered on the wrong project moves to the right one.
   const move = `<details class="cost-move"><summary class="btn btn-sm btn-ghost">${tr('Move')}</summary><form class="task-form" data-cost-move novalidate>${linker({ id: `cm-${c.id}`, label: tr('To project'), kinds: ['project'], name: 'project', exclude: [c.project_id] })}<button class="btn btn-sm" type="submit">${tr('Move here')}</button></form></details>`;
   return `<li data-cost="${esc(c.id)}" data-supplier="${esc(c.supplier)}" data-company="${esc(c.company_id || '')}" data-category="${esc(c.category)}"${c.status === 'rejected' || c.status === 'superseded' ? ' class="is-out"' : ''}>
@@ -79,7 +88,7 @@ function row(c, best) {
         <span class="note">${facts.filter(Boolean).join(' · ')}${c.pdf_name ? ` · ${c.pdf_path ? `<button type="button" class="q-link" data-cost-pdf="${esc(c.pdf_path)}">${esc(c.pdf_name)}</button>` : esc(c.pdf_name)}` : ''}</span>
         ${c.note ? `<span class="note">${esc(c.note)}</span>` : ''}
         ${c.hubspot_deal_id ? `<a class="note" href="${HUBSPOT_DEAL}${encodeURIComponent(c.hubspot_deal_id)}" target="_blank" rel="noopener">${tr('Purchase deal in HubSpot')}</a>` : c.hubspot_error ? `<span class="note q-warn">${tr('Not in HubSpot yet')}: ${esc(c.hubspot_error)}</span>` : ''}</div>
-      <div class="cost-acts">${acts}${move}</div>
+      ${order}<div class="cost-acts">${acts}${move}</div>
     </li>`;
 }
 
@@ -204,6 +213,13 @@ export function bindCosts(root, pid) {
   }));
   $$('[data-cost-set]', box).forEach((b) => b.addEventListener('click', async () => {
     try { await store.setCostStatus(b.closest('[data-cost]').dataset.cost, b.dataset.costSet); toast(tr('Saved.')); } catch (err) { toast(tr(err.message)); }
+  }));
+  $$('[data-cost-order]', box).forEach((b) => b.addEventListener('click', async () => {
+    try { const po = await store.placeOrder(b.closest('[data-cost]').dataset.cost); toast(tr('Order {po} placed. Send it to the supplier from your email.', { po }), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+  }));
+  $$('[data-cost-po]', box).forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await store.updateCostOrder(f.closest('[data-cost]').dataset.cost, { confirmed_on: f.confirmed_on.value || null, eta: f.eta.value || null }); toast(tr('Saved.'), { tone: 'ok' }); } catch (err) { toast(tr(err.message), { tone: 'error' }); }
   }));
   $$('[data-cost-pdf]', box).forEach((b) => b.addEventListener('click', async () => {
     try { const url = await store.costPdfUrl(b.dataset.costPdf); if (url) open(url, '_blank', 'noopener'); } catch (err) { toast(tr(err.message)); }

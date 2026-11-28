@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql', '0055_money_trail.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql', '0055_money_trail.sql', '0056_quote_flow.sql', '0057_search.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -1071,4 +1071,59 @@ test('money trail: a contractor sees no instalments or quotation; paid needs a d
   await as(S);
   await db.query(`select public.mark_paid($1, '2026-11-21', '')`, [pay]);
   await db.query('delete from public.projects where id = $1', [P]); // a deleted project takes its paid instalments with it
+});
+
+// 0056 (ERP audit 28.11.2026): the client's acceptance is the contract; an accepted quotation is frozen; numbers
+// and supplier orders come from the database.
+test('quote flow: acceptance sets the contract and freezes the quotation; orders get PO numbers', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Flow', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  const ref1 = (await db.query('select public.next_quote_reference() r')).rows[0].r;
+  const ref2 = (await db.query('select public.next_quote_reference() r')).rows[0].r;
+  assert.notEqual(ref1, ref2);
+  const Q = '77777777-7777-7777-7777-777777777777';
+  await db.query(`insert into public.quotes (id, reference, data, project_id, status) values ($1, $2, '{"a":1}', $3, 'sent')`, [Q, ref1, P]);
+  const D = (await db.query(`insert into public.documents (project_id, kind, title, approval, uploaded_by, amount, visible_to_client, quote_id) values ($1, 'quote', 'Q', 'pending', $2, 24000, true, $3) returning id`, [P, S, Q])).rows[0].id;
+  await as(A);
+  await db.query(`insert into public.approvals (document_id, project_id, decision, actor_id, on_behalf) values ($1, $2, 'approved', $3, true)`, [D, P, A]);
+  await as(S);
+  const pi = (await db.query('select contract_gbp, contract_doc from public.project_internal where project_id = $1', [P])).rows[0];
+  assert.equal(Number(pi.contract_gbp), 24000); assert.equal(pi.contract_doc, D);
+  assert.equal((await db.query('select status from public.quotes where id = $1', [Q])).rows[0].status, 'accepted');
+  await fails(`update public.quotes set data = '{"a":2}' where id = $1`, [Q]);
+  await db.query(`update public.quotes set status = 'sent' where id = $1`, [Q]); // reopening is allowed, and logged
+  await db.query(`update public.quotes set data = '{"a":2}' where id = $1`, [Q]);
+  const sq = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Okna', 9000) returning id`, [P])).rows[0].id;
+  await fails('select public.place_order($1)', [sq]);
+  await db.query(`update public.supplier_quotes set status = 'accepted' where id = $1`, [sq]);
+  const po = (await db.query('select public.place_order($1) po', [sq])).rows[0].po;
+  assert.match(po, /^PO-\d{4}-0001$/);
+  assert.equal((await db.query('select public.place_order($1) po', [sq])).rows[0].po, po);
+  await db.query(`update public.supplier_quotes set eta = '2026-12-20', confirmed_on = '2026-11-28' where id = $1`, [sq]);
+  await db.query(`update public.supplier_quotes set eta = '2027-01-10' where id = $1`, [sq]);
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where entity = 'supplier_quote' and field = 'eta'`)).rows[0].n, 2);
+  await as(A);
+  await fails('select public.place_order($1)', [sq]);
+  await fails('select public.next_quote_reference()');
+});
+
+// 0057 (top-CRM audit 28.11.2026): one search over projects, people, emails, notes, openings, tasks and quotations.
+test('search: every word must match, accents aside, across emails and notes; staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id, location) values ('Garden room', $1, 'Hackney') returning id`, [A])).rows[0].id;
+  await as(S);
+  await db.query(`insert into public.messages (project_id, author_id, body, internal) values ($1, $2, 'Szyba hartowana do drzwi, potwierdzić z Łukaszem', true)`, [P, S]);
+  await db.query(`insert into public.openings (project_id, ref, system, width_mm, height_mm, notes) values ($1, 'D07', 'lift-slide', 4000, 2400, 'Crane needed')`, [P]);
+  const hit = async (q) => (await db.query('select kind, project_id from public.crm_search($1)', [q])).rows;
+  assert.deepEqual((await hit('lukasz szyba')).map((r) => r.kind), ['message']);
+  assert.equal((await hit('lukasz szyba'))[0].project_id, P);
+  assert.deepEqual((await hit('crane D07')).map((r) => r.kind), ['opening']);
+  assert.deepEqual((await hit('garden hackney')).map((r) => r.kind), ['project']);
+  assert.equal((await hit('garden nowhere')).length, 0);
+  assert.equal((await hit(' ')).length, 0);
+  await as(A);
+  await fails(`select * from public.crm_search('garden')`);
 });

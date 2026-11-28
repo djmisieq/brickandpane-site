@@ -133,7 +133,8 @@ export const store = {
   // Quote builder (admin.html#/quotes, migration 0025, staff-only RLS). The quote is one JSON document; the builder
   // saves it a moment after typing stops. No emit(): nothing else on the page depends on quotes.
   async listQuotes() {
-    return ok(await sb.from('quotes').select('data').order('updated_at', { ascending: false }).limit(500)).map((r) => r.data);
+    // In pages (audit 28.11.2026: past 500 the oldest quotations vanished, and their numbers could be handed out again).
+    return (await every(() => sb.from('quotes').select('data').order('updated_at', { ascending: false }).order('id'), 200)).map((r) => r.data);
   },
   async saveQuote(q) {
     // project_id only when the quote names one: never clear a link made on the server (0038 backfill).
@@ -203,15 +204,23 @@ export const store = {
     return { pdf_path, pdf_name: file.name.slice(0, 200) };
   },
   async setCostStatus(id, status) { ok(await sb.from('supplier_quotes').update({ status }).eq('id', id)); emit(); },
+  // Orders to suppliers (0056): the number comes from the database; the confirmation and promised date are logged.
+  async placeOrder(id) { const po = ok(await sb.rpc('place_order', { sq: id })); emit(); return po; },
+  async updateCostOrder(id, { confirmed_on = null, eta = null }) { ok(await sb.from('supplier_quotes').update({ confirmed_on, eta }).eq('id', id)); emit(); },
+  async nextQuoteReference() { return ok(await sb.rpc('next_quote_reference')); },
   async deleteCost(id) { ok(await sb.from('supplier_quotes').delete().eq('id', id)); emit(); },
   async costPdfUrl(path) { return ok(await sb.storage.from('supplier-quotes').createSignedUrl(path, 300))?.signedUrl; },
   // Tasks and the conversation log (migration 0042, CRM audit phase 3; staff only).
   async listTasks({ projectId = null, requestId = null, open = false } = {}) {
-    let q = sb.from('tasks').select('*').order('done_at', { ascending: false, nullsFirst: true }).order('due_on', { ascending: true, nullsFirst: false }).limit(300);
-    if (projectId) q = q.eq('project_id', projectId);
-    if (requestId) q = q.eq('request_id', requestId);
-    if (open) q = q.is('done_at', null);
-    return ok(await q) || [];
+    // Every open task, in pages; of the done ones the latest 300 (audit 28.11.2026: open tasks past 300 were cut).
+    const base = (done) => {
+      let q = sb.from('tasks').select('*');
+      if (projectId) q = q.eq('project_id', projectId);
+      if (requestId) q = q.eq('request_id', requestId);
+      return done ? q.not('done_at', 'is', null).order('done_at', { ascending: false }).limit(300) : q.is('done_at', null).order('due_on', { ascending: true, nullsFirst: false }).order('id');
+    };
+    const openRows = await every(() => base(false));
+    return open ? openRows : [...openRows, ...(ok(await base(true)) || [])];
   },
   async addTask({ title, kind = 'task', note = '', due_on = null, assignee_id = null, project_id = null, request_id = null, done = false }) {
     const me = (await authUser()).data.user?.id ?? null;
@@ -224,6 +233,10 @@ export const store = {
   },
   // The owner's dashboard: every figure from one function (migration 0043, staff only).
   async ownerDashboard(days = 90) { return ok(await sb.rpc('owner_dashboard', { days })); },
+  async search(q) { return ok(await sb.rpc('crm_search', { q, lim: 30 })) || []; },
+  // The pipeline report (top-CRM audit 28.11.2026): every stage change and every instalment, in pages; staff only.
+  async stageHistory() { return every(() => sb.from('stage_events').select('project_id, to_stage, created_at').order('created_at').order('id')); },
+  async allPayments() { return every(() => sb.from('payments').select('project_id, amount, due_date, paid_at').order('id')); },
   // Companies and people (migration 0044, CRM audit phase 5; staff only).
   async listCompanies() { return every(() => sb.from('companies').select('*').order('name').order('id')); },
   async listPeople() { return every(() => sb.from('people').select('*').order('full_name').order('id')); },
@@ -417,6 +430,7 @@ export const store = {
         visible_to_client: staff ? meta.visible !== false : true,
         approval: staff && meta.approval ? 'pending' : 'none',
         amount: staff && meta.amount ? Number(meta.amount) : null,
+        ...(staff && meta.quote_id ? { quote_id: meta.quote_id } : {}),
       }));
     }
     emit();
