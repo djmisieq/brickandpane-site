@@ -120,10 +120,28 @@ export async function palette(user) {
   let recent = []; try { recent = JSON.parse(localStorage.getItem('bp-crm-recent') || '[]'); } catch { /* private mode */ }
   let shown = [], at = 0;
   const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  // Top-CRM audit 28.11.2026: what the team wrote (emails, notes, messages, openings, tasks, quotations) is searched
+  // on the server (crm_search, migration 0057) and listed under the names found here.
+  let deep = [], asked = '', timer = 0;
+  const KIND = { mail: 'Email', message: 'Message', task: 'Task', opening: 'Opening', quote: 'Quote' };
+  const hrefOf = (h) => (h.kind === 'quote' ? `#/quotes/${h.id}` : h.project_id ? `#/p/${h.project_id}` : h.kind === 'mail' ? '#/mail' : h.kind === 'task' ? '#/my' : '#/board');
+  const ask = () => {
+    clearTimeout(timer);
+    const text = q.value.trim();
+    if (!store.search || text.length < 3) { deep = []; asked = ''; return; }
+    timer = setTimeout(async () => {
+      if (text === asked) return; asked = text;
+      const hits = await store.search(text).catch(() => []);
+      if (q.value.trim() !== text) return;
+      const proj = new Map(projects.map((p) => [p.id, p]));
+      deep = hits.filter((h) => KIND[h.kind]).map((h) => ({ kind: 'deep', label: `${tr(KIND[h.kind])}: ${h.title || ''}`, sub: [proj.get(h.project_id)?.ref, String(h.snippet || '').replace(/\s+/g, ' ').slice(0, 120)].filter(Boolean).join(' · '), href: hrefOf(h) }));
+      draw();
+    }, 250);
+  };
   const draw = () => {
     const words = fold(q.value).split(/\s+/).filter(Boolean);
     shown = words.length
-      ? items.filter((x) => { const h = fold(`${x.label} ${x.sub} ${x.hay || ''}`); return words.every((w) => h.includes(w)); }).slice(0, 12)
+      ? [...items.filter((x) => { const h = fold(`${x.label} ${x.sub} ${x.hay || ''}`); return words.every((w) => h.includes(w)); }).slice(0, 10), ...deep].slice(0, 18)
       : [...recent.map((h) => items.find((x) => x.href === h)).filter(Boolean).slice(0, 5), ...items.filter((x) => x.kind === 'action' || x.kind === 'place')].slice(0, 14);
     at = Math.min(at, Math.max(0, shown.length - 1));
     list.innerHTML = shown.length ? shown.map((x, i) => `<li role="option" id="pal-${i}" aria-selected="${i === at}" class="pal-i pal-${x.kind}${i === at ? ' is-on' : ''}" data-i="${i}"><span class="pal-t">${esc(x.label)}</span><span class="pal-s">${esc(x.sub || '')}</span></li>`).join('') : `<li class="pal-none">${tr('Nothing found.')}</li>`;
@@ -136,7 +154,7 @@ export async function palette(user) {
     if (x.run) { x.run(); return; }
     location.hash = x.href;
   };
-  q.addEventListener('input', () => { at = 0; draw(); });
+  q.addEventListener('input', () => { at = 0; deep = []; draw(); ask(); });
   q.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); at = Math.min(shown.length - 1, at + 1); draw(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); at = Math.max(0, at - 1); draw(); }

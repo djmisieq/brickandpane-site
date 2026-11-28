@@ -2,8 +2,8 @@
 // One call (owner_dashboard) gives every figure: where work comes from, how fast we answer and quote, what is in
 // play, what we won and lost and why, the margin, the money in and due, and who carries what.
 import { store } from './store.js';
-import { esc, fmtMoney, $$ } from './core.js';
-import { tr } from './i18n.js';
+import { esc, fmtMoney, $$, STAGES } from './core.js';
+import { tr, locale } from './i18n.js';
 import { workloadSection } from './u3.js';
 
 export const SOURCES = { website: 'Website', email: 'Email', phone: 'Phone', referral: 'Referral', repeat: 'Repeat client', cold: 'Cold campaign', other: 'Other', unknown: 'Not set' };
@@ -56,9 +56,54 @@ export async function dashboardView(app, nav) {
       <section class="ctl bars-neutral"><h2 class="panel-h">${tr('Lost, and why')}</h2>${(d.lost_reasons || []).length ? bars(d.lost_reasons.map((x) => [x.reason, x.n]), Math.max(...d.lost_reasons.map((x) => x.n))) : `<p class="hint">${tr('Nothing lost in this period.')}</p>`}</section>
       <section class="ctl"><h2 class="panel-h">${tr('Who carries what')}</h2><table class="dash-table"><thead><tr><th scope="col">${tr('Person')}</th><th scope="col">${tr('Open projects')}</th><th scope="col">${tr('Open tasks')}</th></tr></thead><tbody>${(d.workload || []).map((w) => `<tr><th scope="row">${esc(w.name || '—')}</th><td>${w.projects}</td><td>${w.tasks}</td></tr>`).join('')}</tbody></table></section>
     </div>
+    ${await pipelineSection()}
     ${await workloadSection()}
   </div>`;
   bind(app, nav);
+}
+// The pipeline report (top-CRM audit 28.11.2026, "like Pipedrive"): of the projects that came in during the period,
+// how many reached each stage and went on to the next; how long a stage takes (median); what is open in each stage
+// now, its value and its value weighted by probability; and the money the instalments bring in, month by month.
+async function pipelineSection() {
+  if (!store.stageHistory) return '';
+  let projects, events, pays;
+  try { [projects, events, pays] = await Promise.all([store.listProjects(), store.stageHistory(), store.allPayments()]); } catch { return ''; }
+  const since = Date.now() - period * DAY, idx = Object.fromEntries(STAGES.map((s, i) => [s.id, i]));
+  const byP = new Map(); events.forEach((e) => { if (!byP.has(e.project_id)) byP.set(e.project_id, []); byP.get(e.project_id).push(e); });
+  const cohort = projects.filter((p) => new Date(p.created_at) >= since);
+  const top = (p) => Math.max(idx[p.stage] ?? -1, ...(byP.get(p.id) || []).map((e) => idx[e.to_stage] ?? -1));
+  const reached = STAGES.map((_, i) => cohort.filter((p) => top(p) >= i).length);
+  const spans = STAGES.map(() => []);
+  byP.forEach((list) => list.forEach((e, k) => {
+    const end = list[k + 1] ? new Date(list[k + 1].created_at) : Date.now(), start = new Date(e.created_at);
+    if (idx[e.to_stage] != null && end >= since) spans[idx[e.to_stage]].push((end - start) / DAY);
+  }));
+  const median = (a) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return Math.round((b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2) * 10) / 10; };
+  const open = STAGES.map((s) => projects.filter((p) => p.stage === s.id));
+  const val = (list) => list.reduce((n, p) => n + Number(p.internal?.value_gbp || 0), 0);
+  const wtd = (list) => list.reduce((n, p) => n + (p.internal?.value_gbp != null && p.internal?.probability != null ? Number(p.internal.value_gbp) * p.internal.probability / 100 : 0), 0);
+  const rows = STAGES.map((s, i) => {
+    const conv = i < STAGES.length - 1 && reached[i] ? Math.round((reached[i + 1] / reached[i]) * 100) : null, med = median(spans[i]);
+    return `<tr><th scope="row"><a href="#/board">${esc(tr(s.staffLabel || s.label || s.id))}</a></th><td class="num">${reached[i]}</td>
+      <td class="num${conv != null && conv < 50 && i < idx.accepted ? ' cf-warn' : ''}">${conv == null ? '—' : `${conv}%`}</td><td class="num">${med == null ? '—' : esc(tr('{n} d', { n: med }))}</td>
+      <td class="num">${open[i].length || '—'}</td><td class="num">${open[i].length ? esc(fmtMoney(val(open[i]))) : '—'}</td><td class="num">${open[i].length && wtd(open[i]) ? esc(fmtMoney(Math.round(wtd(open[i])))) : '—'}</td></tr>`;
+  }).join('');
+  const openSales = STAGES.slice(0, idx.accepted).flatMap((_, i) => open[i]);
+  // Money expected: unpaid instalments by the month they fall due (overdue and undated apart).
+  const now = new Date(), mk = (d) => d.toISOString().slice(0, 7), months = [];
+  for (let k = 0; k < 6; k += 1) months.push(mk(new Date(Date.UTC(now.getFullYear(), now.getMonth() + k, 1))));
+  const unpaid = pays.filter((x) => !x.paid_at), due = Object.fromEntries(months.map((m) => [m, 0])); let overdue = 0, undated = 0, later = 0;
+  unpaid.forEach((x) => { const a = Number(x.amount || 0); if (!x.due_date) undated += a; else if (new Date(x.due_date) < new Date(now.toDateString())) overdue += a; else { const m = String(x.due_date).slice(0, 7); if (m in due) due[m] += a; else later += a; } });
+  const cash = [...(overdue ? [[tr('Overdue'), overdue]] : []), ...months.map((m) => [new Date(`${m}-01T12:00:00`).toLocaleDateString(locale, { month: 'short', year: 'numeric' }), due[m]]), ...(later ? [[tr('Later'), later]] : []), ...(undated ? [[tr('No due date'), undated]] : [])];
+  const cMax = Math.max(1, ...cash.map((x) => x[1]));
+  return `<div class="dash-grid dash-pipe">
+    <section class="ctl dash-wide"><h2 class="panel-h">${tr('Pipeline, stage by stage')}</h2>
+      <p class="hint">${esc(tr('Of the {n} projects that came in during the period: how many reached each stage and went on to the next. Days in a stage are the median. Open now is every project in that stage today.', { n: cohort.length }))}</p>
+      <div class="table-scroll"><table class="dash-table dash-pipe-t"><thead><tr><th scope="col">${tr('Stage')}</th><th scope="col" class="num">${tr('Reached')}</th><th scope="col" class="num">${tr('Went on')}</th><th scope="col" class="num">${tr('Days in stage')}</th><th scope="col" class="num">${tr('Open now')}</th><th scope="col" class="num">${tr('Value')}</th><th scope="col" class="num">${tr('Weighted')}</th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><th scope="row">${tr('Open sales, weighted')}</th><td colspan="5"></td><td class="num">${esc(fmtMoney(Math.round(wtd(openSales))))}</td></tr></tfoot></table></div></section>
+    <section class="ctl bars-ok"><h2 class="panel-h">${tr('Money expected from instalments')}</h2>${unpaid.length ? bars(cash.map(([l, n]) => [l, n, fmtMoney(n)]), cMax) : `<p class="hint">${tr('No unpaid instalments.')}</p>`}
+      <p class="note">${tr('Instalments without a due date count once a date is set.')}</p></section>
+  </div>`;
 }
 function bind(app, nav) {
   $$('[data-days]', app).forEach((b) => b.addEventListener('click', () => { period = Number(b.dataset.days); dashboardView(app, nav); }));

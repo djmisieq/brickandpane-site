@@ -1084,9 +1084,10 @@ function editorPage(q) {
       </div>
     </div>
     ${changedNote(q)}
+    ${metaOf(q).status === 'accepted' ? `<div class="callout q-locked-note no-print" data-qid="${esc(q.id)}"><p>${t('The client accepted this quotation, so it no longer changes: it is the contract. For a revision, make a copy.', 'Klient zaakceptował tę ofertę, więc już się nie zmienia: to umowa. Na rewizję zrób kopię.')}</p><button type="button" class="btn btn-sm" data-act="dup">${t('Make a copy', 'Zrób kopię')}</button></div>` : ''}
     <div class="q-frame${step === 'offer' ? ' is-offer' : ''}">
       <nav class="q-steps no-print" aria-label="${t('Quote steps', 'Kroki oferty')}">${STEPS.map((s, n) => `<button type="button" class="q-step" data-act="step" data-v="${s.id}" ${s.id === step ? 'aria-current="step"' : ''}><span>${String(n + 1).padStart(2, '0')}</span>${t(s.en, s.pl)}</button>`).join('')}</nav>
-      <div class="q-main">${body}</div>
+      <div class="q-main">${metaOf(q).status === 'accepted' && step !== 'offer' ? `<fieldset class="q-locked" disabled>${body}</fieldset>` : body}</div>
       ${step === 'offer' ? '' : `<aside class="q-aside no-print" id="q-sum">${summary(q)}</aside>`}
     </div>
     <div class="q-foot no-print">
@@ -1350,7 +1351,7 @@ async function sendGo(q, redraw) {
 // The rest of "Send" on a project (audit K4): what the team used to do by hand after printing the quote.
 async function toProject(q, pid, file, tot) {
   const rev = q.revision.trim() || '00';
-  await store.uploadFiles(pid, [file], { kind: 'quote', version: rev === '00' ? '' : `rev ${rev}`, title: `${q.docLang === 'pl' ? 'Oferta' : 'Quotation'} ${q.reference}`, amount: tot.net, approval: true, visible: true });
+  await store.uploadFiles(pid, [file], { kind: 'quote', version: rev === '00' ? '' : `rev ${rev}`, title: `${q.docLang === 'pl' ? 'Oferta' : 'Quotation'} ${q.reference}`, amount: tot.net, approval: true, visible: true, quote_id: q.id });
   await store.updateInternal(pid, { value_gbp: tot.net });
   const d = await store.getProject(pid);
   // Payments only into an empty schedule: a revision must not double them.
@@ -1363,11 +1364,15 @@ async function toProject(q, pid, file, tot) {
   if (!d.internal?.hubspot_deal_id && at >= 0 && at < QUOTE_ISSUED) await store.setStage(pid, 'quote_issued', { note: 'Quotation is in Documents.', visible: true, next_step: 'Review the quotation and accept it, or ask for changes.' });
 }
 
+// ERP audit 28.11.2026: the number comes from the database (all quotations, two people at once); the browser's guess
+// stays for the demo and when the database cannot answer.
+const serverRef = async (guess) => (store.nextQuoteReference ? store.nextQuoteReference().catch(() => guess) : guess);
 async function listAct(a, btn) {
   const id = btn.closest('[data-qid]')?.dataset.qid;
   try {
     if (a === 'new' || a === 'sample') {
       const q = a === 'sample' ? sampleQuote(quotes, firm) : newQuote(quotes, firm);
+      q.reference = await serverRef(q.reference);
       await store.saveQuote(q);
       quotes.unshift(q);
       location.hash = `#/quotes/${q.id}`;
@@ -1376,7 +1381,7 @@ async function listAct(a, btn) {
     if (a === 'dup') {
       const src = quotes.find((q) => q.id === id); if (!src) return;
       const copy = JSON.parse(JSON.stringify(src));
-      Object.assign(copy, { id: uid(), reference: nextRef(quotes), revision: '00', updatedAt: Date.now() });
+      Object.assign(copy, { id: uid(), reference: await serverRef(nextRef(quotes)), revision: '00', updatedAt: Date.now() });
       copy.products.forEach((p) => { p.id = uid(); }); copy.payments.forEach((s) => { s.id = uid(); });
       await store.saveQuote(copy); quotes.unshift(copy);
       // A copy is a separate quote (say, timber beside aluminium): it stays on the same deal, with its own number.

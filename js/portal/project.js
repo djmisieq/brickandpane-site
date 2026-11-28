@@ -170,6 +170,10 @@ function feed(d, ctx) {
     'supplier_quote.status': (l) => tr('Supplier quote: {from} → {to}', { from: tr(l.old_val || ''), to: tr(l.new_val || '') }),
     'quote.status': (l) => tr('Quotation status: {from} → {to}', { from: tr(l.old_val || ''), to: tr(l.new_val || '') }),
     'project.lost_reason': (l) => (l.new_val ? tr('Reason lost: {v}', { v: l.new_val }) : ''),
+    'project.contract_gbp': (l) => tr('The client accepted the quotation: contract {v}', { v: fmtMoney(l.new_val) }),
+    'supplier_quote.po_number': (l) => tr('Order {po} placed with the supplier', { po: l.new_val || '' }),
+    'supplier_quote.confirmed_on': (l) => (l.new_val ? tr('The supplier confirmed the order on {date}', { date: day(l.new_val) }) : ''),
+    'supplier_quote.eta': (l) => (l.old_val ? tr('Delivery promised: {from} → {to}', { from: day(l.old_val), to: day(l.new_val) }) : tr('Delivery promised for {date}', { date: day(l.new_val) })),
   };
   (log || []).forEach((l) => { const f = LOG[`${l.entity}.${l.field}`], t = f && !(l.entity === 'booking' && l.field !== 'added' && l.field !== 'removed') ? f(l) : ''; if (t) push(l.created_at, 'log', '⟲', esc(t), '', l.actor?.full_name || '', true); });
   return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -249,6 +253,7 @@ export async function projectView(app, id, ctx) {
     : activeTab === 'money' ? `<section class="ctl pq" data-project-quotes>
         <div class="pq-head"><h2 class="panel-h">${tr('Quotes')}</h2><button type="button" class="btn btn-sm" data-new-quote>+ ${tr('New quote')}</button></div>
         ${pq.length ? `<ul class="pq-list">${pq.map((x) => `<li><a href="#/quotes/${esc(x.id)}">${esc(x.reference)}${x.revision && x.revision !== '00' ? ` rev ${esc(x.revision)}` : ''}</a> <span class="tag">${esc(x.statusName)}</span> <span class="pq-total">${esc(fmtMoney(x.total))}</span></li>`).join('')}</ul>` : `<p class="hint">${tr('No quote yet. A new one takes the client, the site and the openings from this project.')}</p>`}
+        ${d.internal?.contract_gbp != null ? `<p class="callout" data-contract>${tr('Contract: {v}, accepted by the client on {d}. Sending another revision does not change it.', { v: fmtMoney(d.internal.contract_gbp), d: fmtDay(d.internal.contract_at) })}</p>` : ''}
       </section>${costsPanel(costs)}`
     : activityPanel(items);
   const fold = (key, title, body, open = false) => `<details class="ctl fold" data-fold="${key}" ${openFolds.has(key) || open ? 'open' : ''}><summary class="panel-h">${title}</summary>${body}</details>`;
