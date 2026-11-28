@@ -1687,3 +1687,30 @@ html[data-theme=dark] body.crm .cal-d.is-today .cal-n{color:#1c1b1a}
 .g-move{display:flex;gap:2px}
 @media (max-width:600px){.grid-scroll{max-height:none}.g-table th,.g-table td{height:40px}}
 @media (max-width:767px){.g-pop{position:fixed;left:8px!important;right:8px!important;top:auto!important;bottom:calc(72px + env(safe-area-inset-bottom));width:auto;max-height:60vh;z-index:50}}
+
+/* ===== On site, checklists, handover record (top-CRM audit 28.11.2026): js/portal/field.js ===== */
+.task-cl { margin: .25rem 0 0 2rem; }
+.task-cl-n { font-weight: 600; }
+.task-cl-n.is-all { color: var(--ok); }
+.task-cl-list { list-style: none; padding: 0; margin: .35rem 0; display: grid; gap: .25rem; }
+.task-cl-list label { display: flex; gap: .5rem; align-items: flex-start; min-height: 2.25rem; cursor: pointer; }
+.task-cl-list input { width: 1.25rem; height: 1.25rem; flex: none; margin-top: .1rem; }
+.site-card { margin-bottom: 1rem; }
+.site-when { margin: 0 0 .25rem; color: var(--muted); }
+.site-h { font-size: 1.15rem; margin: 0 0 .5rem; }
+.site-acts { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 .75rem; }
+.site-ops table { width: 100%; }
+.ho-form fieldset { border: 0; padding: 0; margin: 0 0 1rem; }
+.ho-snags { list-style: none; padding: 0; margin: 0 0 .5rem; display: grid; gap: .5rem; }
+.ho-snag { display: grid; grid-template-columns: minmax(6rem, 9rem) 1fr auto; gap: .5rem; align-items: center; }
+.ho-sig { display: block; width: 100%; max-width: 600px; aspect-ratio: 3 / 1; height: auto; background: #fff; border: 1px dashed var(--line-strong); border-radius: 6px; touch-action: none; margin: .25rem 0 .5rem; }
+.ho-pdf { position: fixed; left: -10000px; top: 0; width: 760px; }
+.ho-doc { background: #fff; color: #111; padding: 24px; font-size: 14px; line-height: 1.5; }
+.ho-doc h1 { font-size: 22px; margin: 0 0 8px; } .ho-doc h2 { font-size: 16px; margin: 16px 0 4px; }
+.ho-foot { margin-top: 24px; color: #555; font-size: 12px; }
+.cost-po { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .35rem 0; }
+.cost-po label { display: inline-flex; gap: .35rem; align-items: center; font-size: .9rem; }
+.q-locked { border: 0; padding: 0; margin: 0; min-width: 0; }
+.q-locked-note { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; }
+.dash-wide { grid-column: 1 / -1; }
+@media (max-width: 600px) { .ho-snag { grid-template-columns: 1fr auto; } .ho-snag select { grid-column: 1 / -1; } }

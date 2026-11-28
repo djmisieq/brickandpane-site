@@ -36,6 +36,7 @@ export function item(t, staff, opts = {}) {
       ${opts.project ? `<a class="note task-proj" href="${esc(opts.href)}">${esc(opts.project)}</a>` : ''}
       ${t.note ? `<span class="note task-note">${esc(t.note)}</span>` : ''}</span></label>
     <button type="button" class="q-icon" data-task-del aria-label="${esc(tr('Delete task: {task}', { task: t.title }))}" title="${esc(tr('Delete task'))}">×</button>
+    ${checklist(t)}
     ${t.done_at ? '' : `<details class="task-edit"><summary class="note">${tr('Change')}</summary><form class="task-form" data-task-edit novalidate>
       <div class="field"><label for="te-t-${esc(t.id)}">${tr('Task')}</label><input id="te-t-${esc(t.id)}" name="title" maxlength="300" value="${esc(t.title)}"></div>
       <div class="field-row"><div class="field"><label for="te-d-${esc(t.id)}">${tr('By')}</label><input id="te-d-${esc(t.id)}" name="due_on" type="date" value="${esc(t.due_on || '')}"></div>
@@ -77,9 +78,25 @@ export function tasksBox(list, staff, user, where, uid = 'tk') {
   </div>`;
 }
 
+// A task's checklist (0058): ticked on site one item at a time, each with who and when.
+export function checklist(t) {
+  const list = Array.isArray(t.checklist) ? t.checklist : [];
+  if (!list.length) return '';
+  const n = list.filter((x) => x.done).length;
+  return `<details class="task-cl"${n < list.length && !t.done_at ? ' open' : ''}><summary class="note"><span class="task-cl-n${n === list.length ? ' is-all' : ''}">${esc(tr('Checklist {n}/{all}', { n, all: list.length }))}</span></summary>
+    <ul class="task-cl-list">${list.map((x, i) => `<li><label><input type="checkbox" data-cl="${i}" ${x.done ? 'checked' : ''}> <span>${esc(tr(x.t))}</span></label></li>`).join('')}</ul></details>`;
+}
+export function bindChecklists(root) {
+  $$('[data-cl]', root).forEach((c) => { if (c.dataset.bound) return; c.dataset.bound = '1'; c.addEventListener('change', async () => {
+    const id = c.closest('[data-task]')?.dataset.task; if (!id || !store.tickChecklist) return;
+    try { await store.tickChecklist(id, Number(c.dataset.cl), c.checked); } catch (err) { c.checked = !c.checked; toast(tr(err.message), { tone: 'error' }); }
+  }); });
+}
+
 // The change form on a task: what, by when, who, and on which project (projects audit 26.11.2026).
 export function bindTaskEdits(root) {
   bindLinkers(root);
+  bindChecklists(root);
   $$('[data-task-edit]', root).forEach((f) => { if (f.dataset.bound) return; f.dataset.bound = '1'; f.addEventListener('submit', async (e) => {
     e.preventDefault(); const title = f.title.value.trim(); if (!title) { f.title.focus(); toast(tr('Write what needs doing.')); return; }
     const to = picked(f, 'project'), patch = { title, due_on: f.due_on.value || null, assignee_id: f.assignee_id.value || null };

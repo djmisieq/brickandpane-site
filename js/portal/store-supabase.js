@@ -263,6 +263,13 @@ export const store = {
   // an enquiry joining a project, merging duplicates, bookings and the stage playbook.
   async updateTask(id, patch) { const allowed = {}; ['title', 'note', 'due_on', 'assignee_id', 'project_id', 'request_id'].forEach((k) => { if (k in patch) allowed[k] = patch[k]; }); ok(await sb.from('tasks').update(allowed).eq('id', id)); emit(); },
   async moveCost(id, pid) { ok(await sb.from('supplier_quotes').update({ project_id: pid }).eq('id', id)); emit(); },
+  // On site (0058): one checklist item at a time; handover records (staff only).
+  async tickChecklist(id, item, done) { const out = ok(await sb.rpc('tick_checklist', { task: id, item, done })); emit(); return out; },
+  async listHandovers(pid) { return ok(await sb.from('handover_records').select('*').eq('project_id', pid).order('created_at', { ascending: false })) || []; },
+  async saveHandover(pid, rec) {
+    const row = ok(await sb.from('handover_records').insert({ project_id: pid, checks: rec.checks, snags: rec.snags, notes: rec.notes || '', signed_name: rec.signed_name || '', signature: rec.signature || null, signed_on: rec.signed_on || null }).select().single());
+    emit(); return row;
+  },
   async setCompanyRole(pid, companyId, from, to) { ok(await sb.from('project_companies').update({ role: to }).eq('project_id', pid).eq('company_id', companyId).eq('role', from)); emit(); },
   async projectPeople(pid) { return (ok(await sb.from('project_people').select('role, is_main, person:people(*)').eq('project_id', pid)) || []).filter((x) => x.person); },
   async linkPerson(pid, personId, role = 'contact', isMain = false) {
