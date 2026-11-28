@@ -129,6 +129,13 @@ const log = (s, project_id, entity, entity_id, field, old_val, new_val) => { s.c
 const note = (s, user_id, project_id, type, title, body = '') => s.notifications.push({ id: uid(), user_id, project_id, type, title, body, created_at: now(), read_at: null });
 // The stage playbook (migration 0050), the same starting list.
 const PLAYBOOK = [['in_review', 'Check the drawings and the openings; list the questions for the client', 'task', 1], ['quote_issued', 'Follow up the quotation', 'call', 5], ['accepted', 'Book the survey with the client', 'call', 1], ['accepted', 'Send the deposit invoice', 'task', 1], ['survey', 'Enter the measured sizes and photos', 'task', 1], ['drawings', 'Send the shop drawings for approval', 'task', 2], ['production', 'Place the order with the supplier', 'task', 1], ['production', 'Enter the supplier’s confirmation and production date', 'task', 3], ['delivery', 'Confirm transport, access and unloading', 'call', 1], ['delivery', 'Book the fitting crew', 'task', 1], ['installation', 'Handover: openings checked, photos taken', 'visit', 0], ['handover', 'Send the O&M manual, warranty and final invoice', 'task', 2], ['completed', 'Aftercare call', 'call', 30]];
+// The starting checklists of migration 0058, by stage and task.
+const CHECKLISTS = {
+  'survey|Enter the measured sizes and photos': ['Every opening measured: width, height, diagonals', 'Photos of each opening, inside and out', 'Lintel and structural opening checked', 'Delivery route and access measured', 'Parking and unloading noted', 'Electrics and services near the openings noted'],
+  'delivery|Confirm transport, access and unloading': ['Delivery date and time confirmed with the client', 'Lifting plan for heavy panels', 'Parking or a permit arranged', 'Storage on site agreed', 'Glass and frames checked on arrival'],
+  'installation|Handover: openings checked, photos taken': ['Every sash opens, closes and locks', 'Drainage and seals checked', 'Glass checked for scratches and labels removed', 'Photos of every opening fitted', 'Site cleaned, packaging removed', 'Client shown how to use and clean', 'Handover record signed'],
+  'handover|Send the O&M manual, warranty and final invoice': ['O&M manual uploaded to Documents', 'Declarations of performance uploaded', 'Warranty sent', 'Final invoice sent'],
+};
 // The five automation rules of migration 0051, with the same defaults.
 const RULES = [['enquiry_unanswered', 1], ['client_silent', 7], ['chase_date', 0], ['booking_confirm', 1], ['payment_late', 3]];
 const rules = (s) => { if (!s.rules) s.rules = RULES.map(([id, days]) => ({ id, days, active: true })); return s.rules; };
@@ -311,6 +318,17 @@ export const store = {
     if (t.project_id !== before.project_id) { log(s, t.project_id, 'task', id, 'project_id', before.project_id, t.project_id); if (before.project_id && t.project_id) log(s, before.project_id, 'task', id, 'project_id', before.project_id, t.project_id); }
     if (t.assignee_id !== before.assignee_id) { log(s, t.project_id, 'task', id, 'assignee_id', before.assignee_id, t.assignee_id); taskFor(s, t); }
     t.updated_at = now(); save(s);
+  },
+  async tickChecklist(id, item, done) {
+    const s = load(); const me = needStaff(s).id; const t = (s.tasks || []).find((x) => x.id === id);
+    if (!t || !Array.isArray(t.checklist) || !t.checklist[item]) throw new Error('That item is not on the list.');
+    Object.assign(t.checklist[item], { done: !!done, by: me, at: now() }); save(s); return t.checklist;
+  },
+  async listHandovers(pid) { const s = load(); needStaff(s); return (s.handovers || []).filter((h) => h.project_id === pid).sort((a, b) => b.created_at.localeCompare(a.created_at)); },
+  async saveHandover(pid, rec) {
+    const s = load(); const me = needStaff(s).id; s.handovers ||= [];
+    const row = { id: uid(), project_id: pid, checks: rec.checks || [], snags: rec.snags || [], notes: rec.notes || '', signed_name: rec.signed_name || '', signature: rec.signature || null, signed_on: rec.signed_on || null, document_id: null, created_by: me, created_at: now() };
+    s.handovers.push(row); log(s, pid, 'handover', row.id, 'added', null, [row.signed_name, row.signed_on].join(' · ')); save(s); return row;
   },
   async setTaskDone(id, done) { const s = load(); needStaff(s); const t = (s.tasks || []).find((x) => x.id === id); if (t) { t.done_at = done ? now() : null; t.done_by = done ? (needStaff(s).id) : null; save(s); } },
   // The owner's dashboard in demo mode: the same figures as owner_dashboard (migration 0043), from this browser's data.
@@ -730,7 +748,7 @@ export const store = {
     // on_stage_playbook (0050): the stage's tasks, once per project, for the account manager.
     s.tasks ||= []; const who = p.assignee_id || u.id;
     playbook(s).filter((b) => b.active && b.to_stage === to && !s.tasks.some((x) => x.project_id === pid && x.template_id === b.id)).forEach((b) => {
-      const tk = { id: uid(), title: b.title, kind: b.kind, note: '', due_on: addWorkdays(b.offset_days), assignee_id: who, project_id: pid, request_id: null, template_id: b.id, done_at: null, done_by: null, created_by: u.id, created_at: t, updated_at: t };
+      const tk = { id: uid(), title: b.title, kind: b.kind, note: '', due_on: addWorkdays(b.offset_days), assignee_id: who, project_id: pid, request_id: null, template_id: b.id, done_at: null, done_by: null, created_by: u.id, created_at: t, updated_at: t, checklist: (b.checklist || CHECKLISTS[`${b.to_stage}|${b.title}`] || []).map((x) => ({ t: x, done: false })) };
       s.tasks.push(tk); taskFor(s, tk);
     });
     if (due_at !== undefined && (due_at || null) !== (p.due_at || null)) log(s, pid, 'project', pid, 'due_at', p.due_at, due_at);

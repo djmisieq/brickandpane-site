@@ -90,7 +90,7 @@ test('architect submits a new project with an openings schedule', async ({ page 
 test('the CRM has no prospects tab: companies to win are kept in HubSpot', async ({ page }) => {
   await page.locator('[data-demo-login="staff"]').click();
   await page.goto('/admin.html#/prospects');
-  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Inbox/, /Projects/, /Enquiries/, /Calendar/, /Email/, /Companies/, /Quotes/, /Dashboard/, /Automations/]);
+  await expect(page.locator('.side-nav .side-list a')).toHaveText([/Today/, /My work/, /Inbox/, /Projects/, /Enquiries/, /Calendar/, /On site/, /Email/, /Companies/, /Quotes/, /Dashboard/, /Automations/]);
   await expect(page.locator('h1')).not.toHaveText('Prospects');
 });
 
@@ -1731,4 +1731,46 @@ test('palette: Ctrl+K finds words inside messages and notes, not only names, and
   await expect(hit).toContainText('flush threshold');
   await hit.click();
   await expect(page.locator('.project-head h1')).toContainText('Hartley Road');
+});
+
+// ---------- top-CRM audit 28.11.2026: work on site ----------
+test('on site: today’s visits with the openings; a stage task’s checklist is ticked item by item', async ({ page }) => {
+  await staffOn(page, '#/site');
+  const card = page.locator('.site-card', { hasText: 'Kitchen extension doors' });
+  await expect(card).toContainText('Delivery');
+  await expect(card).toContainText('Today');
+  await expect(card.locator('.site-ops')).toContainText('×');
+  const pid = (await card.getAttribute('data-site'));
+  await page.evaluate(async (id) => { const { store } = await import('/js/portal/store.js'); await store.setStage(id, 'installation', { note: '', visible: false }); }, pid);
+  await page.goto('/admin.html#/board'); await page.goto('/admin.html#/site');
+  const cl = page.locator('.site-card', { hasText: 'Kitchen extension doors' }).locator('.task-cl').first();
+  await expect(cl).toContainText('Checklist 0/7');
+  await cl.locator('[data-cl="0"]').check();
+  await expect(page.locator('.site-card', { hasText: 'Kitchen extension doors' }).locator('.task-cl').first()).toContainText('Checklist 1/7');
+});
+
+test('handover record: name, a date the person enters and a finger signature; snags become tasks; the PDF goes to Documents', async ({ page }) => {
+  await staffOn(page, '#/site');
+  const pid = await page.locator('.site-card', { hasText: 'Kitchen extension doors' }).getAttribute('data-site');
+  await page.goto(`/admin.html#/handover/${pid}`);
+  await expect(page.locator('h1')).toContainText('Handover record');
+  await expect(page.locator('#ho-date')).toHaveValue(''); // no date is filled in for the person
+  await page.locator('[name="chk"]').first().check();
+  await page.locator('[data-snag-add]').click();
+  await page.locator('[name="snag_t"]').fill('Scratch on the outer pane (TEST)');
+  await page.locator('#ho-name').fill('Ravi Patel (TEST)');
+  await page.locator('[data-ho] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('date');
+  await page.locator('#ho-date').fill(new Date().toISOString().slice(0, 10));
+  await page.locator('[data-ho] button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('sign');
+  const box = await page.locator('[data-sig]').boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 40); await page.mouse.down();
+  await page.mouse.move(box.x + 120, box.y + 80, { steps: 8 }); await page.mouse.move(box.x + 220, box.y + 30, { steps: 8 }); await page.mouse.up();
+  await page.locator('[data-ho] button[type="submit"]').click();
+  await expect(page.locator('.project-head h1')).toContainText('Kitchen extension doors', { timeout: 20000 });
+  await page.locator('[data-tab="documents"]').click();
+  await expect(page.locator('#panel-documents, [role="tabpanel"]').first()).toContainText(/Handover record [A-Z]+-/);
+  await page.locator('[data-tab="activity"]').click();
+  await expect(page.locator('body')).toContainText('Scratch on the outer pane (TEST)');
 });

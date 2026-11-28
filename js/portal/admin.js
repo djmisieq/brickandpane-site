@@ -20,6 +20,7 @@ import { gridBusy, gridCSV } from './grid.js';
 import { projectSheet } from './sheets.js';
 import { inboxView, peekProject, timelineView, watchOnline } from './u3.js';
 import { myWorkView, calendarView, playbookView } from './work.js';
+import { siteView, handoverView } from './field.js';
 import { companiesView, companyView, KINDS as CO_KINDS } from './companies.js';
 
 const app = $('#app');
@@ -98,6 +99,8 @@ async function draw(fromStore) {
     else if (r.name === 'today') await today();
     else if (r.name === 'my') await myWorkView(app, viewSwitch('my', await listRequests()), user);
     else if (r.name === 'calendar') await calendarView(app, viewSwitch('calendar', await listRequests()), user);
+    else if (r.name === 'site') await siteView(app, user);
+    else if (r.name === 'handover' && r.id) await handoverView(app, r.id, user);
     else if (r.name === 'playbook') await playbookView(app, viewSwitch('', await listRequests()));
     else if (r.name === 'automations') await automationsView(app);
     else if (r.name === 'inbox') await inboxView(app);
@@ -307,9 +310,9 @@ async function today() {
 const viewSwitch = () => '';
 const NAV = [
   ['today', '#/today', 'Today', 1], ['my', '#/my', 'My work', 1], ['inbox', '#/inbox', 'Inbox', 0], ['board', '#/board', 'Projects', 1], ['enquiries', '#/enquiries', 'Enquiries', 0],
-  ['calendar', '#/calendar', 'Calendar', 1], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0], ['automations', '#/automations', 'Automations', 0],
+  ['calendar', '#/calendar', 'Calendar', 1], ['site', '#/site', 'On site', 0], ['mail', '#/mail', 'Email', 0], ['companies', '#/companies', 'Companies', 0], ['quotes', '#/quotes', 'Quotes', 0], ['owner', '#/owner', 'Dashboard', 0], ['automations', '#/automations', 'Automations', 0],
 ];
-const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'automations', timeline: 'calendar', '': 'today' };
+const NAV_OF = { list: 'board', p: 'board', company: 'companies', playbook: 'automations', timeline: 'calendar', handover: 'site', '': 'today' };
 let side = null;
 async function sideNav(r) {
   if (!side) {
@@ -512,4 +515,6 @@ addEventListener('hashchange', () => render());
 // Keyboard: Ctrl+K or / finds anything, N a new project, T a task, G then a letter goes to a place, ? lists them.
 bindKeys(() => user);
 watchOnline();
+// The CRM opens without a connection on the live site (sw-crm.js: network first, the kept copy only offline).
+if ('serviceWorker' in navigator && location.hostname === 'brickandpane.co.uk') navigator.serviceWorker.register('/sw-crm.js', { scope: '/' }).catch(() => {});
 render();

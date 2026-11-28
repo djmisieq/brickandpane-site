@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql', '0055_money_trail.sql', '0056_quote_flow.sql', '0057_search.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql', '0055_money_trail.sql', '0056_quote_flow.sql', '0057_search.sql', '0058_field.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -1126,4 +1126,25 @@ test('search: every word must match, accents aside, across emails and notes; sta
   assert.equal((await hit(' ')).length, 0);
   await as(A);
   await fails(`select * from public.crm_search('garden')`);
+});
+
+// 0058 (top-CRM audit 28.11.2026): checklists copied from the playbook and ticked one item at a time; handover records.
+test('field: a stage task brings its checklist; a tick changes one item; handover records are staff only', async () => {
+  const { db, as, fails } = await setup();
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Site', $1) returning id`, [A])).rows[0].id;
+  await as(S);
+  await db.query(`select public.set_stage($1, 'installation', '', false, null, null)`, [P]);
+  const t = (await db.query(`select id, checklist from public.tasks where project_id = $1 and template_id is not null and jsonb_array_length(checklist) > 0`, [P])).rows[0];
+  assert.ok(t, 'the fitting task has a checklist');
+  assert.equal(t.checklist[0].done, false);
+  const after = (await db.query('select public.tick_checklist($1, 0, true) c', [t.id])).rows[0].c;
+  assert.equal(after[0].done, true); assert.equal(after[0].by, S); assert.equal(after[1].done, false);
+  await fails('select public.tick_checklist($1, 99, true)', [t.id]);
+  await db.query(`insert into public.handover_records (project_id, checks, snags, signed_name, signature, signed_on) values ($1, '[{"t":"Locks","ok":true}]', '[{"t":"Scratch on D02"}]', 'Jo Client', 'data:image/png;base64,iVBORw0KGgo=', '2026-11-28')`, [P]);
+  await fails(`insert into public.handover_records (project_id, signature) values ($1, 'javascript:alert(1)')`, [P]);
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where entity = 'handover'`)).rows[0].n, 1);
+  await as(A);
+  assert.equal((await db.query('select * from public.handover_records')).rows.length, 0);
+  await fails('select public.tick_checklist($1, 1, true)', [t.id]);
 });
