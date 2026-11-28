@@ -356,11 +356,12 @@ export const store = {
   },
   async listProjects() {
     const me = await this.getUser();
-    const rows = ok(await sb.from('projects')
+    // In pages, as companies and people are (audit 28.11.2026: past 1000 projects the list was cut without a word).
+    const rows = await every(() => sb.from('projects')
       .select(`*, owner:profiles!projects_owner_id_fkey(${PROFILE}), assignee:profiles!projects_assignee_id_fkey(${PROFILE})`)
-      .order('updated_at', { ascending: false }));
+      .order('updated_at', { ascending: false }).order('id'));
     if (me?.role === 'staff') {
-      const internal = ok(await sb.from('project_internal').select('*'));
+      const internal = await every(() => sb.from('project_internal').select('*').order('project_id'));
       const map = Object.fromEntries(internal.map((i) => [i.project_id, i]));
       rows.forEach((r) => { r.internal = map[r.id]; });
     }

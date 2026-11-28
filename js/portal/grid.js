@@ -5,7 +5,7 @@
 // columns (Shift+click), a totals row, the sum of the selection in a status line, columns to hide, reorder and
 // resize (kept in this browser). Saving is optimistic: a failed save puts the old value back and says why.
 import { esc, fmtMoney, fmtDay, toast, $, $$ } from './core.js';
-import { tr } from './i18n.js';
+import { tr, LANG, locale } from './i18n.js';
 
 const STATES = new Map(); // grid id → selection, scroll, pending values, undo; survives a live redraw
 let busy = false;
@@ -14,15 +14,32 @@ const pref = (id) => { try { return JSON.parse(localStorage.getItem(`bp-grid:${i
 const keep = (id, v) => { try { localStorage.setItem(`bp-grid:${id}`, JSON.stringify(v)); } catch { /* private mode */ } };
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 const isNum = (c) => ['number', 'money', 'pct', 'days'].includes(c.type);
+// A date with its year when it is not this year's (audit 28.11.2026: dues across the new year read the same).
+const fmtDayY = (iso) => { const d = new Date(`${iso}T12:00:00`); if (Number.isNaN(d.getTime())) return iso; return d.getFullYear() === new Date().getFullYear() ? fmtDay(`${iso}T12:00:00`) : d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+// A number as people write it in either language (audit 28.11.2026: "2,5" was saved as 25). Both marks: the last one
+// is the decimal. Only commas: in English "1,200" and "12,500,000" are thousands; otherwise a comma is the decimal.
+export function num(s) {
+  let t = String(s ?? '').replace(/[£%\s  ]/g, '').replace(/^\((.*)\)$/, '-$1');
+  if (t === '') return null;
+  const lc = t.lastIndexOf(','), ld = t.lastIndexOf('.');
+  if (lc >= 0 && ld >= 0) t = lc > ld ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+  else if (lc >= 0) t = LANG !== 'pl' && /^-?\d{1,3}(,\d{3})+$/.test(t) ? t.replace(/,/g, '') : /,.*,/.test(t) ? t.replace(/,/g, '') : t.replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3}){2,}$/.test(t)) t = t.replace(/\./g, ''); // 1.200.000
+  const n = Number(t); if (!Number.isFinite(n)) throw new Error('number'); return n;
+}
+// A number for the clipboard and CSV: Polish Excel reads "2.4" as a date, so the decimal is a comma there.
+const numOut = (v) => (v == null || v === '' ? '' : LANG === 'pl' ? String(v).replace('.', ',') : String(v));
 
 // Values typed or pasted, read the way Excel writes them.
 const PARSE = {
   text: (s) => String(s ?? '').trim(),
-  number: (s) => { const t = String(s ?? '').replace(/[£%,\s]/g, ''); if (t === '') return null; const n = Number(t); if (!Number.isFinite(n)) throw new Error('number'); return n; },
+  number: (s) => num(s),
   date: (s) => {
     const t = String(s ?? '').trim(); if (!t) return null;
-    let m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-    if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+    const real = (y, m, d) => { const x = new Date(Date.UTC(+y, +m - 1, +d)); if (x.getUTCFullYear() !== +y || x.getUTCMonth() !== +m - 1 || x.getUTCDate() !== +d) throw new Error('date'); return x.toISOString().slice(0, 10); };
+    let m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/); if (m) return real(m[3], m[2], m[1]); // day first, as in the UK and Poland
+    m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return real(m[1], m[2], m[3]);
     if (/^\d{5}$/.test(t)) return new Date(Date.UTC(1899, 11, 30) + Number(t) * 864e5).toISOString().slice(0, 10); // Excel serial
     throw new Error('date');
   },
@@ -50,30 +67,39 @@ export function parseTSV(text) {
 export function grid(host, opt) {
   const st = STATES.get(opt.id) || { sel: null, anchor: null, scroll: [0, 0], pending: {}, undo: [], filters: {}, sort: [] };
   STATES.set(opt.id, st);
-  if (opt.state) Object.assign(st, { filters: opt.state.filters || {}, sort: opt.state.sort || [] }), (opt.state = null);
   const p = pref(opt.id);
-  if (opt.view) { p.hidden = opt.view.hidden ?? p.hidden; p.order = opt.view.order ?? p.order; }
-  let all = opt.rows, rows = [], cols = [], editor = null;
+  // A view brings its filters and sort, and its columns when it was saved with them (audit 28.11.2026: they were lost).
+  if (opt.state) {
+    Object.assign(st, { filters: opt.state.filters || {}, sort: opt.state.sort || [] });
+    if (opt.state.hidden) p.hidden = opt.state.hidden; if (opt.state.order) p.order = opt.state.order;
+    if (opt.state.hidden || opt.state.order) keep(opt.id, p);
+    opt.state = null;
+  }
+  let all = opt.rows, rows = [], cols = [], editor = null, editing = null;
 
   const raw = (row, c) => { const pd = st.pending[opt.rowId(row)]; return pd && c.field in pd ? pd[c.field] : c.get ? c.get(row) : row[c.field]; };
-  const label = (c, v) => (c.options ? c.options.find((o) => o.value === v)?.label ?? '' : v);
+  const label = (c, v) => (c.options ? c.options.find((o) => o.value === v)?.label ?? '' : c.fmt ? c.fmt(v) : v);
   const show = (row, c) => {
     const v = raw(row, c);
     if (c.render) return c.render(row, v);
     if (v == null || v === '') return '<span class="g-empty">—</span>';
     if (c.type === 'money') return esc(fmtMoney(v));
     if (c.type === 'pct') return `${esc(String(v))}%`;
-    if (c.type === 'date') return esc(fmtDay(`${String(v).slice(0, 10)}T12:00:00`));
+    if (c.type === 'date') return esc(fmtDayY(String(v).slice(0, 10)));
     return esc(String(label(c, v)));
   };
-  const text = (row, c) => { const v = raw(row, c); return c.type === 'date' ? String(v || '').slice(0, 10) : String(label(c, v) ?? ''); };
+  const text = (row, c) => { const v = raw(row, c); return c.type === 'date' ? String(v || '').slice(0, 10) : isNum(c) ? numOut(v) : String(label(c, v) ?? ''); };
+  // What a filter keeps: the stored value, not its label, so a view saved in Polish works in English and after a
+  // rename (views saved before 28.11 kept labels, and still match).
+  const key = (c, v) => (v == null || v === '' ? '' : c.type === 'date' ? String(v).slice(0, 10) : String(v));
 
   // Filters: a set of allowed values (blank as ''), or a range for numbers and dates.
   const passes = (row, skip = null) => Object.entries(st.filters).every(([f, F]) => {
     if (f === skip) return true;
     const c = opt.columns.find((x) => x.field === f); if (!c) return true;
     const v = raw(row, c);
-    if (F.in) return F.in.includes(v == null || v === '' ? '' : String(c.type === 'date' ? String(v).slice(0, 10) : label(c, v)));
+    if (F.in) return F.in.includes(key(c, v)) || (v != null && v !== '' && F.in.includes(String(label(c, v))));
+    if ((F.min != null || F.max != null) && (v == null || v === '')) return false; // a blank is not 0
     if (F.min != null && !(Number(v) >= F.min)) return false;
     if (F.max != null && !(Number(v) <= F.max)) return false;
     return true;
@@ -84,7 +110,8 @@ export function grid(host, opt) {
       let x = raw(a, c), y = raw(b, c);
       const ex = x == null || x === '', ey = y == null || y === '';
       if (ex || ey) { if (ex && ey) continue; return ex ? 1 : -1; } // blanks last either way
-      if (!isNum(c)) { x = fold(label(c, x)); y = fold(label(c, y)); }
+      if (c.order) { x = c.order(x); y = c.order(y); } // e.g. stages in the order of the pipeline
+      else if (!isNum(c)) { const n = fold(label(c, x)).localeCompare(fold(label(c, y)), undefined, { numeric: true }); if (n) return n * dir; continue; } // D2 before D10
       if (x < y) return -dir; if (x > y) return dir;
     }
     return 0;
@@ -129,6 +156,12 @@ export function grid(host, opt) {
       <div class="grid-status" aria-live="polite"></div></div>`;
     const sc = $('.grid-scroll', host); [sc.scrollTop, sc.scrollLeft] = st.scroll;
     sc.addEventListener('scroll', () => { st.scroll = [sc.scrollTop, sc.scrollLeft]; }, { passive: true });
+    // The cursor follows its row and column, not their position: a live redraw or a re-sort moves rows under it
+    // (audit 28.11.2026: the next Enter edited a different project).
+    if (st.at) {
+      const r = rows.findIndex((x) => opt.rowId(x) === st.at.id), c = cols.findIndex((x) => x.field === st.at.f);
+      if (r >= 0 && c >= 0 && st.sel) { const dr = st.anchor.r - st.sel.r, dc = st.anchor.c - st.sel.c; st.sel = { r, c }; st.anchor = { r: Math.max(0, Math.min(rows.length - 1, r + dr)), c: Math.max(0, Math.min(cols.length - 1, c + dc)) }; }
+    }
     if (!st.sel || st.sel.r >= rows.length) st.anchor = st.sel = { r: Math.min(st.sel?.r || 0, Math.max(0, rows.length - 1)), c: Math.min(st.sel?.c || 0, cols.length - 1) };
     if (st.anchor.r >= rows.length) st.anchor = { ...st.sel };
     paint(false); bind();
@@ -145,6 +178,7 @@ export function grid(host, opt) {
     if (!rows.length) return;
     const { r0, r1, c0, c1 } = range();
     for (let r = r0; r <= r1; r += 1) for (let c = c0; c <= c1; c += 1) { const el = td(r, c); if (el) { el.classList.add('is-sel'); el.setAttribute('aria-selected', 'true'); painted.push(el); } }
+    st.at = rows[st.sel.r] && cols[st.sel.c] ? { id: opt.rowId(rows[st.sel.r]), f: cols[st.sel.c].field } : null;
     const a = td(st.sel.r, st.sel.c);
     if (a) { a.classList.add('is-active'); a.tabIndex = 0; painted.push(a); if (scroll) a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
     requestAnimationFrame(status);
@@ -165,17 +199,28 @@ export function grid(host, opt) {
   };
 
   async function save(changes, what, { record = true } = {}) {
-    const batch = changes.map(({ r, c, value }) => ({ row: rows[r], rowId: opt.rowId(rows[r]), col: cols[c], value, old: raw(rows[r], cols[c]) })).filter((b) => b.value !== b.old && !(b.value == null && b.old === ''));
+    // Every way into a cell (typing, paste, Ctrl+D, Delete, undo) passes the same checks (audit 28.11.2026: a paste
+    // skipped them and a probability of 150 went in).
+    let refused = null;
+    const batch = changes.map(({ r, c, value }) => ({ row: rows[r], rowId: opt.rowId(rows[r]), col: cols[c], value, old: raw(rows[r], cols[c]), r, c }))
+      .filter((b) => b.value !== b.old && !(b.value == null && b.old === ''))
+      .filter((b) => { const msg = invalid(b.col, b.row, b.value); if (!msg) return true; refused ||= msg; td(b.r, b.c)?.classList.add('is-error'); return false; });
+    if (refused) toast(tr(refused), { tone: 'error' });
     if (!batch.length) return;
     batch.forEach((b) => { (st.pending[b.rowId] ||= {})[b.col.field] = b.value; });
     redrawCells(batch, 'is-saving');
-    const res = await Promise.allSettled(batch.map((b) => opt.onSave(b.rowId, b.col.field, b.value, b.row)));
+    // One request per row, not per cell, when the caller can take several fields at once (a paste of 250 cells was
+    // 250 requests and 250 redraws).
+    const byRow = new Map(); batch.forEach((b) => { if (!byRow.has(b.rowId)) byRow.set(b.rowId, []); byRow.get(b.rowId).push(b); });
+    const jobs = opt.onSaveRow
+      ? [...byRow.values()].map((list) => ({ list, run: () => opt.onSaveRow(list[0].rowId, Object.fromEntries(list.map((b) => [b.col.field, b.value])), list[0].row) }))
+      : batch.map((b) => ({ list: [b], run: () => opt.onSave(b.rowId, b.col.field, b.value, b.row) }));
+    const res = await Promise.allSettled(jobs.map((j) => j.run()));
     const ok = [], bad = [];
-    res.forEach((x, i) => {
-      const b = batch[i];
+    res.forEach((x, i) => jobs[i].list.forEach((b) => {
       if (x.status === 'fulfilled') { ok.push(b); setTimeout(() => { if (st.pending[b.rowId]?.[b.col.field] === b.value) delete st.pending[b.rowId][b.col.field]; }, 6000); }
       else { delete st.pending[b.rowId][b.col.field]; bad.push([b, x.reason]); }
-    });
+    }));
     redrawCells(batch, null);
     bad.forEach(([b]) => { const el = cellOf(b); if (el) { el.classList.add('is-error'); setTimeout(() => el.classList.remove('is-error'), 2500); } });
     if (record && ok.length) { st.undo.push(ok.map((b) => ({ rowId: b.rowId, field: b.col.field, old: b.old, value: b.value }))); if (st.undo.length > 50) st.undo.shift(); }
@@ -189,7 +234,8 @@ export function grid(host, opt) {
   }
   function undo() {
     const last = st.undo.pop(); if (!last) { toast(tr('Nothing to undo.')); return; }
-    const ch = last.map((u) => ({ r: rows.findIndex((x) => opt.rowId(x) === u.rowId), c: cols.findIndex((x) => x.field === u.field), value: u.old })).filter((x) => x.r >= 0 && x.c >= 0);
+    const want = last.map((u) => ({ r: rows.findIndex((x) => opt.rowId(x) === u.rowId), c: cols.findIndex((x) => x.field === u.field), value: u.old })), ch = want.filter((x) => x.r >= 0 && x.c >= 0);
+    if (ch.length < want.length) toast(tr('{n} cells are hidden by a filter or a column setting and were not restored.', { n: want.length - ch.length }), { tone: 'error' });
     save(ch, 'restored', { record: false });
   }
 
@@ -204,20 +250,29 @@ export function grid(host, opt) {
     else { editor.type = c.type === 'date' ? 'date' : 'text'; if (isNum(c)) editor.inputMode = 'decimal'; editor.value = initial ?? (c.type === 'date' ? String(raw(row, c) || '').slice(0, 10) : raw(row, c) ?? ''); }
     editor.className = 'g-editor'; editor.dataset.mode = initial === undefined ? 'edit' : 'type';
     editor.setAttribute('aria-label', c.label);
+    editing = { r: st.sel.r, c: st.sel.c, id: opt.rowId(row), field: c.field }; // the cell being edited, whatever is clicked next
     el.append(editor); editor.focus();
     if (c.options && initial === undefined) try { editor.showPicker?.(); } catch { /* not allowed here */ }
     editor.addEventListener('blur', () => setTimeout(() => { if (editor && document.activeElement !== editor) commit(0, 0, false); }, 0));
   }
+  // Returns false when the value is refused: the editor stays open on its own cell (audit 28.11.2026: a refused width,
+  // then a click elsewhere, saved the number into the clicked cell).
   function commit(dr, dc, focusNext = true) {
-    if (!editor) return;
-    const c = cols[st.sel.c]; let v;
-    try { v = c.options ? (editor.value || null) : parse(c, editor.value); } catch { editor.classList.add('is-error'); toast(tr('That is not a valid {kind}.', { kind: tr(c.type === 'date' ? 'date' : isNum(c) ? 'number' : 'choice') }), { tone: 'error' }); return; }
-    if (c.validate) { const msg = c.validate(v, rows[st.sel.r]); if (msg) { editor.classList.add('is-error'); toast(tr(msg), { tone: 'error' }); return; } }
-    editor.remove(); editor = null; busy = false;
-    save([{ r: st.sel.r, c: st.sel.c, value: v }]);
+    if (!editor) return true;
+    const r = rows.findIndex((x) => opt.rowId(x) === editing.id), ci = cols.findIndex((x) => x.field === editing.field);
+    if (r < 0 || ci < 0) { cancel(); return true; }
+    const c = cols[ci]; let v;
+    const refuse = (msg) => { editor.classList.add('is-error'); toast(msg, { tone: 'error' }); st.sel = st.anchor = { r, c: ci }; paint(false); editor.focus(); return false; };
+    try { v = c.options ? (editor.value || null) : parse(c, editor.value); } catch { return refuse(tr('That is not a valid {kind}.', { kind: tr(c.type === 'date' ? 'date' : isNum(c) ? 'number' : 'choice') })); }
+    const msg = invalid(c, rows[r], v); if (msg) return refuse(tr(msg));
+    editor.remove(); editor = null; editing = null; busy = false;
+    st.sel = st.anchor = { r, c: ci };
+    save([{ r, c: ci, value: v }]);
     if (focusNext) move(dr, dc);
+    return true;
   }
-  function cancel() { editor?.remove(); editor = null; busy = false; td(st.sel.r, st.sel.c)?.focus(); }
+  const invalid = (c, row, v) => (c.required && (v == null || v === '') ? 'This cell cannot be empty.' : c.validate ? c.validate(v, row) || '' : '');
+  function cancel() { editor?.remove(); editor = null; editing = null; busy = false; td(st.sel.r, st.sel.c)?.focus(); }
 
   const ARROW = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
   function onKey(e) {
@@ -257,23 +312,30 @@ export function grid(host, opt) {
     for (let r = r0; r <= r1; r += 1) for (let c = c0; c <= c1; c += 1) if (editable(cols[c], rows[r]) && !cols[c].required) ch.push({ r, c, value: null });
     save(ch, 'cleared');
   }
-  function onPaste(e) {
-    if (editor || !host.contains(document.activeElement) || !rows.length) return;
+  // Only a cell takes the clipboard: a paste into the filter's search or the view list stays theirs.
+  const inCell = () => !!document.activeElement?.closest?.('.g-table tbody') && host.contains(document.activeElement);
+  async function onPaste(e) {
+    if (editor || !inCell() || !rows.length) return;
     e.preventDefault();
     const data = parseTSV(e.clipboardData.getData('text/plain') || ''); if (!data.length) return;
     const { r0, r1, c0, c1 } = range(), single = data.length === 1 && data[0].length === 1, ch = []; let skipped = 0;
     // More rows than the grid: the caller may add them (e.g. openings pasted from an architect's schedule).
-    if (!single && opt.onAddRows && r0 + data.length > rows.length) { opt.onAddRows(data.slice(rows.length - r0), cols.slice(c0)); }
+    const adds = !single && opt.onAddRows && r0 + data.length > rows.length;
+    if (adds && Object.keys(st.filters).length) toast(tr('Clear the filters to add rows from a paste: some rows are hidden.'), { tone: 'error' });
+    const toAdd = adds && !Object.keys(st.filters).length ? [data.slice(rows.length - r0), cols.slice(c0)] : null;
     const h = single ? r1 - r0 + 1 : data.length, w = single ? c1 - c0 + 1 : Math.max(...data.map((x) => x.length));
     for (let i = 0; i < h && r0 + i < rows.length; i += 1) for (let j = 0; j < w && c0 + j < cols.length; j += 1) {
       const c = cols[c0 + j], cell = single ? data[0][0] : data[i]?.[j] ?? '';
       if (!editable(c, rows[r0 + i])) { skipped += 1; continue; }
       try { ch.push({ r: r0 + i, c: c0 + j, value: c.options ? PARSE.select(cell, c) : parse(c, cell) }); } catch { skipped += 1; td(r0 + i, c0 + j)?.classList.add('is-error'); }
     }
-    save(ch, skipped ? 'pasted (some skipped)' : 'pasted');
+    if (!single && ((!adds && r0 + data.length > rows.length) || c0 + w > cols.length)) toast(tr('Part of the paste did not fit the table and was left out.'), { tone: 'error' });
+    if (!ch.length && skipped && !toAdd) { toast(tr('Nothing pasted: the values do not fit these cells.'), { tone: 'error' }); return; }
+    await save(ch, skipped ? 'pasted (some skipped)' : 'pasted');
+    if (toAdd) opt.onAddRows(...toAdd); // after the cells, so its message is the one left on screen
   }
   function onCopy(e) {
-    if (editor || !host.contains(document.activeElement) || !rows.length) return;
+    if (editor || !inCell() || !rows.length) return;
     e.preventDefault();
     const { r0, r1, c0, c1 } = range(), q = (v) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v), lines = [];
     for (let r = r0; r <= r1; r += 1) { const line = []; for (let c = c0; c <= c1; c += 1) line.push(q(text(rows[r], cols[c]))); lines.push(line.join('\t')); }
@@ -286,13 +348,15 @@ export function grid(host, opt) {
     $('.g-pop', host)?.remove();
     const c = opt.columns.find((x) => x.field === field), F = st.filters[field] || {};
     const others = all.filter((row) => passes(row, field)); // values as Excel lists them: after the other filters
-    const vals = [...new Set(others.map((row) => { const v = raw(row, c); return v == null || v === '' ? '' : String(c.type === 'date' ? String(v).slice(0, 10) : label(c, v)); }))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : isNum(c) ? Number(a) - Number(b) : a.localeCompare(b)));
+    const shown = new Map(); others.forEach((row) => { const v = raw(row, c), k = key(c, v); if (!shown.has(k)) shown.set(k, k === '' ? '' : String(label(c, v) ?? k)); });
+    const was = (k) => !F.in || F.in.includes(k) || (k !== '' && F.in.includes(shown.get(k)));
+    const vals = [...shown.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : isNum(c) ? Number(a) - Number(b) : c.order ? c.order(a) - c.order(b) : shown.get(a).localeCompare(shown.get(b), undefined, { numeric: true })));
     const pop = document.createElement('div'); pop.className = 'g-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', tr('Filter {col}', { col: c.label }));
     pop.innerHTML = `<div class="g-pop-sort"><button type="button" class="btn btn-sm btn-ghost" data-p-sort="1">${tr('Sort A→Z')}</button><button type="button" class="btn btn-sm btn-ghost" data-p-sort="-1">${tr('Sort Z→A')}</button></div>
       ${isNum(c) ? `<div class="g-pop-range"><label>${tr('From')} <input type="number" data-p-min value="${F.min ?? ''}"></label><label>${tr('To')} <input type="number" data-p-max value="${F.max ?? ''}"></label></div>` : ''}
       <input type="search" class="g-pop-q" placeholder="${esc(tr('Search the values'))}" aria-label="${esc(tr('Search the values'))}">
       <label class="g-pop-all"><input type="checkbox" data-p-all ${F.in ? '' : 'checked'}> ${tr('Select all')}</label>
-      <ul class="g-pop-list">${vals.map((v) => `<li><label><input type="checkbox" value="${esc(v)}" ${!F.in || F.in.includes(v) ? 'checked' : ''}> ${v === '' ? `<em>${tr('(Blank)')}</em>` : esc(c.type === 'date' ? fmtDay(`${v}T12:00:00`) : isNum(c) && c.type === 'money' ? fmtMoney(v) : v)}</label></li>`).join('')}</ul>
+      <ul class="g-pop-list">${vals.map((v) => `<li><label><input type="checkbox" value="${esc(v)}" ${was(v) ? 'checked' : ''}> ${v === '' ? `<em>${tr('(Blank)')}</em>` : esc(c.type === 'date' ? fmtDayY(v) : c.type === 'money' ? fmtMoney(v) : shown.get(v))}</label></li>`).join('')}</ul>
       <div class="g-pop-acts"><button type="button" class="btn btn-sm" data-p-ok>${tr('Apply')}</button><button type="button" class="btn btn-sm btn-ghost" data-p-clear>${tr('Clear filter')}</button></div>`;
     openPop(pop);
     const r = anchor.getBoundingClientRect(), hr = host.querySelector('.grid').getBoundingClientRect();
@@ -303,7 +367,9 @@ export function grid(host, opt) {
     $$('[data-p-sort]', pop).forEach((b) => b.addEventListener('click', () => { st.sort = [{ f: field, dir: Number(b.dataset.pSort) }]; closePop(pop); changed(); }));
     $('[data-p-clear]', pop).addEventListener('click', () => { delete st.filters[field]; closePop(pop); changed(); });
     $('[data-p-ok]', pop).addEventListener('click', () => {
-      const next = {}; const on = boxes().filter((b) => b.checked).map((b) => b.value);
+      // As in Excel: with a search typed, only the matching values that are ticked are kept.
+      const searching = $('.g-pop-q', pop).value.trim() !== '';
+      const next = {}; const on = boxes().filter((b) => b.checked && !(searching && b.closest('li').hidden)).map((b) => b.value);
       if (on.length < vals.length) next.in = on;
       const mn = $('[data-p-min]', pop)?.value, mx = $('[data-p-max]', pop)?.value;
       if (mn !== undefined && mn !== '') next.min = Number(mn); if (mx !== undefined && mx !== '') next.max = Number(mx);
@@ -344,7 +410,7 @@ export function grid(host, opt) {
     t.addEventListener('pointerdown', (e) => {
       const cell = e.target.closest('tbody td, tbody th'); if (!cell || e.target.closest('.g-editor')) return;
       if (e.target.closest('a') && !e.shiftKey) { e.preventDefault(); }
-      if (editor) commit(0, 0, false);
+      if (editor && !commit(0, 0, false)) { e.preventDefault(); return; } // a refused value keeps you in its cell
       const r = Number(cell.parentElement.dataset.r), c = cell.cellIndex;
       st.sel = { r, c }; if (!e.shiftKey) st.anchor = { r, c }; paint(false); cell.focus({ preventScroll: true });
       if (e.pointerType === 'touch') return;
@@ -391,7 +457,7 @@ export function gridCSV(g, name) {
   const cols = g.columns(), sep = document.documentElement.lang === 'pl' ? ';' : ',';
   const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = cols.map((c) => (c.type === 'money' ? `${c.label} (GBP)` : c.label));
-  const lines = g.rows().map((row) => cols.map((c) => { const v = g.raw(row, c); return c.type === 'date' ? String(v || '').slice(0, 10) : isNum(c) ? (v ?? '') : g.text(row, c); }));
+  const lines = g.rows().map((row) => cols.map((c) => { const v = g.raw(row, c); return c.type === 'date' ? String(v || '').slice(0, 10) : isNum(c) ? numOut(v) : g.text(row, c); }));
   const blob = new Blob([`﻿${[head, ...lines].map((r) => r.map(cell).join(sep)).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);

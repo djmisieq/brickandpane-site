@@ -1310,6 +1310,13 @@ const PL = {
   "Quantity is a whole number, 1 or more.": "Ilość to liczba całkowita, co najmniej 1.",
   "Double, laminated": "Dwuszybowa, laminowana",
   "Triple, laminated": "Trzyszybowa, laminowana",
+  "This cell cannot be empty.": "Ta komórka nie może być pusta.",
+  "{n} cells are hidden by a filter or a column setting and were not restored.": "Komórki ukryte filtrem lub ustawieniem kolumn ({n}) nie zostały przywrócone.",
+  "Clear the filters to add rows from a paste: some rows are hidden.": "Wyczyść filtry, żeby dodać wiersze z wklejenia: część wierszy jest ukryta.",
+  "Part of the paste did not fit the table and was left out.": "Część wklejenia nie zmieściła się w tabeli i została pominięta.",
+  "Only the person who saved this view can delete it.": "Ten widok może usunąć tylko osoba, która go zapisała.",
+  "{n} pasted rows were not added: {why}": "Nie dodano wklejonych wierszy ({n}): {why}",
+  "Nothing pasted: the values do not fit these cells.": "Nic nie wklejono: wartości nie pasują do tych komórek.",
 };
 
 export const tr = (s, vars) => {
