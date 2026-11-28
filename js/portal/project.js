@@ -149,8 +149,29 @@ function feed(d, ctx) {
     'enquiry.project_id': (l) => (l.new_val === d.project.id ? tr('An enquiry joined this project') : tr('An enquiry left this project')),
     'booking.added': (l) => tr('Booked: {what}', { what: String(l.new_val || '').split(' · ').slice(0, 2).map((v, i) => (i ? fmtDay(v) : tr(BOOKING_KINDS[v] || v))).join(' ') }),
     'booking.removed': () => tr('A booking was removed'),
+    // Money and documents (0055): every change to an instalment, a shared file or the team leaves a line here.
+    'payment.added': (l) => tr('Instalment added: {what}', { what: String(l.new_val || '').split(' · ').slice(0, 2).map((v, i) => (i ? fmtMoney(v) : tr(v))).join(' ') }),
+    'payment.removed': (l) => tr('Instalment removed: {what}', { what: tr(String(l.old_val || '').split(' · ')[0]) }),
+    'payment.paid_at': (l) => (l.new_val ? tr('Payment recorded as received on {date}', { date: day(l.new_val) }) : tr('Payment undone')),
+    'payment.amount': (l) => tr('Instalment amount: {from} → {to}', { from: fmtMoney(l.old_val), to: fmtMoney(l.new_val) }),
+    'payment.due_date': (l) => tr('Instalment due: {date}', { date: day(l.new_val) }),
+    'payment.paid_note': (l) => (l.new_val ? tr('Payment note: {v}', { v: l.new_val }) : ''),
+    'document.added': (l) => tr('Document added: {v}', { v: String(l.new_val || '').split(' · ')[0] }),
+    'document.removed': (l) => tr('Document removed: {v}', { v: String(l.old_val || '').split(' · ')[0] }),
+    'document.visible_to_client': (l) => tr(l.new_val === 'true' ? 'A document was shared with the client' : 'A document was hidden from the client'),
+    'document.approval': (l) => tr('Document decision: {v}', { v: tr(String(l.new_val || '').replace(/_/g, ' ')) }),
+    'approval.added': (l) => tr('Decision recorded: {v}', { v: tr(String(l.new_val || '').split(' · ')[0].replace(/_/g, ' ')) }),
+    'member.added': (l) => tr('{name} joined the project team as {role}', { name: who(l.entity_id) || tr('Someone'), role: tr(String(l.new_val || '')) }),
+    'member.removed': (l) => tr('{name} left the project team', { name: who(l.entity_id) || tr('Someone') }),
+    'member.role': (l) => tr('{name}: team role {from} → {to}', { name: who(l.entity_id) || tr('Someone'), from: tr(l.old_val || ''), to: tr(l.new_val || '') }),
+    'supplier_quote.added': (l) => tr('Supplier quote added: {v}', { v: String(l.new_val || '').split(' · ').filter(Boolean).slice(2, 3).join('') || '' }),
+    'supplier_quote.removed': () => tr('A supplier quote was removed'),
+    'supplier_quote.amount': (l) => tr('Supplier quote amount: {from} → {to}', { from: l.old_val ?? '—', to: l.new_val ?? '—' }),
+    'supplier_quote.status': (l) => tr('Supplier quote: {from} → {to}', { from: tr(l.old_val || ''), to: tr(l.new_val || '') }),
+    'quote.status': (l) => tr('Quotation status: {from} → {to}', { from: tr(l.old_val || ''), to: tr(l.new_val || '') }),
+    'project.lost_reason': (l) => (l.new_val ? tr('Reason lost: {v}', { v: l.new_val }) : ''),
   };
-  (log || []).forEach((l) => { const f = LOG[`${l.entity}.${l.field}`]; if (f && !(l.entity === 'booking' && l.field !== 'added' && l.field !== 'removed')) push(l.created_at, 'log', '⟲', esc(f(l)), '', l.actor?.full_name || '', true); });
+  (log || []).forEach((l) => { const f = LOG[`${l.entity}.${l.field}`], t = f && !(l.entity === 'booking' && l.field !== 'added' && l.field !== 'removed') ? f(l) : ''; if (t) push(l.created_at, 'log', '⟲', esc(t), '', l.actor?.full_name || '', true); });
   return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 const FILTERS = { all: 'Everything', client: 'What the client sees', internal: 'Team only', mail: 'Email', task: 'Tasks', log: 'Changes to links and dates' };

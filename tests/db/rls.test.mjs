@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql']
+const MIGRATIONS = ['0001_project_portal.sql', '0002_accounts_estimates.sql', '0003_team_changes_payments.sql', '0004_materials.sql', '0005_contact_requests.sql', '0007_my_enquiries.sql', '0008_enquiry_openings_convert.sql', '0011_portal_hardening.sql', '0012_saved_lists.sql', '0014_prospects.sql', '0018_hubspot_links.sql', '0019_hubspot_stage_sync.sql', '0021_hubspot_events.sql', '0023_drop_prospects.sql', '0024_convert_invite_email.sql', '0025_quotes.sql', '0026_quote_hubspot.sql', '0028_hubspot_account_backfill.sql', '0029_hubspot_crm_events.sql', '0030_hubspot_invite_on_email.sql', '0031_costs.sql', '0032_costs_hubspot.sql', '0034_costs_hubspot_fixes.sql', '0035_mail.sql', '0037_mail_keywords_scan.sql', '0038_quote_project.sql', '0039_supplier_compare.sql', '0041_stage_unlock.sql', '0042_tasks.sql', '0043_owner_dashboard.sql', '0044_companies.sql', '0045_mail_send.sql', '0046_company_source.sql', '0047_do_not_contact.sql', '0049_project_links.sql', '0050_team_work.sql', '0051_automation_rules.sql', '0053_inbox_mail_fields.sql', '0054_sheets.sql', '0055_money_trail.sql']
   .map((f) => readFileSync(new URL(`../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const A = '11111111-1111-1111-1111-111111111111'; // architect (owner)
 const C = '22222222-2222-2222-2222-222222222222'; // homeowner client
@@ -381,7 +381,7 @@ test('payments, changes, openings and team queue HubSpot events', async () => {
   assert.equal((await db.query(`select count(*)::int n from public.hubspot_events where project_id = $1 and kind = 'openings'`, [P])).rows[0].n, 1);
   await as(S);
   // Paying and deciding are separate events from recording and raising.
-  await db.query('update public.payments set paid_at = now() where id = $1', [pay]);
+  await db.query("select public.mark_paid($1, current_date, '')", [pay]); // 0055: paid with a date, through mark_paid
   await as(A); // the architect decides a change the team raised, through decide_change (no direct updates allowed)
   await db.query(`select public.decide_change($1, 'approved', '')`, [chg]);
   await as(S);
@@ -847,7 +847,7 @@ test('project links: move, log, attach an enquiry, merge duplicates, set the sta
   const sq = (await db.query(`insert into public.supplier_quotes (project_id, supplier, amount) values ($1, 'Okna', 100) returning id`, [P])).rows[0].id;
   await db.query('update public.supplier_quotes set project_id = $1 where id = $2', [Q, sq]);
   const tk = (await db.query(`insert into public.tasks (title, request_id) values ('Reply', $1) returning id`, [R])).rows[0].id;
-  const log = (await db.query(`select project_id, field, actor_id from public.crm_log where entity = 'supplier_quote'`)).rows;
+  const log = (await db.query(`select project_id, field, actor_id from public.crm_log where entity = 'supplier_quote' and field = 'project_id'`)).rows;
   assert.equal(log.length, 2); assert.ok(log.every((l) => l.actor_id === S));
   // People on a project, the assignee change and waiting-on are logged too.
   const co = (await db.query(`insert into public.companies (name, kind) values ('JSA', 'architect') returning id`)).rows[0].id;
@@ -1031,4 +1031,44 @@ test('sheets: saved views for staff only; an opening edited by the team is logge
   await as(A);
   assert.equal((await db.query('select * from public.crm_views')).rows.length, 0);
   await fails(`insert into public.crm_views (table_key, name, state) values ('projects', 'Mine', '{}')`);
+});
+
+// 0055 (ERP audit 28.11.2026): money for the client's side only; payments, bank details and roles leave a trail.
+test('money trail: a contractor sees no instalments or quotation; paid needs a date, undo needs a reason', async () => {
+  const { db, as, fails } = await setup();
+  const K = '66666666-6666-6666-6666-666666666666';
+  await db.query(`insert into auth.users values ($1,'sub@x.com','{"full_name":"Ken"}')`, [K]);
+  await as(A);
+  const P = (await db.query(`insert into public.projects (name, owner_id) values ('Money', $1) returning id`, [A])).rows[0].id;
+  await db.exec('reset role');
+  await db.query(`insert into public.project_members (project_id, user_id, role) values ($1, $2, 'contractor')`, [P, K]);
+  await as(S);
+  const pay = (await db.query(`insert into public.payments (project_id, label, amount) values ($1, 'Deposit', 5000) returning id`, [P])).rows[0].id;
+  await db.query(`insert into public.documents (project_id, kind, title, uploaded_by, visible_to_client) values ($1, 'quote', 'Q1', $2, true), ($1, 'drawing', 'Rev A', $2, true)`, [P, S]);
+  await fails(`update public.payments set paid_at = now() where id = $1`, [pay]);
+  await fails(`select public.mark_paid($1, (current_date + 5)::date, '')`, [pay]);
+  await db.query(`select public.mark_paid($1, '2026-11-20', 'BACS')`, [pay]);
+  assert.equal((await db.query('select paid_by from public.payments where id = $1', [pay])).rows[0].paid_by, S);
+  await fails(`update public.payments set amount = 1 where id = $1`, [pay]);
+  await fails(`update public.payments set paid_at = null where id = $1`, [pay]);
+  await fails(`delete from public.payments where id = $1`, [pay]);
+  await fails(`select public.void_payment($1, '')`, [pay]);
+  await db.query(`select public.void_payment($1, 'Bank returned it')`, [pay]);
+  assert.equal((await db.query('select paid_at from public.payments where id = $1', [pay])).rows[0].paid_at, null);
+  assert.ok((await db.query(`select count(*)::int n from public.crm_log where entity = 'payment' and field = 'paid_at'`)).rows[0].n >= 2);
+  await fails(`update public.profiles set role = 'staff' where id = $1`, [K]);
+  await db.query(`insert into public.quote_settings (id, data) values (true, '{"sortCode":"11-11-11"}')`);
+  await db.query(`update public.quote_settings set data = '{"sortCode":"22-22-22"}'`);
+  assert.equal((await db.query(`select count(*)::int n from public.crm_log where entity = 'quote_settings' and field = 'sortCode'`)).rows[0].n, 2);
+  assert.equal((await db.query('select updated_by from public.quote_settings')).rows[0].updated_by, S);
+  assert.ok((await db.query(`select count(*)::int n from public.notifications where type = 'security'`)).rows[0].n >= 1);
+  await as(K);
+  assert.equal((await db.query('select * from public.payments')).rows.length, 0);
+  assert.deepEqual((await db.query('select kind from public.documents')).rows.map((r) => r.kind), ['drawing']);
+  await as(A);
+  assert.equal((await db.query('select * from public.payments')).rows.length, 1);
+  assert.equal((await db.query('select * from public.documents')).rows.length, 2);
+  await as(S);
+  await db.query(`select public.mark_paid($1, '2026-11-21', '')`, [pay]);
+  await db.query('delete from public.projects where id = $1', [P]); // a deleted project takes its paid instalments with it
 });
