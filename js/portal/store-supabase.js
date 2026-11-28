@@ -436,14 +436,15 @@ export const store = {
   },
   async decideChange(changeId, decision, comment = '') { ok(await sb.rpc('decide_change', { c: changeId, decision, note: comment })); },
   async addPayment(pid, { label, amount, due_date }) { ok(await sb.from('payments').insert({ project_id: pid, label, amount: Number(amount), due_date })); },
-  async markPaid(paymentId) {
-    const row = ok(await sb.from('payments').select('paid_at').eq('id', paymentId).single());
-    ok(await sb.from('payments').update({ paid_at: row.paid_at ? null : new Date().toISOString() }).eq('id', paymentId));
-  },
+  // Money in (0055): the date a person enters, by whom; undoing it needs a reason. Both are in the project's history.
+  async markPaid(paymentId, { paid_on, note = '' } = {}) { ok(await sb.rpc('mark_paid', { pay: paymentId, paid_on, note })); emit(); },
+  async voidPayment(paymentId, reason) { ok(await sb.rpc('void_payment', { pay: paymentId, reason })); emit(); },
 
   // One transaction from the stage the row really has (set_stage, migration 0049): two people at once cannot
   // write a wrong "from" stage into the history.
   async setStage(pid, to, { note = '', visible = true, next_step, due_at } = {}) {
+    // A stage change that says nothing about the date keeps it (audit 28.11.2026: sending a quotation cleared it).
+    if (due_at === undefined) due_at = ok(await sb.from('projects').select('due_at').eq('id', pid).single())?.due_at ?? null;
     ok(await sb.rpc('set_stage', { pid, to_stage: to, note, visible, next_step: next_step === undefined ? null : next_step, due_at: due_at !== undefined ? due_at : null }));
     emit();
   },

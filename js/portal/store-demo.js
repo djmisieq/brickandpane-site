@@ -624,9 +624,18 @@ export const store = {
     const s = load(); needStaff(s);
     s.payments.push({ id: uid(), project_id: pid, label, amount: +amount, due_date, paid_at: null }); save(s);
   },
-  async markPaid(paymentId) {
+  async markPaid(paymentId, { paid_on, note = '' } = {}) {
     const s = load(); needStaff(s);
-    const x = s.payments.find((y) => y.id === paymentId); x.paid_at = x.paid_at ? null : now(); save(s);
+    if (!paid_on) throw new Error('Enter the date the money arrived.');
+    if (paid_on > new Date().toISOString().slice(0, 10)) throw new Error('The date the money arrived cannot be in the future.');
+    const x = s.payments.find((y) => y.id === paymentId); if (!x || x.paid_at) throw new Error('This instalment is already paid, or it is gone.');
+    x.paid_at = `${paid_on}T12:00:00.000Z`; x.paid_by = me(s)?.id || null; x.paid_note = String(note).slice(0, 300); save(s);
+  },
+  async voidPayment(paymentId, reason) {
+    const s = load(); needStaff(s);
+    if (String(reason || '').trim().length < 3) throw new Error('Say why the payment is undone.');
+    const x = s.payments.find((y) => y.id === paymentId); if (!x || !x.paid_at) throw new Error('This instalment is not paid.');
+    x.paid_at = null; x.paid_by = null; x.paid_note = `Undone: ${String(reason).trim()}`.slice(0, 300); save(s);
   },
 
   async createProject(data, openings, files) {

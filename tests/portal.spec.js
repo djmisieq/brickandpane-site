@@ -1649,3 +1649,25 @@ test('sheet: a paste into the filter search stays there; a view keeps its column
   await page.locator('[data-sheet-view]').selectOption({ label: 'No location (TEST)' });
   await expect(page.locator('.g-table thead')).not.toContainText('Location');
 });
+
+// ---------- ERP audit 28.11.2026: money in leaves a trail ----------
+test('payments: paid needs the date the money arrived; undo needs a reason; both are in the history', async ({ page }) => {
+  await staffOn(page);
+  await card(page, 'Kitchen extension doors');
+  await page.locator('[data-tab="overview"]').click();
+  const row = page.locator('tr', { hasText: 'On delivery' });
+  await row.locator('[data-paid]').click();
+  await page.locator('.qd-pay button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('date');
+  await page.locator('#pay-on').fill(new Date().toISOString().slice(0, 10));
+  await page.locator('#pay-note').fill('BACS (TEST)');
+  await page.locator('.qd-pay button[type="submit"]').click();
+  await expect(row).toContainText('Paid');
+  await row.locator('[data-paid]').click();
+  await expect(page.locator('.qd-pay h2')).toContainText('Undo payment');
+  await page.locator('.qd-pay button[type="submit"]').click();
+  await expect(page.locator('.toast').last()).toContainText('why');
+  await page.locator('#pay-why').fill('Marked by mistake (TEST)');
+  await page.locator('.qd-pay button[type="submit"]').click();
+  await expect(row).not.toContainText('Paid');
+});

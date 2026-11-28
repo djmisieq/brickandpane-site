@@ -148,7 +148,7 @@ export function overviewPanel(d, viewer = 'client', audience = 'trade', user = n
         ${payments.length ? `
           <h3 class="panel-h">${tr('Payments')}</h3>
           <table class="spec spec-compact"><thead><tr><th scope="col">${tr('Stage')}</th><th scope="col">${tr('Amount')}</th><th scope="col">${tr('Due')}</th><th scope="col">${tr('Status')}</th></tr></thead><tbody>
-            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : x.due_date && x.due_date < new Date().toISOString().slice(0, 10) ? `<span class="badge tone-${viewer === 'staff' ? 'danger' : 'warn'}">${tr('Overdue')}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${tr(x.paid_at ? 'Mark unpaid' : 'Mark paid')}</button>` : ''}</td></tr>`).join('')}
+            ${payments.map((x) => `<tr><th scope="row">${esc(tr(x.label))}</th><td>${fmtGBP(x.amount)}</td><td>${x.due_date ? fmtDay(x.due_date) : '—'}</td><td>${x.paid_at ? `<span class="badge badge-ok">${tr('Paid {date}', { date: fmtDate(x.paid_at) })}</span>` : x.due_date && x.due_date < new Date().toISOString().slice(0, 10) ? `<span class="badge tone-${viewer === 'staff' ? 'danger' : 'warn'}">${tr('Overdue')}</span>` : `<span class="badge">${tr('Not yet due')}</span>`}${viewer === 'staff' ? ` <button type="button" class="linkish" data-paid="${esc(x.id)}">${tr(x.paid_at ? 'Undo payment' : 'Mark paid')}</button>` : ''}</td></tr>`).join('')}
           </tbody></table>
           <p class="note" style="margin-top:.6rem">${tr('Paid {paid} of {total}', { paid: fmtGBP(paid), total: fmtGBP(total) })}${audience === 'home' ? ` ${tr('(amounts include VAT)')}` : ''}.</p>` : ''}
       </div>
@@ -319,7 +319,27 @@ export function bindDetail(root, d, refresh) {
     e.preventDefault(); const f = e.currentTarget;
     try { const r = await store.inviteMember(d.project.id, f.email.value, f.role.value); f.reset(); toast(tr(r === 'added' ? 'Added to the project.' : 'Invitation saved. They’ll join when they create an account with that email.')); } catch (err) { toast(tr(err.message)); }
   });
-  $$('[data-paid]', root).forEach((b) => b.addEventListener('click', async () => { try { await store.markPaid(b.dataset.paid); } catch (err) { toast(tr(err.message)); } }));
+  // Money in (0055): the date the money arrived is entered by a person; undoing a payment needs a reason.
+  $$('[data-paid]', root).forEach((b) => b.addEventListener('click', async () => {
+    const x = (d.payments || []).find((y) => y.id === b.dataset.paid); if (!x) return;
+    const { dialog, head, bindClose } = await import('./crm-quick.js');
+    const today = new Date().toISOString().slice(0, 10);
+    const dlg = dialog('qd-pay', `${head(tr(x.paid_at ? 'Undo payment' : 'Mark paid'))}<form class="qd-body" novalidate>
+      <p class="hint">${esc(tr(x.label))} · ${fmtGBP(x.amount)}</p>
+      ${x.paid_at ? `<div class="field"><label for="pay-why">${tr('Why is the payment undone?')}</label><input id="pay-why" name="why" required minlength="3" maxlength="200" placeholder="${esc(tr('e.g. Marked by mistake; the bank returned it'))}"></div>`
+        : `<div class="field"><label for="pay-on">${tr('Date the money arrived')}</label><input id="pay-on" name="on" type="date" required max="${today}"></div>
+      <div class="field"><label for="pay-note">${tr('Note (optional)')}</label><input id="pay-note" name="note" maxlength="200" placeholder="${esc(tr('e.g. BACS, ref BP-2026-0012'))}"></div>`}
+      <p class="hint">${tr('Recorded in the project history with your name.')}</p>
+      <div class="qd-acts"><button class="btn" type="submit">${tr(x.paid_at ? 'Undo payment' : 'Mark paid')}</button><button class="btn btn-ghost" type="button" data-close>${tr('Cancel')}</button></div></form>`);
+    bindClose(dlg);
+    $('form', dlg).addEventListener('submit', async (e) => {
+      e.preventDefault(); const f = e.currentTarget;
+      try {
+        if (x.paid_at) await store.voidPayment(x.id, f.why.value.trim()); else await store.markPaid(x.id, { paid_on: f.on.value, note: f.note.value.trim() });
+        dlg.close(); toast(tr(x.paid_at ? 'Payment undone.' : 'Payment recorded.'), { tone: 'ok' });
+      } catch (err) { toast(tr(err.message), { tone: 'error' }); }
+    });
+  }));
   const composer = $('[data-message]', root);
   // Live updates re-render the whole panel. Keep the chosen mode and the draft, or an internal note
   // the staff member is writing would silently flip modes. Staff start on an internal note (audit K6, 24.11.2026):
